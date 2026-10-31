@@ -35,6 +35,50 @@ cloned save in slot-2 (2026-10-31). Game: Unity 6000.6, IL2CPP metadata v108, al
 
 The upgrade shop also has `Category.Vehicles` / `OfferKind.Vehicle`. I haven't yet checked what it shows.
 
+## Scope
+
+Keep the core small. It covers: register a vehicle, list and sell it in the garage, build its model, an optional
+controller swap, seats, save safety, upgrades integration, and the co-op registry. New cleaning or sweeping behaviour
+is up to each vehicle mod. A vehicle that uses the default `MoonPrototypeVehicle` controller with `Work.Clean` already
+gets vanilla cleaning from its width and hopper stats.
+
+## Vehicle upgrades (how vanilla does it)
+
+- Upgrades belong to the **owned vehicle instance**, not to the player. `MoonOwnedVehicle.upgrades` is a 7-byte array,
+  one level per `MoonVehicleUpgrades.Kind` (Speed, Hopper, Turbo, Cruise, Suction, Unload, Lights). Each player buys
+  their own vehicle (`owner`, storage id `garage/<g>/<vehicle>/<owner>`), so in practice upgrades are per player.
+- Definitions: `MoonVehicleUpgrades.All` (`Def`: kind, title, summary, glyph, maxLevel, prices, effect,
+  sweepersOnly).
+  - Per vehicle type: `Applies(def, vehicle)`, `PriceScale(vehicle)`, `Price(def, vehicle, level)`, `Sweeper(item)`.
+  - Tuning constants: `SpeedStep`, `HopperStep`, `Suction*`.
+- Reads go through `MoonWorld.VehicleUpgradeLevel(MoonOwnedVehicle | storage, kind)`.
+- Writes go through `MoonWorld.TryUpgradeVehicle(player, storage, kind, expectedLevel, out msg)`, plus
+  `TryGetVehicleUpgradePrice`, `EnsureUpgrades`, and `CrewVehicleUpgrade` for co-op.
+- The vehicle applies them in `MoonPrototypeVehicle.ApplyUpgrades()`. The garage menu's upgrades page is
+  `MoonGarageMenu.BuildUpgradesPage/UpgradeDetails`.
+- The separate player upgrade tree (`MoonUpgradeTree`, `treeLevels`, `TeamTree`) and tool upgrades
+  (`MoonUpgradeSnapshot`) are a different system. The core doesn't touch them.
+
+### Core rule: never own upgrade state, always ask the game
+
+- **Vanilla kinds.** A definition declares which vanilla kinds apply, a price scale, and optional per-kind effect
+  callbacks. The core answers `Applies` and `PriceScale` for modded indices and leaves everything else to vanilla. The
+  levels stay in `MoonOwnedVehicle.upgrades`, and custom controllers read them via `MoonWorld.VehicleUpgradeLevel`. A
+  mod that changes how upgrades work, for example shared team upgrades, patches those few `MoonWorld` methods. Modded
+  vehicles then follow it automatically, with no core support needed.
+- **Custom kinds** (for example "Rotor" on the choppa). The 7-byte array and the `Kind` enum are fixed, so custom
+  levels live in the core's sidecar, keyed by storage id. The core exposes them through one overridable resolver,
+  `MoonVehicles.Upgrades` (`Level(storage, id)`, `TryBuy(player, storage, id)`). That resolver mirrors the vanilla
+  methods, so a shared-upgrades mod can redirect both systems the same way. The garage upgrades page lists custom kinds
+  under the vanilla rows.
+
+### A shared-upgrades mod is feasible
+
+There are only a handful of choke points. A shared-upgrades mod could patch `VehicleUpgradeLevel` (both overloads)
+to read a team table keyed by vehicle type. It would patch `TryUpgradeVehicle`, `TryGetVehicleUpgradePrice` and
+`CrewVehicleUpgrade` to write that table, and replace the core resolver for custom kinds. Saving the team table would
+use the same sidecar pattern.
+
 ## Library API (draft)
 
 ```csharp

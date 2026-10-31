@@ -1,0 +1,52 @@
+== MoonCleaners.MoonVehicleUpgrades : Il2CppSystem.Object
+  P static System.Int32 Count
+  P static Il2CppInterop.Runtime.InteropTypes.Arrays.Il2CppReferenceArray`1<MoonCleaners.MoonVehicleUpgrades/Def> All
+  P static System.Single SpeedStep
+  P static System.Double HopperStep
+  P static Il2CppInterop.Runtime.InteropTypes.Arrays.Il2CppStringArray SuctionNames
+  P static Il2CppInterop.Runtime.InteropTypes.Arrays.Il2CppStructArray`1<System.Single> SuctionWidth
+  P static Il2CppInterop.Runtime.InteropTypes.Arrays.Il2CppStructArray`1<System.Single> SuctionSpeed
+  P static System.Int32 SuctionNormal
+  P static Il2CppInterop.Runtime.InteropTypes.Arrays.Il2CppReferenceArray`1<Il2CppSystem.ValueTuple`2<System.String,Il2CppInterop.Runtime.InteropTypes.Arrays.Il2CppStructArray`1<System.Int32>>> OldTreeNodes
+  M static String Pct(Single value)
+  M static Def Find(Kind kind)
+  M static Single Boost(Int32 level)
+  M static Boolean Sweeper(Item spec)
+  M static Boolean Applies(Def def, Int32 vehicle)
+  M static Decimal PriceScale(Int32 vehicle)
+  M static Decimal Price(Def def, Int32 vehicle, Int32 level)
+  M static String SuctionName(Int32 setting)
+  M static Int32 SuctionBottom(Int32 level)
+  M static Int32 SuctionTop(Int32 level)
+  M static Decimal OldTreeRefund(String id, Int32 level)
+  M Void .ctor(IntPtr pointer)
+== MoonCleaners.MoonVehicleUpgrades/Kind : System.Enum
+  E Speed = 0
+  E Hopper = 1
+  E Turbo = 2
+  E Cruise = 3
+  E Suction = 4
+  E Unload = 5
+  E Lights = 6
+== MoonCleaners.MoonVehicleUpgrades/Def : Il2CppSystem.Object
+  P MoonCleaners.MoonVehicleUpgrades/Kind kind
+  P System.String title
+  P System.String summary
+  P MoonCleaners.MoonUpgradeTree/Glyph glyph
+  P System.Int32 maxLevel
+  P Il2CppInterop.Runtime.InteropTypes.Arrays.Il2CppStructArray`1<System.Int32> prices
+  P Il2CppSystem.Func`2<System.Int32,System.String> effect
+  P System.Boolean sweepersOnly
+  M Void .ctor()
+  M Void .ctor(IntPtr pointer)
+== MoonCleaners.MoonVehicleUpgrades/__c : Il2CppSystem.Object
+  P static MoonCleaners.MoonVehicleUpgrades/__c __9
+  M Void .ctor()
+  M String __cctor_b__22_0(Int32 l)
+  M String __cctor_b__22_1(Int32 l)
+  M String __cctor_b__22_2(Int32 l)
+  M String __cctor_b__22_3(Int32 l)
+  M String __cctor_b__22_4(Int32 l)
+  M String __cctor_b__22_5(Int32 l)
+  M String __cctor_b__22_6(Int32 l)
+  M Void .ctor(IntPtr pointer)
