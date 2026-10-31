@@ -45,7 +45,7 @@ namespace MsChoppa
                 DecorateModel = ChoppaModel.Decorate,
                 UpgradeKinds = new[] { MoonVehicleUpgrades.Kind.Speed, MoonVehicleUpgrades.Kind.Lights },
             }, Guid);
-            new HarmonyLib.Harmony(Guid).PatchAll(typeof(CameraPatch));
+            CameraPatch.Install();
             L.LogInfo($"Ms Choppa {Version} loaded");
         }
 
@@ -114,17 +114,19 @@ namespace MsChoppa
         }
     }
 
-    [HarmonyLib.HarmonyPatch]
     internal static class CameraPatch
     {
-        [HarmonyLib.HarmonyPatch(typeof(MoonWalker), nameof(MoonWalker.LateUpdate)), HarmonyLib.HarmonyPostfix]
-        static void AfterWalker(MoonWalker __instance)
+        static Il2CppSystem.Action<UnityEngine.Rendering.ScriptableRenderContext, UnityEngine.Camera> hook; // kept alive
+
+        internal static void Install()
         {
-            if (ChoppaController.ByVehicle.Count == 0) return;
-            var v = __instance.mountedVehicle;
-            if (v == null || !ChoppaController.ByVehicle.TryGetValue(v.Pointer, out var c) || c == null || !c.CameraOverride) return;
-            try { c.PlaceCamera(__instance); }
-            catch (System.Exception e) { Plugin.L.LogError("Choppa camera: " + e); ChoppaController.ByVehicle.Remove(v.Pointer); }
+            hook = Il2CppInterop.Runtime.DelegateSupport.ConvertDelegate<Il2CppSystem.Action<UnityEngine.Rendering.ScriptableRenderContext, UnityEngine.Camera>>(
+                new System.Action<UnityEngine.Rendering.ScriptableRenderContext, UnityEngine.Camera>((ctx, cam) =>
+                {
+                    try { ChoppaController.BeforeRender(cam); }
+                    catch (System.Exception e) { Plugin.L.LogError("Choppa camera: " + e); ChoppaController.CameraOwner = null; }
+                }));
+            UnityEngine.Rendering.RenderPipelineManager.add_beginCameraRendering(hook);
         }
     }
 }

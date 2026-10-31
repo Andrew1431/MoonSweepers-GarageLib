@@ -244,11 +244,21 @@ namespace MsChoppa
             catch (Exception e) { Plugin.L.LogWarning("Disabling mouse-look failed: " + e.Message); }
         }
 
-        // Called after MoonWalker.LateUpdate placed its vehicle camera: put the camera behind the choppa instead.
-        internal void PlaceCamera(MoonWalker w)
+        // Chase camera state, advanced once per frame in LateUpdate and applied to the game's camera right before it
+        // renders (URP beginCameraRendering), after every script that also moves it.
+        internal static ChoppaController CameraOwner;
+        internal Camera ChaseCamera;
+        internal Vector3 camPos;
+        internal Quaternion camRot;
+        bool camStarted;
+
+        void LateUpdate()
         {
-            var cam = w.viewCamera;
+            if (!CameraOverride || rider == null) { if (CameraOwner == this) CameraOwner = null; camStarted = false; return; }
+            var cam = rider.viewCamera != null ? rider.viewCamera : Camera.main;
             if (cam == null) return;
+            ChaseCamera = cam;
+            CameraOwner = this;
             float s = Plugin.Scale.Value / 0.75f;
             Vector3 up = Up;
             Vector3 fwd = Vector3.ProjectOnPlane(transform.forward, up);
@@ -256,9 +266,17 @@ namespace MsChoppa
             var orbit = Quaternion.LookRotation(fwd.normalized, up) * Quaternion.Euler(10f + lookPitch, lookYaw, 0f);
             Vector3 focus = transform.position + up * (2f * s);
             Vector3 desired = focus + orbit * new Vector3(0f, 0f, -Plugin.ChaseDistance.Value * s) + up * (Plugin.ChaseHeight.Value - 2f) * s;
-            var ct = cam.transform;
-            ct.position = Vector3.SmoothDamp(ct.position, desired, ref chaseVel, 0.12f);
-            ct.rotation = Quaternion.LookRotation(focus - ct.position, up);
+            if (!camStarted) { camPos = desired; chaseVel = Vector3.zero; camStarted = true; Plugin.L.LogInfo($"Choppa chase camera drives '{cam.name}' (parent '{cam.transform.parent?.name}')"); }
+            camPos = Vector3.SmoothDamp(camPos, desired, ref chaseVel, 0.12f);
+            camRot = Quaternion.LookRotation(focus - camPos, up);
+            cam.transform.SetPositionAndRotation(camPos, camRot);
+        }
+
+        internal static void BeforeRender(Camera cam)
+        {
+            var o = CameraOwner;
+            if (o == null || o.WasCollected || !o.CameraOverride || cam == null || o.ChaseCamera == null || cam.Pointer != o.ChaseCamera.Pointer) return;
+            cam.transform.SetPositionAndRotation(o.camPos, o.camRot);
         }
 
         void OnDisable()
