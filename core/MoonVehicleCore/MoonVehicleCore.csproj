@@ -1,0 +1,33 @@
+<Project Sdk="Microsoft.NET.Sdk">
+  <PropertyGroup>
+    <TargetFramework>net6.0</TargetFramework>
+    <AssemblyName>MoonVehicleCore</AssemblyName>
+    <RootNamespace>MoonVehicleCore</RootNamespace>
+    <ImplicitUsings>disable</ImplicitUsings>
+    <Nullable>disable</Nullable>
+    <LangVersion>latest</LangVersion>
+    <NoWarn>$(NoWarn);CS0618;CS1591</NoWarn>
+    <GenerateDocumentationFile>true</GenerateDocumentationFile>
+    <DevBuild Condition="'$(DevBuild)' == ''">true</DevBuild>
+    <DefineConstants Condition="'$(DevBuild)' == 'true'">$(DefineConstants);DEVBUILD</DefineConstants>
+    <GameDir>C:\Program Files (x86)\Steam\steamapps\common\Moon Sweepers</GameDir>
+    <BepInExCoreDir>$(GameDir)\BepInEx\core</BepInExCoreDir>
+    <InteropDir>$(GameDir)\BepInEx\interop</InteropDir>
+    <GamePluginDir>$(GameDir)\BepInEx\plugins\MoonVehicleCore</GamePluginDir>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <Reference Include="$(BepInExCoreDir)\BepInEx.Core.dll" Private="false" />
+    <Reference Include="$(BepInExCoreDir)\BepInEx.Unity.Common.dll" Private="false" />
+    <Reference Include="$(BepInExCoreDir)\BepInEx.Unity.IL2CPP.dll" Private="false" />
+    <Reference Include="$(BepInExCoreDir)\Il2CppInterop.Runtime.dll" Private="false" />
+    <Reference Include="$(BepInExCoreDir)\Il2CppInterop.Common.dll" Private="false" />
+    <Reference Include="$(BepInExCoreDir)\0Harmony.dll" Private="false" />
+    <Reference Include="$(InteropDir)\*.dll" Private="false" />
+  </ItemGroup>
+
+  <Target Name="CopyPluginToGame" AfterTargets="Build">
+    <MakeDir Directories="$(GamePluginDir)" />
+    <Copy SourceFiles="$(TargetPath)" DestinationFiles="$(GamePluginDir)\$(TargetFileName)" />
+  </Target>
+</Project>

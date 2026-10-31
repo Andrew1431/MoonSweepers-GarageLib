@@ -124,16 +124,30 @@ Plus events (`Spawned`, `Stored`, `Bought`) and a query API (`IsModded(int index
    (id, index, mod version). A client missing a vehicle mod gets a clear message, plus a placeholder box model so the
    world stays consistent. The host is authoritative for purchases, as in vanilla.
 
+## Findings from the first build (2026-10-31)
+
+- `GarageVehicleMask` is a compile-time constant: writing it through interop doesn't stick. Buying and spawning
+  index 22/23 work without it anyway (the 1000+ vs 22–31 question is moot for buying; the mask's real consumer is
+  still unknown).
+- The static array setters (`Vehicles`, `GarageOffers`) work through interop.
+- The per-save index map was dropped: indices are assigned from 22 sorted by id, and the sidecar stores string ids
+  and index-free storage keys, so an index shift between sessions is harmless (tested: rover #22 → #23).
+- `MoonProgressStore.Root` is the save folder; the sidecar lives there.
+- A garage holds one parked vehicle; buying into an occupied garage is refused by vanilla.
+- Vanilla `MoonPrototypeVehicle.FixedUpdate` applies gravity (`useGravity` is off), so custom controllers must apply
+  radial gravity themselves.
+- Legacy `UnityEngine.Input` throws (SEH) in this game; use the Input System or Rewired-style polling.
+
 ## Milestones
 
 - **M0 – Research spike (done).** Loader works, data model mapped, slot-2 loads under automation.
-- **M1 – One injected test vehicle.** Clone the ride-on sweeper's stats with a plain box model, at index 22. It should
+- **M1 – One injected test vehicle (done).** Clone the ride-on sweeper's stats with a plain box model, at index 22. It should
   appear in the garage and be buyable, then spawn and drive. This answers whether growing the arrays works and where
   the mask is read.
-- **M2 – Save sidecar.** Strip and restore on save and load. Test: buy, save, quit, remove the mod, load (vanilla is
+- **M2 – Save sidecar (done, except an uninstall-the-core test).** Strip and restore on save and load. Test: buy, save, quit, remove the mod, load (vanilla is
   clean), reinstall (vehicle is back).
-- **M3 – Public API and models.** `VehicleDefinition`, AssetBundle model loading, card icon rendering, seats.
-- **M4 – Custom controller hook.** Ms Choppa flies using big-choppa's flight model.
+- **M3 – Public API and models (API done; AssetBundle helper, icons, custom-upgrade UI pending).** `VehicleDefinition`, AssetBundle model loading, card icon rendering, seats.
+- **M4 – Custom controller hook (hook done and tested with a hover test; choppa flight model pending).** Ms Choppa flies using big-choppa's flight model.
 - **M5 – Co-op.** Handshake, registry sync, purchase/spawn relay, late joiners.
 - **M6 – Release.** Nexus page (the community is on Nexus), example vehicle mod, docs, dependency note
   (BepInEx be.791 + ModEngine patcher).

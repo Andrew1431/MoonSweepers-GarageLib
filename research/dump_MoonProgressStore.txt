@@ -1,0 +1,93 @@
+== MoonCleaners.MoonProgressStore : Il2CppSystem.Object
+  P static System.Int32 Version
+  P static System.Int32 ManifestVersion
+  P static System.Int32 Magic
+  P System.String root
+  P System.String identity
+  P System.String settingsJson
+  P System.String fullBackups
+  P System.Int32 seed
+  P System.Int32 regionCount
+  P Il2CppSystem.Action`2<MoonCleaners.MoonChunkSnapshot,Il2CppInterop.Runtime.InteropTypes.Arrays.Il2CppStructArray`1<System.Byte>> compact
+  P Il2CppSystem.Object gate
+  P Il2CppSystem.Collections.Generic.Dictionary`2<System.Int32,MoonCleaners.MoonProgressStore/Entry> entries
+  P Il2CppSystem.Collections.Generic.Dictionary`2<System.Int32,MoonCleaners.MoonChunkSnapshot> unsaved
+  P Il2CppInterop.Runtime.InteropTypes.Arrays.Il2CppStructArray`1<System.Byte> _Regions_k__BackingField
+  P MoonCleaners.MoonLooseDustSnapshot _LooseDust_k__BackingField
+  P Il2CppSystem.Threading.Tasks.Task _Pending_k__BackingField
+  P System.Boolean _IsNew_k__BackingField
+  P static System.String BackupFolder
+  P static System.String DamagedFolder
+  P static System.Int32 SnapshotsKept
+  P System.String _RecoveryMessage_k__BackingField
+  P static System.String SharedChunks
+  P static System.Int32 FullBackupsKept
+  P static System.String ChunkList
+  P System.String _FullBackupNote_k__BackingField
+  P MoonCleaners.MoonProgressStore/Request waiting
+  P System.Int32 lastManifestLength
+  P System.String _SaveRepair_k__BackingField
+  P static System.Int32 PagedMagic
+  P static System.Int32 PagedVersion
+  P static System.Int32 MaxPacked
+  P static System.Int32 MaxOutline
+  P static Il2CppSystem.Runtime.CompilerServices.ConditionalWeakTable`2<Il2CppInterop.Runtime.InteropTypes.Arrays.Il2CppStructArray`1<System.Byte>,MoonCleaners.MoonProgressStore/Packed> packedPages
+  P Il2CppInterop.Runtime.InteropTypes.Arrays.Il2CppStructArray`1<System.Byte> Regions
+  P MoonCleaners.MoonLooseDustSnapshot LooseDust
+  P Il2CppSystem.Threading.Tasks.Task Pending
+  P System.String Root
+  P System.Boolean IsNew
+  P System.String RecoveryMessage
+  P System.String FullBackupNote
+  P System.String SaveRepair
+  M Void .ctor(String root, String identity, String settingsJson, Int32 seed, Int32 regionCount, Action`2 compact, String fullBackups)
+  M String Source(String file)
+  M Void Recovered(String what, Exception cause)
+  M List`1 Snapshots()
+  M Void KeepSnapshot()
+  M Void KeepDamaged(String file)
+  M MoonChunkSnapshot RecoverChunk(Int32 id, String file, Il2CppStructArray`1 coarse, Exception cause)
+  M Boolean IsFullBackup(String file)
+  M static Boolean IsChunkFile(String name)
+  M List`1 FullBackupManifests()
+  M Void PutBack(String manifest)
+  M IEnumerable`1 SideFiles()
+  M Void SetFullBackupsAside()
+  M Task FullBackup()
+  M Void TakeFullBackup()
+  M Void PruneFullBackups()
+  M Int32 CheckChunkFiles()
+  M static Boolean Whole(String path, String name)
+  M static Void CopyInto(String from, String to)
+  M static Void ReplaceWith(String from, String to)
+  M static Void ReplaceFile(String temp, String path, String backup)
+  M static String Hash(Il2CppStructArray`1 bytes)
+  M Boolean HasChunk(Int32 id)
+  M Il2CppStringArray CurrentChunkFiles()
+  M Il2CppStructArray`1 Coarse(Int32 id)
+  M Task`1 ReadChunk(Int32 id)
+  M String ChunkFile(Int32 id)
+  M Boolean Downloading(Int32 id)
+  M Task Save(Il2CppStructArray`1 states, List`1 chunks, MoonLooseDustSnapshot looseDust, Boolean replaceChunks)
+  M static Task AfterSave(Task before)
+  M Void Write(Il2CppStructArray`1 states, List`1 chunks, MoonLooseDustSnapshot dust, Boolean replaceChunks)
+  M Il2CppStructArray`1 Serialize(Il2CppStructArray`1 states, Dictionary`2 next, MoonLooseDustSnapshot dust)
+  M Void Adopt(Manifest m)
+  M Manifest ParseManifest(Il2CppStructArray`1 payload, Boolean lenient, List`1 notes)
+  M static Int64 ChunkLength(MoonChunkSnapshot c)
+  M static Void RememberPacked(Il2CppStructArray`1 data, Il2CppStructArray`1 raw, Il2CppStructArray`1 bytes)
+  M static Il2CppStructArray`1 Gzip(Action`1 write)
+  M static Il2CppStructArray`1 PackPage(MoonPageSnapshot p)
+  M static Void WriteChunkBody(Stream s, MoonChunkSnapshot c, Il2CppStructArray`1 outline, Il2CppReferenceArray`1 pages)
+  M static String WriteChunk(String folder, MoonChunkSnapshot c)
+  M static MoonChunkSnapshot ReadChunkFrom(Stream f, Int32 id)
+  M static MoonChunkSnapshot ReadPagedChunk(Stream f, Int32 id, Int32 length)
+  M static Void Unpack(MoonPageSnapshot p, Il2CppStructArray`1 bytes)
+  M static Void Fill(Stream s, Il2CppStructArray`1 into)
+  M static MoonChunkSnapshot DecodeChunk(BinaryReader r, Int32 id)
+  M static Void WriteEnvelope(String path, Il2CppStructArray`1 payload, Boolean backup)
+  M static Void WriteEnvelopeWith(String path, Il2CppStructArray`1 payload, Boolean backup, String hash)
+  M static Il2CppStructArray`1 ReadEnvelope(String path)
+  M static Il2CppStructArray`1 SalvageEnvelope(String path)
+  M static Il2CppStructArray`1 ReadEnvelopeFrom(Stream f, Boolean salvage)
+  M Void .ctor(IntPtr pointer)
