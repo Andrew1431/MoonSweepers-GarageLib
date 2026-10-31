@@ -19,6 +19,16 @@ namespace MsChoppa
         Transform mainRotor, tailRotor;
         float gravity, skidY, nextLog;
         bool wasDriven, warnedInput, placed;
+        MoonWalker rider;          // local walker mounted in this choppa (pilot or passenger)
+        bool lookDisabled;
+        MoonWalker lookWalker;     // the walker whose look action we switched off
+        internal static readonly System.Collections.Generic.Dictionary<IntPtr, ChoppaController> ByVehicle = new();
+        internal bool CameraOverride;
+        float lookYaw, lookPitch;
+        Vector3 chaseVel;
+        readonly System.Collections.Generic.List<Renderer> hiddenRenderers = new();
+        Vector3 lastPos;
+        float relocateAt = -1f;
         float boundAt;
 
         protected override void OnBound()
@@ -29,6 +39,7 @@ namespace MsChoppa
             tailRotor = FindDeep(transform, "TailRotor");
             gravity = Plugin.Gravity.Value > 0f ? Plugin.Gravity.Value : GameGravity();
             skidY = SkidBottom();
+            ByVehicle[Vehicle.Pointer] = this;
             boundAt = Time.time;
             Plugin.L.LogInfo($"ChoppaController bound: storage={Storage} body={(body != null)} mass={body?.mass} useGravity={body?.useGravity} kinematic={body?.isKinematic} " +
                              $"Physics.gravity={Physics.gravity} -> using {gravity:F2} m/s², radius {transform.position.magnitude:F0} m, skidY={skidY:F2}, rotors main={mainRotor != null} tail={tailRotor != null}");
@@ -41,7 +52,7 @@ namespace MsChoppa
             try
             {
                 if (flight == null || Vehicle == null) return;
-                if (!placed && Time.time > boundAt + 0.5f && body != null && !body.isKinematic) { placed = true; LeaveGarage(); }
+                if (!placed && Time.time > boundAt + 0.5f && body != null && !body.isKinematic) { placed = true; LeaveGarage(); lastPos = body.position; }
                 bool driven = Vehicle.IsDriven;
                 bool local = driven && IsLocalDriver();
                 if (driven != wasDriven)
@@ -61,6 +72,8 @@ namespace MsChoppa
                     pilot.Update(flight, ReadInput(), Time.deltaTime);
                 }
                 else flight.CommandedRates = Vector3.zero;
+
+                UpdateRider(local);
 
                 float dt = Time.deltaTime;
                 if (mainRotor != null) mainRotor.Rotate(0f, flight.RotorSpin * 900f * dt, 0f, Space.Self);
@@ -82,6 +95,15 @@ namespace MsChoppa
         void FixedUpdate()
         {
             if (flight == null || body == null || body.isKinematic) return;
+            // Recalled or brought out again by a garage: the game teleports the existing choppa into the hall.
+            Vector3 p = body.position;
+            if (placed && (p - lastPos).sqrMagnitude > 9f && !Vehicle.IsDriven && MoonGarage.InHall(p))
+            {
+                relocateAt = Time.time + 0.5f;
+                Plugin.L.LogInfo($"Choppa teleported {Vector3.Distance(p, lastPos):F0} m into a garage hall; moving it out shortly");
+            }
+            lastPos = p;
+            if (relocateAt > 0f && Time.time >= relocateAt) { relocateAt = -1f; LeaveGarage(); lastPos = body.position; }
             flight.Grounded = CheckGrounded();
             flight.Step(body, Time.fixedDeltaTime, Up, gravity, applyGravity: true);
         }
@@ -109,6 +131,110 @@ namespace MsChoppa
             return true;
         }
 #endif
+
+        // Riders are hidden (the borrowed van's seat poses don't fit the cabin), and while the local pilot flies the
+        // game's mouse-look is switched off so the camera stays behind the choppa; hold FreeLook to look around.
+        void UpdateRider(bool localPilot)
+        {
+            if (rider == null || rider.WasCollected || !RiderInThis(rider)) rider = FindLocalRider();
+            bool freeLook = Keyboard.current != null && Held(Keyboard.current, Plugin.FreeLook.Value) > 0f;
+            CameraOverride = localPilot && rider != null;
+            SetLook(!CameraOverride);
+            if (CameraOverride)
+            {
+                var m = Mouse.current;
+                if (freeLook && m != null)
+                {
+                    lookYaw = Mathf.Clamp(lookYaw + m.delta.x.ReadValue() * 0.15f, -170f, 170f);
+                    lookPitch = Mathf.Clamp(lookPitch - m.delta.y.ReadValue() * 0.15f, -60f, 70f);
+                }
+                else
+                {
+                    float back = 1f - Mathf.Exp(-Time.deltaTime * 8f);
+                    lookYaw = Mathf.Lerp(lookYaw, 0f, back);
+                    lookPitch = Mathf.Lerp(lookPitch, 0f, back);
+                }
+            }
+
+            var keep = new System.Collections.Generic.HashSet<IntPtr>();
+            if (rider != null)
+                foreach (var r in rider.GetComponentsInChildren<Renderer>(true))
+                {
+                    if (r == null) continue;
+                    keep.Add(r.Pointer);
+                    if (!r.forceRenderingOff) { r.forceRenderingOff = true; hiddenRenderers.Add(r); }
+                }
+            for (int i = hiddenRenderers.Count - 1; i >= 0; i--)
+            {
+                var r = hiddenRenderers[i];
+                if (r == null || r.WasCollected) { hiddenRenderers.RemoveAt(i); continue; }
+                if (keep.Contains(r.Pointer)) continue;
+                r.forceRenderingOff = false;
+                hiddenRenderers.RemoveAt(i);
+            }
+        }
+
+        bool RiderInThis(MoonWalker w) =>
+            w.mountedVehicle != null && w.mountedVehicle.Pointer == Vehicle.Pointer ||
+            w.vehicleSeat != null && w.vehicleSeat.IsChildOf(transform);
+
+        MoonWalker FindLocalRider()
+        {
+            foreach (var w in UnityEngine.Object.FindObjectsByType<MoonWalker>(FindObjectsSortMode.None))
+                if (w != null && RiderInThis(w)) { Plugin.L.LogInfo($"Choppa rider found: {w.name} (pilot={w.mountedVehicle != null})"); return w; }
+            return null;
+        }
+
+        // Off while piloting: the game's mouse-look would orbit its vehicle camera, which we replace with a chase cam.
+        void SetLook(bool enabled)
+        {
+            if (enabled)
+            {
+                if (!lookDisabled) return;
+                try { if (lookWalker != null && !lookWalker.WasCollected) lookWalker.look?.Enable(); }
+                catch (Exception e) { Plugin.L.LogWarning("Re-enabling mouse-look failed: " + e.Message); }
+                lookDisabled = false; lookWalker = null;
+                Plugin.L.LogInfo("Choppa camera released, game mouse-look back on");
+                return;
+            }
+            if (lookDisabled || rider == null) return;
+            try
+            {
+                var look = rider.look;
+                if (look == null) return;
+                look.Disable();
+                lookDisabled = true; lookWalker = rider;
+                lookYaw = lookPitch = 0f;
+                Plugin.L.LogInfo("Choppa chase camera on, game mouse-look off (hold FreeLook to look around)");
+            }
+            catch (Exception e) { Plugin.L.LogWarning("Disabling mouse-look failed: " + e.Message); }
+        }
+
+        // Called after MoonWalker.LateUpdate placed its vehicle camera: put the camera behind the choppa instead.
+        internal void PlaceCamera(MoonWalker w)
+        {
+            var cam = w.viewCamera;
+            if (cam == null) return;
+            float s = Plugin.Scale.Value / 0.75f;
+            Vector3 up = Up;
+            Vector3 fwd = Vector3.ProjectOnPlane(transform.forward, up);
+            if (fwd.sqrMagnitude < 1e-4f) fwd = Vector3.ProjectOnPlane(transform.up, up);
+            var orbit = Quaternion.LookRotation(fwd.normalized, up) * Quaternion.Euler(10f + lookPitch, lookYaw, 0f);
+            Vector3 focus = transform.position + up * (2f * s);
+            Vector3 desired = focus + orbit * new Vector3(0f, 0f, -Plugin.ChaseDistance.Value * s) + up * (Plugin.ChaseHeight.Value - 2f) * s;
+            var ct = cam.transform;
+            ct.position = Vector3.SmoothDamp(ct.position, desired, ref chaseVel, 0.12f);
+            ct.rotation = Quaternion.LookRotation(focus - ct.position, up);
+        }
+
+        void OnDisable()
+        {
+            CameraOverride = false;
+            SetLook(true);
+            ByVehicle.Remove(Vehicle != null ? Vehicle.Pointer : IntPtr.Zero);
+            foreach (var r in hiddenRenderers) if (r != null && !r.WasCollected) r.forceRenderingOff = false;
+            hiddenRenderers.Clear();
+        }
 
         // Garages bring vehicles out into their hall, which has a roof and walls too close for the rotor. Right after
         // spawning inside one, hop onto a helipad spot outside. Parking in a garage later (to store it) is left alone.

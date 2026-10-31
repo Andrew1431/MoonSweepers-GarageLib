@@ -91,9 +91,10 @@ namespace MoonVehicleCore
                 {
                     wasInGame = inGame;
                     CoreLog.Info(inGame ? "Session in game" : "Session left game");
-                    if (inGame) { CoreState.FindWorld(); Injection.Ensure(); }
+                    if (inGame) { CoreState.FindWorld(); Injection.Ensure(); IconRenderer.QueueAll(); }
                     else CoreState.World = null;
                 }
+                IconRenderer.Tick();
 #if DEVBUILD
                 DevTools.Tick();
 #endif

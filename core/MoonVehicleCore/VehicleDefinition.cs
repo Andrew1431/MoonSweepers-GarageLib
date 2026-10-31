@@ -42,8 +42,10 @@ namespace MoonVehicleCore
         /// <summary>Optional tweak applied after the model is built (tint, extra parts).</summary>
         public Action<GameObject, ModelContext> DecorateModel;
 
-        /// <summary>Optional garage card picture. Null uses the base vehicle's picture.</summary>
+        /// <summary>Optional garage card picture. Null: <see cref="CardIconPng"/> if set, else the core renders the model like the vanilla cards.</summary>
         public Func<Sprite> CardIcon;
+        /// <summary>Optional PNG bytes for the garage card (square, transparent background). Used when <see cref="CardIcon"/> is null.</summary>
+        public byte[] CardIconPng;
 
         /// <summary>
         /// Optional controller. Must derive from <see cref="VehicleController"/>; the core registers it with IL2CPP and

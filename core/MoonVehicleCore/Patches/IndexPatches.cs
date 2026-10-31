@@ -113,6 +113,9 @@ namespace MoonVehicleCore.Patches
                 }
                 catch (System.Exception e) { CoreLog.Once("icon" + d.Id, $"'{d.Id}' CardIcon threw: {e}"); }
             }
+            var rendered = IconRenderer.Get(d);
+            if (rendered != null) { __result = rendered; return false; }
+            CoreLog.Once("icon-pending" + d.Id, $"'{d.Id}' card icon not ready, using base picture");
             Remap.ToBase(ref vehicle, "GarageMenu.Render");
             return true;
         }
