@@ -120,6 +120,45 @@ namespace MoonVehicleCore.Patches
             return true;
         }
 
+        // The menu's own picture lookup (Render) is inlined where the cards are built, so modded cards stay blank.
+        // While the menu is open, put the modded vehicles' pictures on their card, upgrade-strip and fleet images.
+        [HarmonyPatch(typeof(MoonGarageMenu), nameof(MoonGarageMenu.Update)), HarmonyPostfix]
+        static void MenuUpdate(MoonGarageMenu __instance)
+        {
+            if (MoonVehicles.All.Count == 0 || !__instance.IsOpen) return;
+            try
+            {
+                var cards = __instance.cards;
+                if (cards != null)
+                    for (int i = 0; i < cards.Count; i++) { var c = cards.get_Item(i); if (c != null) Fill(c.art, c.vehicle); }
+                var strip = __instance.strip;
+                if (strip != null)
+                    for (int i = 0; i < strip.Count; i++) { var c = strip.get_Item(i); if (c != null) Fill(c.art, c.vehicle); }
+                var rows = __instance.fleetRows;
+                if (rows != null)
+                    foreach (var r in rows)
+                        if (r != null && StorageIds.TryParse(r.storage, out _, out int v, out _)) Fill(r.art, v);
+                var shown = __instance.shown ?? __instance.selected;
+                if (shown != null && __instance.page == MoonGarageMenu.Page.Vehicles) Fill(__instance.picture, shown.vehicle);
+            }
+            catch (System.Exception e) { CoreLog.Once("menu-art", "Garage menu pictures: " + e, 2); }
+        }
+
+        static void Fill(UnityEngine.UI.Image img, int vehicle)
+        {
+            if (img == null) return;
+            var d = MoonVehicles.Definition(vehicle);
+            if (d == null) return;
+            Sprite s = null;
+            try { s = d.CardIcon?.Invoke(); } catch { }
+            s ??= IconRenderer.Get(d);
+            if (s == null || (img.sprite != null && img.sprite.Pointer == s.Pointer)) return;
+            img.sprite = s;
+            img.enabled = true;
+            if (img.color.a < 0.01f) img.color = Color.white;
+            CoreLog.Once("menu-art" + d.Id + img.name, $"Garage menu: set '{d.Id}' picture on {img.name}", 3);
+        }
+
         [HarmonyPatch(typeof(MoonGarageMenu), nameof(MoonGarageMenu.Row)), HarmonyPrefix]
         static void Row(Il2CppSystem.Collections.Generic.List<MoonWorld.GarageOffer> offers)
         {

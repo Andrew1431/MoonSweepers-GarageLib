@@ -13,6 +13,8 @@ namespace MoonVehicleCore
     {
         static ConfigEntry<bool> autoLoad, autoBringOut, autoSave, autoQuit;
         static ConfigEntry<string> autoBuy;
+        static ConfigEntry<int> autoOpenMenu;
+        static bool menuOpened;
         static float menuT, gameT;
         static bool loadRequested, bought, saveRequested, quitRequested;
         static float saveAt = -1;
@@ -24,6 +26,7 @@ namespace MoonVehicleCore
             autoBringOut = cfg.Bind("Dev", "AutoBringOut", false, "Dev build: bring the AutoBuy vehicle out of its garage.");
             autoSave = cfg.Bind("Dev", "AutoSave", false, "Dev build: request a save 10 s after the AutoBuy step.");
             autoQuit = cfg.Bind("Dev", "AutoQuit", false, "Dev build: quit the game once that save finished.");
+            autoOpenMenu = cfg.Bind("Dev", "AutoOpenGarageMenu", -1, "Dev build: open the first garage's menu on this tab (0 vehicles, 1 upgrades, 2 fleet) 20 s into the game. -1 = off.");
             CoreLog.Info($"[dev] AutoLoadSlot2={autoLoad.Value} AutoBuy='{autoBuy.Value}' AutoBringOut={autoBringOut.Value} AutoSave={autoSave.Value} AutoQuit={autoQuit.Value}");
         }
 
@@ -37,6 +40,15 @@ namespace MoonVehicleCore
             }
             if (!MoonSession.InGame) { gameT = 0; return; }
             gameT += dt;
+            if (autoOpenMenu.Value >= 0 && !menuOpened && gameT > 20f)
+            {
+                menuOpened = true;
+                var menus = UnityEngine.Object.FindObjectsByType<MoonGarageMenu>(FindObjectsSortMode.None);
+                var g = MoonGarage.all;
+                if (menus != null && menus.Length > 0 && g != null && g.Count > 0)
+                    CoreLog.Info($"[dev] open garage menu tab {autoOpenMenu.Value}: {menus[0].Open(g.get_Item(0).Id, autoOpenMenu.Value)}");
+                else CoreLog.Warn($"[dev] no garage menu ({menus?.Length}) or garage");
+            }
             if (!string.IsNullOrEmpty(autoBuy.Value) && !bought && gameT > 15f) { bought = true; foreach (var id in autoBuy.Value.Split(',', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries)) Buy(id); saveAt = gameT + 10f; }
             if (autoSave.Value && bought && !saveRequested && saveAt > 0 && gameT > saveAt)
             {
