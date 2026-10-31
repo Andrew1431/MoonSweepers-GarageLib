@@ -1,0 +1,277 @@
+== MoonCleaners.MoonUpgradeShop : UnityEngine.MonoBehaviour
+  P static System.Single ToolsW
+  P static System.Single SlotsX
+  P static System.Single SlotsW
+  P static System.Single ItemRowH
+  P Il2CppSystem.Collections.Generic.List`1<MoonCleaners.MoonUpgradeShop/OwnedToolView> ownedTools
+  P Il2CppInterop.Runtime.InteropTypes.Arrays.Il2CppReferenceArray`1<MoonCleaners.MoonUpgradeShop/QuickSlotView> quickSlots
+  P UnityEngine.RectTransform inventoryPanel
+  P UnityEngine.RectTransform dragGhost
+  P UnityEngine.UI.Button inventoryTab
+  P UnityEngine.UI.Button shopTab
+  P TMPro.TMP_Text inventoryTabLabel
+  P TMPro.TMP_Text shopTabLabel
+  P TMPro.TMP_Text collectionHeading
+  P TMPro.TMP_Text itemLocation
+  P TMPro.TMP_Text destinationLabel
+  P System.Int32 targetSlot
+  P System.Int32 hoveredSlot
+  P System.String hoveredItem
+  P MoonCleaners.MoonToolDefinition selectedItem
+  P System.String draggedItem
+  P System.Boolean inventoryPage
+  P static Il2CppSystem.Collections.Generic.HashSet`1<MoonCleaners.MoonUpgradeShop> cameraOwners
+  P MoonCleaners.MoonWalker walker
+  P MoonCleaners.MoonToolbelt belt
+  P MoonCleaners.MoonDustInventory inventory
+  P UnityEngine.GameObject root
+  P UnityEngine.GameObject ownedEventSystem
+  P Il2CppSystem.Collections.Generic.List`1<MoonCleaners.MoonUpgradeShop/OfferView> offers
+  P UnityEngine.RectTransform window
+  P TMPro.TMP_FontAsset font
+  P TMPro.TMP_Text balance
+  P TMPro.TMP_Text status
+  P TMPro.TMP_Text capacity
+  P Il2CppInterop.Runtime.InteropTypes.Arrays.Il2CppStructArray`1<System.Int32> quotedLevels
+  P Il2CppInterop.Runtime.InteropTypes.Arrays.Il2CppStructArray`1<System.Int32> quotedContainerTiers
+  P Il2CppInterop.Runtime.InteropTypes.Arrays.Il2CppStructArray`1<System.Int32> quotedGearLevels
+  P System.Int32 blockedUntilFrame
+  P System.Single refreshAfter
+  P System.Boolean priorVisible
+  P UnityEngine.CursorLockMode priorLock
+  P MoonCleaners.MoonUpgradeShop/Category selectedCategory
+  P System.String _LastMessage_k__BackingField
+  P System.Boolean _PrototypeTesting_k__BackingField
+  P MoonCleaners.MoonPrototypeEquipment prototypes
+  P System.Int32 pageKeysVersion
+  P static Il2CppInterop.Runtime.InteropTypes.Arrays.Il2CppReferenceArray`1<MoonCleaners.MoonUpgradeShop/ConceptOffer> Concepts
+  P static System.Single ListW
+  P static System.Single RowH
+  P static System.Single DetailX
+  P static System.Single PictureSize
+  P static System.Single TextX
+  P static System.Single TextW
+  P static System.Single ChipSize
+  P static Il2CppInterop.Runtime.InteropTypes.Arrays.Il2CppStringArray CategoryNames
+  P static Il2CppInterop.Runtime.InteropTypes.Arrays.Il2CppStringArray CategoryLabels
+  P UnityEngine.RectTransform shopContent
+  P UnityEngine.UI.ScrollRect shopScroll
+  P TMPro.TMP_Text shopInventoryLinkLabel
+  P TMPro.TMP_Text detailCategory
+  P TMPro.TMP_Text detailName
+  P TMPro.TMP_Text detailSummary
+  P TMPro.TMP_Text chipCaption
+  P TMPro.TMP_Text detailStatus
+  P Il2CppInterop.Runtime.InteropTypes.Arrays.Il2CppReferenceArray`1<TMPro.TMP_Text> statCaptions
+  P Il2CppInterop.Runtime.InteropTypes.Arrays.Il2CppReferenceArray`1<TMPro.TMP_Text> statValues
+  P UnityEngine.UI.Image detailArt
+  P MoonCleaners.MoonShopConceptIcon detailSymbol
+  P UnityEngine.UI.Button actionButton
+  P Il2CppInterop.Runtime.InteropTypes.Arrays.Il2CppReferenceArray`1<UnityEngine.UI.Button> shopTabs
+  P Il2CppInterop.Runtime.InteropTypes.Arrays.Il2CppReferenceArray`1<MoonCleaners.MoonUpgradeShop/Chip> chips
+  P MoonCleaners.MoonUpgradeShop/OfferView selectedOffer
+  P MoonCleaners.MoonUpgradeShop/OfferView shownOffer
+  P MoonCleaners.MoonUpgradeShop/OfferView beltOffer
+  P System.Boolean messageIsError
+  P static Il2CppSystem.Collections.Generic.Dictionary`2<System.String,System.String> GearArt
+  P static Il2CppSystem.Collections.Generic.Dictionary`2<System.String,MoonCleaners.MoonShopConceptIcon/Symbol> GearSymbols
+  P static UnityEngine.Color Muted
+  P static UnityEngine.Color White
+  P static UnityEngine.Color Orange
+  P static UnityEngine.Color Green
+  P static Il2CppInterop.Runtime.InteropTypes.Arrays.Il2CppStringArray Descriptions
+  P static System.Single Left
+  P static System.Single Top
+  P static System.Single BodyTop
+  P MoonCleaners.MoonSurveyKit kit
+  P UnityEngine.RectTransform shopPage
+  P UnityEngine.RectTransform inventoryPage2
+  P TMPro.TMP_Text pageTitle
+  P TMPro.TMP_Text pageLine
+  P UnityEngine.RectTransform keys
+  P System.Int32 keysVersion
+  P System.Boolean keysInventory
+  P System.Int32 TargetEquipmentSlot
+  P System.Boolean InventoryPage
+  P System.String SelectedInventoryItem
+  P System.Boolean IsOpen
+  P MoonCleaners.MoonUpgradeShop/Category SelectedCategory
+  P System.String LastMessage
+  P System.Boolean PrototypeTesting
+  P MoonCleaners.MoonWorld World
+  P System.String Player
+  P Il2CppInterop.Runtime.InteropTypes.Arrays.Il2CppReferenceArray`1<MoonCleaners.MoonToolOffer> ToolOffers
+  M Void TogglePage(Boolean showInventory)
+  M Void OpenInventory(Boolean showInventory)
+  M Void ShowInventory(Boolean show)
+  M Boolean SelectInventoryTool(String id)
+  M Boolean AssignSelectedToSlot(Int32 slot)
+  M Boolean AssignInventoryTool(String id, Int32 slot)
+  M Boolean ClearEquipmentSlot(Int32 slot)
+  M Void BuildEquipmentInventory()
+  M Void BuildQuickSlots()
+  M Boolean SelectEquipmentSlot(Int32 slot)
+  M Boolean EquipSelectedTool()
+  M Void DoubleClickEquipment(String id)
+  M Void HoverEquipment(String id, Int32 slot, Boolean entered)
+  M String MoveDescription(MoonToolDefinition tool, Int32 destination)
+  M Void RefreshEquipment()
+  M String EquipmentDragId(Int32 slot)
+  M Boolean BeginEquipmentDrag(String id, PointerEventData pointer)
+  M Void MoveEquipmentDrag(PointerEventData pointer)
+  M Void DropEquipment(Int32 slot)
+  M Void EndEquipmentDrag()
+  M static MoonUpgradeShop ForCamera(Camera camera)
+  M Void Awake()
+  M Void Bind()
+  M Void OnEnable()
+  M Void Update()
+  M Void RefreshPageKeys()
+  M Void FitWindow()
+  M Void SetOpen(Boolean open)
+  M Boolean PurchaseContainer(Int32 index)
+  M Boolean PurchaseTool(Int32 slot)
+  M Boolean PurchaseGear(Int32 index)
+  M Void Refresh()
+  M Int32 PrototypeIndex(OfferView offer)
+  M Void SetPrototypeTesting(Boolean enabled)
+  M Boolean TestItem(Category category, Int32 index)
+  M Void TestOffer(OfferView offer)
+  M Void ClearPrototypes()
+  M Void EnsureInput()
+  M Void OnDisable()
+  M Void OnDestroy()
+  M static Boolean Sold(Category category)
+  M Void BuildShopMenu()
+  M Void BuildShopList(RectTransform page)
+  M OfferView AddOffer(OfferKind kind, Int32 index, Category category, String name, Sprite sprite, Single rotation, Single artScale)
+  M Void AddGear(Int32 index)
+  M Void AddConcept(Int32 index)
+  M Void BuildShopDetails(RectTransform page)
+  M Boolean Listed(OfferView offer)
+  M Void SelectCategory(Category category)
+  M Void SelectOffer(OfferView offer, Boolean refresh)
+  M Void ShowOffer(OfferView offer)
+  M Void ShopAction()
+  M Void ChipClicked(Int32 index)
+  M Void GearAction(Int32 index)
+  M Void ShowBelt()
+  M Boolean HasContainer(Int32 index)
+  M Double ContainerKilograms(Int32 index, Int32 tier)
+  M static String Kilograms(Double kg)
+  M static String Price(Decimal dollars)
+  M Void RefreshShop()
+  M Void RefreshDetails()
+  M String Summary(OfferView offer)
+  M Void SetStats(Il2CppReferenceArray`1 stats)
+  M Void ShowChips(MoonToolDefinition tool, Int32 container, Boolean beltSlots, Boolean jetpackTiers)
+  M static Void Light(Chip chip, Boolean lit, Boolean owned, Boolean locked)
+  M Void FitShopWindow()
+  M Void Build()
+  M Void RefreshFrame()
+  M static Void ToolArt(Transform parent, Sprite sprite, Vector2 position, Vector2 size, Single rotation)
+  M Void .ctor()
+  M Void _Build_b__187_3(MoonSound sound, Single gain)
+  M Void _Build_b__187_0()
+  M Void _Build_b__187_1()
+  M Void _Build_b__187_2()
+  M Void .ctor(IntPtr pointer)
+== MoonCleaners.MoonUpgradeShop/OwnedToolView : Il2CppSystem.Object
+  P MoonCleaners.MoonToolDefinition tool
+  P UnityEngine.UI.Button button
+  P TMPro.TMP_Text title
+  P TMPro.TMP_Text location
+  P TMPro.TMP_Text action
+  P UnityEngine.UI.Button equip
+  M Void .ctor()
+  M Void .ctor(IntPtr pointer)
+== MoonCleaners.MoonUpgradeShop/QuickSlotView : Il2CppSystem.Object
+  P UnityEngine.UI.Button button
+  P UnityEngine.UI.Button clear
+  P UnityEngine.UI.Image icon
+  P TMPro.TMP_Text name
+  M Void .ctor()
+  M Void .ctor(IntPtr pointer)
+== MoonCleaners.MoonUpgradeShop/Category : System.Enum
+  E Tools = 0
+  E Vehicles = 1
+  E Inventory = 2
+  E BaseEquipment = 3
+  E Suit = 4
+== MoonCleaners.MoonUpgradeShop/OfferKind : System.Enum
+  E Tool = 0
+  E Vehicle = 1
+  E Container = 2
+  E Concept = 3
+  E Gear = 4
+== MoonCleaners.MoonUpgradeShop/ConceptOffer : Il2CppSystem.ValueType
+  P MoonCleaners.MoonUpgradeShop/Category category
+  P System.String name
+  P System.String type
+  P System.String description
+  P MoonCleaners.MoonShopConceptIcon/Symbol symbol
+  M Void .ctor(Category category, String name, String type, String description, Symbol symbol)
+  M Void .ctor(IntPtr pointer)
+  M Void .ctor()
+== MoonCleaners.MoonUpgradeShop/OfferView : Il2CppSystem.Object
+  P MoonCleaners.MoonUpgradeShop/OfferKind kind
+  P System.Int32 index
+  P MoonCleaners.MoonUpgradeShop/Category category
+  P System.String name
+  P UnityEngine.Sprite sprite
+  P System.Single rotation
+  P System.Single artScale
+  P System.Boolean hasSymbol
+  P MoonCleaners.MoonShopConceptIcon/Symbol symbol
+  P UnityEngine.UI.Button row
+  P TMPro.TMP_Text title
+  P TMPro.TMP_Text line
+  M Void .ctor()
+  M Void .ctor(IntPtr pointer)
+== MoonCleaners.MoonUpgradeShop/Chip : Il2CppSystem.Object
+  P UnityEngine.UI.Button button
+  P MoonCleaners.MoonSurveyOutline box
+  P TMPro.TMP_Text label
+  P UnityEngine.UI.Image icon
+  M Void .ctor()
+  M Void .ctor(IntPtr pointer)
+== MoonCleaners.MoonUpgradeShop/__c__DisplayClass144_0 : Il2CppSystem.Object
+  P MoonCleaners.MoonUpgradeShop/Category category
+  P MoonCleaners.MoonUpgradeShop __4__this
+  M Void .ctor()
+  M Void _BuildShopMenu_b__0()
+  M Void .ctor(IntPtr pointer)
+== MoonCleaners.MoonUpgradeShop/__c__DisplayClass146_0 : Il2CppSystem.Object
+  P MoonCleaners.MoonUpgradeShop __4__this
+  P MoonCleaners.MoonUpgradeShop/OfferView offer
+  M Void .ctor()
+  M Void _AddOffer_b__0()
+  M Void _AddOffer_b__1()
+  M Void _AddOffer_b__2()
+  M Void .ctor(IntPtr pointer)
+== MoonCleaners.MoonUpgradeShop/__c__DisplayClass151_0 : Il2CppSystem.Object
+  P System.Int32 slot
+  P MoonCleaners.MoonUpgradeShop __4__this
+  M Void .ctor()
+  M Void _BuildShopDetails_b__0()
+  M Void .ctor(IntPtr pointer)
+== MoonCleaners.MoonUpgradeShop/__c__DisplayClass153_0 : Il2CppSystem.Object
+  P MoonCleaners.MoonUpgradeShop __4__this
+  P MoonCleaners.MoonToolDefinition held
+  M Void .ctor()
+  M Boolean _SelectCategory_b__0(OfferView o)
+  M Void .ctor(IntPtr pointer)
+== MoonCleaners.MoonUpgradeShop/__c__DisplayClass36_0 : Il2CppSystem.Object
+  P MoonCleaners.MoonToolDefinition tool
+  P MoonCleaners.MoonUpgradeShop __4__this
+  M Void .ctor()
+  M Void _BuildEquipmentInventory_b__0()
+  M Void _BuildEquipmentInventory_b__1()
+  M Void .ctor(IntPtr pointer)
+== MoonCleaners.MoonUpgradeShop/__c__DisplayClass37_0 : Il2CppSystem.Object
+  P System.Int32 slot
+  P MoonCleaners.MoonUpgradeShop __4__this
+  M Void .ctor()
+  M Void _BuildQuickSlots_b__0()
+  M Void _BuildQuickSlots_b__1()
+  M Void .ctor(IntPtr pointer)

@@ -1,0 +1,23 @@
+== MoonCleaners.MoonWorld/PurchaseKind : System.Enum
+  E Tool = 0
+  E Container = 1
+  E TreeNode = 2
+  E VehicleUpgrade = 3
+== MoonCleaners.MoonWorld/GarageOffer : Il2CppSystem.Object
+  P System.Int32 vehicle
+  P Il2CppSystem.Decimal price
+  P System.String summary
+  M Void .ctor()
+  M Void .ctor(IntPtr pointer)
+== MoonCleaners.MoonWorld/VehicleHandover : Il2CppSystem.ValueType
+  P System.Int32 index
+  P System.String storage
+  P UnityEngine.Vector3 position
+  P UnityEngine.Quaternion rotation
+  P System.Double kilograms
+  P System.Double capacity
+  P System.Boolean lights
+  M Void Write(BinaryWriter w)
+  M static Boolean Read(BinaryReader r, VehicleHandover& h)
+  M Void .ctor(IntPtr pointer)
+  M Void .ctor()

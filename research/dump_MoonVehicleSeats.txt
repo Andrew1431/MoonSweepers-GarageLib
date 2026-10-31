@@ -1,0 +1,23 @@
+== MoonCleaners.MoonVehicleSeats : Il2CppSystem.Object
+  P static Il2CppInterop.Runtime.InteropTypes.Arrays.Il2CppStructArray`1<MoonCleaners.MoonVehicleSeats/Seat> CrewVan
+  P static UnityEngine.Vector3 Place
+  P static UnityEngine.Vector3 Hip
+  P static UnityEngine.Vector3 Ankle
+  P static UnityEngine.Vector3 Hand
+  P static UnityEngine.Vector3 Eye
+  P static System.Int32 MaxSeats
+  P static Il2CppInterop.Runtime.InteropTypes.Arrays.Il2CppStructArray`1<UnityEngine.RaycastHit> hits
+  M static Il2CppStructArray`1 Layout(Int32 vehicle)
+  M static Int32 Count(Int32 vehicle)
+  M static Boolean HasPassengers(Int32 vehicle)
+  M static Boolean Pose(MoonAuthoredVehicleView view, Int32 vehicle, Int32 seat, Vector3& position, Quaternion& rotation)
+  M static Boolean Find(MoonWorld world, String storage, Transform& root, MoonAuthoredVehicleView& view, Int32& vehicle)
+  M static Boolean Taken(String storage, Int32 seat)
+  M static Int32 Free(MoonAuthoredVehicleView view, Int32 vehicle, String storage, Vector3 near, Int32 except)
+  M static Vector3 ExitSpot(MoonWorld world, Transform vehicle, Vector3 seat)
+  M static Vector3 Ground(MoonWorld world, Transform vehicle, Vector3 spot, Vector3& up)
+  M Void .ctor(IntPtr pointer)
+== MoonCleaners.MoonVehicleSeats/Seat : System.ValueType
+  F Vector3 foot
+  F Single turn
+  M Object BoxIl2CppObject()

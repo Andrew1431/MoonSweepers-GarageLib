@@ -1,0 +1,48 @@
+== MoonCleaners.MoonPrototypeCatalog : Il2CppSystem.Object
+  P static Il2CppInterop.Runtime.InteropTypes.Arrays.Il2CppReferenceArray`1<MoonCleaners.MoonPrototypeCatalog/Item> Tools
+  P static Il2CppInterop.Runtime.InteropTypes.Arrays.Il2CppReferenceArray`1<MoonCleaners.MoonPrototypeCatalog/Item> Vehicles
+  P static System.Int32 CrewTransport
+  P static System.Int32 LunarSweeper
+  P static System.Int32 MegaVacuumRover
+  P static Il2CppInterop.Runtime.InteropTypes.Arrays.Il2CppReferenceArray`1<MoonCleaners.MoonPrototypeCatalog/Item> Inventory
+  P static Il2CppInterop.Runtime.InteropTypes.Arrays.Il2CppReferenceArray`1<MoonCleaners.MoonPrototypeCatalog/Item> Base
+  M static String AuthoredPrefab(Int32 index)
+  M static Double StorageKg(Int32 index)
+  M static Single Heft(Int32 index)
+  M static Item V(String name, Work work, Single speed, Single turn, Int32 cargo, Single width)
+  M static Item I(String name, Work work, String hint, Int32 capacity)
+  M static Item B(String name, Work work, String hint, Single width, Int32 capacity)
+  M static Item Get(Category category, Int32 index)
+  M Void .ctor(IntPtr pointer)
+== MoonCleaners.MoonPrototypeCatalog/Work : System.Enum
+  E Clean = 0
+  E Scan = 1
+  E Grab = 2
+  E Transport = 3
+  E Lift = 4
+  E Service = 5
+  E Power = 6
+  E Auto = 7
+  E Capacity = 8
+  E QuickSwap = 9
+  E Pack = 10
+  E Label = 11
+  E Sort = 12
+  E Store = 13
+  E Light = 14
+  E Solar = 15
+  E Platform = 16
+  E Barrier = 17
+  E Shop = 18
+== MoonCleaners.MoonPrototypeCatalog/Item : Il2CppSystem.Object
+  P System.String name
+  P System.String hint
+  P MoonCleaners.MoonPrototypeCatalog/Work work
+  P System.Single width
+  P System.Single depth
+  P System.Single reach
+  P System.Single speed
+  P System.Single turn
+  P System.Int32 capacity
+  M Void .ctor(String name, Work work, String hint, Single width, Single depth, Single reach, Single speed, Single turn, Int32 capacity)
+  M Void .ctor(IntPtr pointer)

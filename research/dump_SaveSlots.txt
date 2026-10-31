@@ -1,0 +1,51 @@
+== MoonCleaners.MoonSaveSlots : Il2CppSystem.Object
+  P static System.Int32 Count
+  P static System.String ActiveKey
+  P static System.Boolean migrated
+  P static System.String Folder
+  P static System.Int32 Active
+  M static String SlotFolder(Int32 slot)
+  M static String BackupFolder(Int32 slot)
+  M static String Backups(String identity)
+  M static String Root(String identity)
+  M static Boolean Used(Int32 slot)
+  M static Summary Read(Int32 slot)
+  M static Summary ReadSummary(String path)
+  M static Void Record(Decimal dollars, Int32 regions, Double playSeconds)
+  M static Void Delete(Int32 slot)
+  M static Void Migrate()
+  M static Void ResetState()
+  M Void .ctor(IntPtr pointer)
+== MoonCleaners.MoonSaveSlots/Summary : Il2CppSystem.Object
+  P System.Int64 lastPlayedTicks
+  P System.Double dollars
+  P System.Int32 regions
+  P System.Double playSeconds
+  M Void .ctor()
+  M Void .ctor(IntPtr pointer)
+== MoonCleaners.MoonSession : Il2CppSystem.Object
+  P static System.String MenuScene
+  P static System.String GameScene
+  P static System.String loading
+  P static Il2CppSystem.Action`1<System.String> LoadingStarted
+  P static Il2CppSystem.Action LoadingAbandoned
+  P static System.Boolean quitting
+  P static System.Boolean InGame
+  P static System.Boolean InMenu
+  P static System.Boolean Loading
+  M static Void add_LoadingStarted(Action`1 value)
+  M static Void remove_LoadingStarted(Action`1 value)
+  M static Void add_LoadingAbandoned(Action value)
+  M static Void remove_LoadingAbandoned(Action value)
+  M static Void ResetState()
+  M static Boolean WantsToQuit()
+  M static Void Loaded(Scene scene, LoadSceneMode mode)
+  M static Void StartShift()
+  M static Boolean JoinCrewShift(IPrelude join)
+  M static Void LoadAbandoned(String scene)
+  M static Void ReloadShift()
+  M static Void ReturnToMenu()
+  M static Void ReloadMenu()
+  M static Void Load(String scene)
+  M static Void QuitGame()
+  M Void .ctor(IntPtr pointer)

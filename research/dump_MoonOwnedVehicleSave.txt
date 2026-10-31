@@ -1,0 +1,8 @@
+== MoonCleaners.MoonOwnedVehicleSave : Il2CppSystem.Object
+  P static System.Int32 MaxVehicles
+  P static System.Int32 OdometerVersion
+  P static System.Int32 UpgradesVersion
+  M static Void Write(BinaryWriter writer, MoonLooseDustSnapshot state)
+  M static Void Read(BinaryReader reader, MoonLooseDustSnapshot state, Int32 version)
+  M static MoonOwnedVehicle ReadOne(BinaryReader reader, Boolean odometer, Boolean upgrades)
+  M Void .ctor(IntPtr pointer)

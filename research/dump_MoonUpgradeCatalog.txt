@@ -1,0 +1,10 @@
+== MoonCleaners.MoonUpgradeCatalog : UnityEngine.ScriptableObject
+  P Il2CppInterop.Runtime.InteropTypes.Arrays.Il2CppReferenceArray`1<MoonCleaners.MoonToolOffer> tools
+  P Il2CppInterop.Runtime.InteropTypes.Arrays.Il2CppReferenceArray`1<MoonCleaners.MoonContainerOffer> containers
+  P Il2CppInterop.Runtime.InteropTypes.Arrays.Il2CppReferenceArray`1<MoonCleaners.MoonBagOffer> bags
+  P System.String StarterId
+  M Decimal ContainerPrice(MoonToolDefinition tool, Int32 tier)
+  M Decimal LegacyBagRefund(Int32 tier)
+  M MoonToolOffer Find(String id)
+  M Void .ctor()
+  M Void .ctor(IntPtr pointer)

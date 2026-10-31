@@ -1,0 +1,10 @@
+== MoonCleaners.MoonGarageSave : Il2CppSystem.Object
+  M static Void Write(BinaryWriter writer, MoonLooseDustSnapshot state)
+  M static Void Read(BinaryReader reader, MoonLooseDustSnapshot state)
+  M Void .ctor(IntPtr pointer)
+== MoonCleaners.MoonGarageSave/__c : Il2CppSystem.Object
+  P static MoonCleaners.MoonGarageSave/__c __9
+  P static Il2CppSystem.Predicate`1<MoonCleaners.MoonDepotSnapshot> __9__0_0
+  M Void .ctor()
+  M Boolean _Write_b__0_0(MoonDepotSnapshot d)
+  M Void .ctor(IntPtr pointer)

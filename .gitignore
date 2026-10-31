@@ -1,2 +1,5 @@
 *.blend1
 *.blend@
+.save-backup/
+bin/
+obj/

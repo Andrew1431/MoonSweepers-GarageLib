@@ -1,0 +1,91 @@
+== MoonCleaners.MoonGarage : UnityEngine.MonoBehaviour
+  P Il2CppInterop.Runtime.InteropTypes.Arrays.Il2CppReferenceArray`1<UnityEngine.Transform> bays
+  P UnityEngine.Collider orderDesk
+  P UnityEngine.Transform unloadPoint
+  P UnityEngine.Transform collectorHood
+  P UnityEngine.Transform collectorBellows
+  P UnityEngine.Renderer hoodRenderer
+  P System.Int32 hoodLightSlot
+  P System.Single hoodHeight
+  P System.Single bellowsLength
+  P System.Single hoodTravel
+  P UnityEngine.Transform siloDust
+  P UnityEngine.Vector2 siloDustTravel
+  P UnityEngine.Renderer halo
+  P System.Int32 haloLightSlot
+  P MoonCleaners.MoonWorld _World_k__BackingField
+  P System.Int32 _Id_k__BackingField
+  P static Il2CppSystem.Collections.Generic.List`1<MoonCleaners.MoonGarage> all
+  P UnityEngine.Bounds hall
+  P System.Boolean hallFound
+  P static UnityEngine.Vector3 SpaceCentre
+  P static UnityEngine.Vector3 SpaceHalf
+  P static Il2CppInterop.Runtime.InteropTypes.Arrays.Il2CppReferenceArray`1<UnityEngine.Collider> spaceHits
+  P MoonCleaners.MoonPrototypeVehicle collecting
+  P System.Single holdUntil
+  P System.Single flowUntil
+  P System.Single hoodTarget
+  P System.Single hoodDrop
+  P System.Boolean flowing
+  P System.Boolean crewHeld
+  P static Il2CppSystem.Action`3<MoonCleaners.MoonGarage,System.Single,System.Boolean> HoodShown
+  P static Il2CppInterop.Runtime.InteropTypes.Arrays.Il2CppStructArray`1<UnityEngine.RaycastHit> hoodHits
+  P static Il2CppInterop.Runtime.InteropTypes.Arrays.Il2CppStructArray`1<UnityEngine.Vector2> hoodRays
+  P static System.Single HoodReach
+  P static System.Single HoodClearance
+  P static System.Single DriverReach
+  P static System.Single DriverHead
+  P MoonCleaners.MoonPrototypeVehicle measured
+  P Il2CppSystem.Collections.Generic.List`1<UnityEngine.Renderer> vehicleRenderers
+  P UnityEngine.Vector3 hoodRest
+  P UnityEngine.Vector3 bellowsScale
+  P System.Boolean restRead
+  P UnityEngine.MaterialPropertyBlock lightBlock
+  P UnityEngine.Color ringEmission
+  P UnityEngine.Color haloEmission
+  P System.Single ringGlow
+  P System.Single haloGlow
+  P static System.Int32 EmissionId
+  P UnityEngine.AudioSource hoodSound
+  P UnityEngine.AudioSource flowSound
+  P UnityEngine.Vector3 dustRest
+  P System.Single shownFill
+  P UnityEngine.Renderer dustRenderer
+  P static System.Single MinShownFill
+  P System.Single deliveredAt
+  P MoonCleaners.MoonWorld World
+  P System.Int32 Id
+  P UnityEngine.Bounds Hall
+  P System.Boolean HoodMoving
+  M Void OnEnable()
+  M Void OnDisable()
+  M static MoonGarage Find(MoonWorld world, Int32 id)
+  M Void Setup(MoonWorld world, Int32 id)
+  M Bounds FindHall()
+  M static Boolean InHall(Vector3 point)
+  M Void Update()
+  M Pose Bay(Int32 vehicle)
+  M Pose Spot()
+  M Component Occupant(MoonPrototypeVehicle coming)
+  M static String Describe(Component occupant)
+  M static MoonGarage CollectorFor(MoonPrototypeVehicle vehicle)
+  M static Void add_HoodShown(Action`3 value)
+  M static Void remove_HoodShown(Action`3 value)
+  M Double Collect(MoonPrototypeVehicle vehicle, Single seconds, String& message, Boolean& started)
+  M Void ShowCrewCollect(Single drop, Boolean flowing)
+  M Boolean UnderHood(MoonPrototypeVehicle vehicle, Single& drop)
+  M Void Awake()
+  M static Color Emission(Renderer r, Int32 slot)
+  M Void AnimateCollector()
+  M Void CollectorSounds(Boolean moving, Boolean flowingNow)
+  M Void SetGlow(Renderer r, Int32 slot, Color colour, Single glow, Single& shown)
+  M Void AnimateSilo()
+  M Void Deliver()
+  M Void AnimateHalo()
+  M Void .ctor()
+  M Void .ctor(IntPtr pointer)
+== MoonCleaners.MoonGarage/__c__DisplayClass34_0 : Il2CppSystem.Object
+  P System.Int32 vehicle
+  M Void .ctor()
+  M Boolean _Bay_b__0(GarageOffer o)
+  M Void .ctor(IntPtr pointer)

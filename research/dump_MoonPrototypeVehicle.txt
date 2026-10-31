@@ -1,0 +1,224 @@
+== MoonCleaners.MoonPrototypeVehicle : UnityEngine.MonoBehaviour
+  P MoonCleaners.MoonPrototypeCatalog/Item _Spec_k__BackingField
+  P System.Int32 _Index_k__BackingField
+  P System.Boolean _IsDriven_k__BackingField
+  P System.Boolean _Autopilot_k__BackingField
+  P System.String _StorageId_k__BackingField
+  P MoonCleaners.MoonPrototypeEquipment owner
+  P MoonCleaners.MoonPrototypeCargo cargo
+  P UnityEngine.Rigidbody body
+  P UnityEngine.Transform seat
+  P UnityEngine.Transform arm
+  P UnityEngine.Transform cargoAnchor
+  P MoonCleaners.MoonAuthoredVehicleView authored
+  P System.Boolean _Grounded_k__BackingField
+  P System.Boolean _Cleaning_k__BackingField
+  P System.Single _Steering_k__BackingField
+  P System.Boolean _Drifting_k__BackingField
+  P System.Single _DriftSlip_k__BackingField
+  P static System.Single DriftTurn
+  P static System.Single DriftGrip
+  P System.Single driftRelease
+  P MoonCleaners.MoonVehicleDust wheelDust
+  P System.Single _SpeedFactor_k__BackingField
+  P System.Single _BoostFactor_k__BackingField
+  P System.Single _UnloadFactor_k__BackingField
+  P System.Int32 appliedUpgrades
+  P System.Single _TurnRate_k__BackingField
+  P System.Single _CollectionFeedback_k__BackingField
+  P MoonCleaners.MoonVehicleLights lights
+  P UnityEngine.Vector3 groundNormal
+  P UnityEngine.Vector3 lastCleanPoint
+  P UnityEngine.Vector3 lastCleanRight
+  P UnityEngine.Vector3 feedbackPoint
+  P System.Boolean hasCleanPoint
+  P System.Single nextFullNotice
+  P MoonCleaners.MoonBrushDust dustFeedback
+  P Il2CppSystem.Action`2<System.Int32,System.Double> onCleaned
+  P Il2CppSystem.Collections.Generic.List`1<UnityEngine.Transform> wheels
+  P Il2CppInterop.Runtime.InteropTypes.Arrays.Il2CppStructArray`1<UnityEngine.RaycastHit> groundHits
+  P System.Single nextPadCheck
+  P UnityEngine.Vector3 home
+  P System.Single throttle
+  P System.Single steer
+  P System.Single nextWork
+  P System.Single lift
+  P System.Single autoTurnUntil
+  P System.Boolean workHeld
+  P System.Boolean brake
+  P System.Boolean ready
+  P System.Boolean boost
+  P System.Boolean boostLatched
+  P System.Boolean cleaningLatched
+  P Il2CppInterop.Runtime.InteropTypes.Arrays.Il2CppStructArray`1<UnityEngine.RaycastHit> exitHits
+  P MoonCleaners.MoonGarage padGarage
+  P System.Double padMoved
+  P System.String padNote
+  P System.Boolean _CruiseFitted_k__BackingField
+  P System.Boolean _CruiseOn_k__BackingField
+  P System.Int32 _SuctionLevel_k__BackingField
+  P System.Int32 _Suction_k__BackingField
+  P System.Single _SuctionChangedAt_k__BackingField
+  P System.Single cruiseThrottle
+  P System.Boolean cruiseRaising
+  P Il2CppInterop.Runtime.InteropTypes.Arrays.Il2CppStructArray`1<MoonCleaners.MoonPrototypeVehicle/Strut> struts
+  P System.Single stiffness
+  P System.Single damping
+  P System.Single strutForceLimit
+  P System.Single exitReach
+  P System.Single flippedFor
+  P System.Single flipHold
+  P System.Single flipStarted
+  P System.Single flippedNoticeAt
+  P System.Boolean heldStill
+  P System.Boolean flipping
+  P UnityEngine.Vector3 flipFromPosition
+  P UnityEngine.Vector3 flipToPosition
+  P UnityEngine.Quaternion flipFromRotation
+  P UnityEngine.Quaternion flipToRotation
+  P static System.Single SpringHz
+  P static System.Single DampingRatio
+  P static System.Single Downforce
+  P static System.Single SideGrip
+  P static System.Single UprightDot
+  P static System.Single GroundDot
+  P static System.Single YawResponse
+  P static System.Single TiltDamping
+  P static System.Single FlipTilt
+  P static System.Single FlipStillSpeed
+  P static System.Single FlipSettle
+  P static System.Single FlipSeconds
+  P static System.Single FlipLift
+  P static System.Single FlipHoldSeconds
+  P static System.Single AirPitchRate
+  P static System.Single AirSpinRate
+  P static System.Single AirResponse
+  P static System.Single AirDeadZone
+  P static System.Single AirAfter
+  P static System.Single AirTouchGrace
+  P System.Single airPitch
+  P System.Single airTurn
+  P System.Single airborneSince
+  P System.Single touchedAt
+  P static UnityEngine.PhysicsMaterial vehicleMaterial
+  P Il2CppInterop.Runtime.InteropTypes.Arrays.Il2CppStructArray`1<UnityEngine.RaycastHit> strutHits
+  P System.Int32 _WheelsOnGround_k__BackingField
+  P System.Single _Clearance_k__BackingField
+  P System.Boolean _Flipped_k__BackingField
+  P System.Boolean _InAir_k__BackingField
+  P System.Boolean _AirControl_k__BackingField
+  P System.Single impactAt
+  P System.Boolean tipped
+  P MoonCleaners.MoonPrototypeCatalog/Item Spec
+  P System.Int32 Index
+  P System.Boolean IsDriven
+  P System.Boolean Autopilot
+  P System.Int32 CargoCount
+  P System.Single Speed
+  P System.String StorageId
+  P MoonCleaners.MoonWorld World
+  P System.String DriverId
+  P MoonCleaners.MoonWalker Owner
+  P System.Double DustKilograms
+  P System.Double DustCapacityKg
+  P System.Boolean DustFull
+  P System.Boolean IsAuthoredTest
+  P MoonCleaners.MoonAuthoredVehicleView AuthoredView
+  P System.Single ForwardSpeed
+  P System.Boolean Grounded
+  P System.Boolean Cleaning
+  P System.Single Steering
+  P System.Single DriveInput
+  P System.Boolean CleaningEnabled
+  P System.Boolean Boosting
+  P System.Boolean BoostOn
+  P System.Boolean Drifting
+  P System.Single DriftSlip
+  P System.Single MaximumSpeed
+  P System.Single CruiseSpeed
+  P System.Single SpeedFactor
+  P System.Single BoostFactor
+  P System.Single UnloadFactor
+  P System.Single CleaningWidth
+  P System.Single TurnRate
+  P System.Single CollectionFeedback
+  P System.Boolean LightsOn
+  P System.Single FlipHoldProgress
+  P System.Boolean CruiseFitted
+  P System.Boolean CruiseOn
+  P System.Int32 SuctionLevel
+  P System.Int32 Suction
+  P System.Boolean SuctionAdjustable
+  P System.Single SuctionChangedAt
+  P System.Single SuctionSpeedShare
+  P System.Single SuctionWidthShare
+  P System.Single ForwardTop
+  P System.Int32 WheelsOnGround
+  P System.Int32 WheelCount
+  P System.Single Clearance
+  P System.Boolean Flipped
+  P System.Boolean Flipping
+  P System.Boolean Upright
+  P System.Boolean FacesUp
+  P System.Boolean InAir
+  P System.Single AirTime
+  P System.Boolean AirControl
+  P UnityEngine.Vector3 CameraPivot
+  M Void ApplyUpgrades()
+  M Void Initialize(MoonPrototypeEquipment owner, Int32 index, String storageId)
+  M Boolean Enter()
+  M Void VehicleSound(AudioClip clip, Single volume)
+  M Boolean Exit()
+  M Boolean JumpOut()
+  M Boolean Exit(Boolean jump)
+  M Vector3 ExitSpot()
+  M Vector3 ExitGround(Vector3 spot, Vector3& up)
+  M static Boolean ExitClear(Vector3 foot, Vector3 up)
+  M Void LeaveAt(Vector3 foot, Vector3 up, Boolean jump)
+  M Boolean HoldFlip(Boolean held, Single dt)
+  M Void Service()
+  M Void ToggleLights()
+  M Void SetLights(Boolean on)
+  M Void TestDrive(Single drive, Single turn, Boolean working, Boolean faster)
+  M Void ToggleCleaning()
+  M Void Update()
+  M Boolean DustUnder(Vector3 contact)
+  M Void KickDust()
+  M Void Clean()
+  M Void CleaningCompleted(Int32 changed, Double kilograms)
+  M Void UnloadOnPad()
+  M Void PadNotify(String message)
+  M Void ToggleCargo()
+  M Void PrepareRemoval()
+  M Void OnDisable()
+  M Void OnDestroy()
+  M Void FitDriverControls(MoonWorld world)
+  M Void DriverControls(Single& input)
+  M Void SetCruise(Boolean on)
+  M Void ReleaseDriverControls()
+  M Void SetupPhysics()
+  M Void FixedUpdate()
+  M Void AirSteer(Single dt)
+  M Void OnCollisionEnter(Collision collision)
+  M Void OnCollisionStay(Collision collision)
+  M Boolean CastStrut(Vector3 top, Vector3 down, Single radius, Single distance, RaycastHit& nearest)
+  M Void UpdateDrift(Boolean stopped, Single travel)
+  M Single WheelTravel(Int32 wheel)
+  M Void UpdateFlipped(Vector3 radial, Single dt)
+  M Boolean FlipUpright()
+  M Void FlipStep(Vector3 radial)
+  M Void FlippedDriverHint()
+  M Void .ctor()
+  M Boolean _PrepareRemoval_b__165_0(Transform x)
+  M Void .ctor(IntPtr pointer)
+== MoonCleaners.MoonPrototypeVehicle/Strut : System.ValueType
+  F Vector3 rest
+  F Single radius
+  F Single travel
+  F Single length
+  F Single lastLength
+  F Boolean contact
+  F Vector3 point
+  F Vector3 normal
+  F Int32 wheel
+  M Object BoxIl2CppObject()

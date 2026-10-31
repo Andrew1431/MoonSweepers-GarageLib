@@ -1,0 +1,112 @@
+== MoonCleaners.MoonAuthoredVehicleView : UnityEngine.MonoBehaviour
+  P UnityEngine.Transform driverAnchor
+  P UnityEngine.Transform leftGrip
+  P UnityEngine.Transform rightGrip
+  P Il2CppInterop.Runtime.InteropTypes.Arrays.Il2CppReferenceArray`1<UnityEngine.Transform> wheels
+  P Il2CppInterop.Runtime.InteropTypes.Arrays.Il2CppReferenceArray`1<UnityEngine.Transform> brushes
+  P Il2CppInterop.Runtime.InteropTypes.Arrays.Il2CppReferenceArray`1<UnityEngine.Transform> rollers
+  P Il2CppInterop.Runtime.InteropTypes.Arrays.Il2CppReferenceArray`1<MoonCleaners.MoonAuthoredVehicleView/Hose> hoses
+  P static System.Single GulpSpeed
+  P static System.Single GulpSpacing
+  P static System.Single GulpWidth
+  P static System.Single GulpBulge
+  P static System.Single GulpSqueeze
+  P static System.Single HoseBuzz
+  P static System.Int32 GulpSamples
+  P Il2CppInterop.Runtime.InteropTypes.Arrays.Il2CppStructArray`1<System.Single> wheelSteer
+  P System.Boolean enclosedCab
+  P System.Boolean rigid
+  P System.Single wheelRadius
+  P System.Single cleaningOffset
+  P System.Single cleaningWidth
+  P UnityEngine.Transform dustVolume
+  P UnityEngine.Transform dustSurface
+  P System.Single dustHeight
+  P TMPro.TMP_Text readout
+  P UnityEngine.Vector3 seatedHip
+  P UnityEngine.Vector3 seatedFoot
+  P System.Single seatedLean
+  P UnityEngine.Vector3 steeringGrip
+  P UnityEngine.Transform steeringWheel
+  P UnityEngine.Vector3 steeringAxis
+  P System.Single steeringTurn
+  P Il2CppInterop.Runtime.InteropTypes.Arrays.Il2CppReferenceArray`1<UnityEngine.Transform> axles
+  P Il2CppInterop.Runtime.InteropTypes.Arrays.Il2CppStructArray`1<UnityEngine.Vector2Int> axleWheels
+  P UnityEngine.Transform driveShaft
+  P UnityEngine.Transform driveShaftFront
+  P UnityEngine.Transform driveShaftRear
+  P Il2CppInterop.Runtime.InteropTypes.Arrays.Il2CppStructArray`1<UnityEngine.Vector3> headlights
+  P UnityEngine.Vector2 headlightGlass
+  P System.Boolean headlightRound
+  P System.Single headlightLean
+  P Il2CppInterop.Runtime.InteropTypes.Arrays.Il2CppStructArray`1<UnityEngine.Vector3> headlightPanes
+  P Il2CppInterop.Runtime.InteropTypes.Arrays.Il2CppStructArray`1<UnityEngine.Vector3> taillights
+  P UnityEngine.Vector2 taillightGlass
+  P System.Single brushAngle
+  P System.Single brushSpeed
+  P System.Single previousSpeed
+  P System.Single travelPhase
+  P System.Single _Steering_k__BackingField
+  P UnityEngine.Transform _Suspension_k__BackingField
+  P Il2CppInterop.Runtime.InteropTypes.Arrays.Il2CppStructArray`1<UnityEngine.Quaternion> wheelRest
+  P Il2CppInterop.Runtime.InteropTypes.Arrays.Il2CppStructArray`1<UnityEngine.Quaternion> brushRest
+  P Il2CppInterop.Runtime.InteropTypes.Arrays.Il2CppStructArray`1<UnityEngine.Quaternion> rollerRest
+  P Il2CppInterop.Runtime.InteropTypes.Arrays.Il2CppStructArray`1<UnityEngine.Quaternion> axleRestRotation
+  P Il2CppInterop.Runtime.InteropTypes.Arrays.Il2CppStructArray`1<UnityEngine.Vector3> wheelPositions
+  P Il2CppInterop.Runtime.InteropTypes.Arrays.Il2CppStructArray`1<UnityEngine.Vector3> axleRest
+  P UnityEngine.Quaternion steeringRest
+  P UnityEngine.Quaternion shaftRestRotation
+  P UnityEngine.Vector3 shaftRest
+  P UnityEngine.Vector3 shaftRestScale
+  P Il2CppInterop.Runtime.InteropTypes.Arrays.Il2CppStructArray`1<System.Single> wheelAngles
+  P UnityEngine.Vector3 spring
+  P UnityEngine.Vector3 springVelocity
+  P MoonCleaners.MoonPrototypeVehicle vehicle
+  P UnityEngine.Vector3 surfaceRest
+  P UnityEngine.MaterialPropertyBlock dustProperties
+  P Il2CppInterop.Runtime.InteropTypes.Arrays.Il2CppReferenceArray`1<UnityEngine.Renderer> dustRenderers
+  P Il2CppInterop.Runtime.InteropTypes.Arrays.Il2CppReferenceArray`1<UnityEngine.Transform> frontWheelsOf
+  P Il2CppInterop.Runtime.InteropTypes.Arrays.Il2CppStructArray`1<System.Boolean> frontWheels
+  P Il2CppSystem.Collections.Generic.List`1<MoonCleaners.MoonAuthoredVehicleView/HoseState> hoseStates
+  P Il2CppInterop.Runtime.InteropTypes.Arrays.Il2CppStructArray`1<System.Single> gulp
+  P System.Single suckTime
+  P System.Boolean hosesAtRest
+  P UnityEngine.AudioSource hoseSound
+  P System.Single BrushSpeed
+  P System.Single Steering
+  P System.Boolean Seated
+  P System.Boolean Heavy
+  P UnityEngine.Transform Suspension
+  M Void Awake()
+  M Transform Grip(String name, Vector3 point)
+  M Vector3 WheelRestPosition(Int32 index)
+  M Boolean FrontWheel(Int32 i)
+  M Void Animate(Single speed, Single steering, Boolean cleaning, Single fill)
+  M Void PrepareHose(Hose hose)
+  M Void HoseSound(Single suction)
+  M Void Suck(Single dt)
+  M Void OnDestroy()
+  M Void SetFill(Single fill)
+  M Void .ctor()
+  M Void .ctor(IntPtr pointer)
+== MoonCleaners.MoonAuthoredVehicleView/Hose : Il2CppSystem.Object
+  P UnityEngine.Transform part
+  P Il2CppInterop.Runtime.InteropTypes.Arrays.Il2CppStructArray`1<UnityEngine.Vector3> path
+  P Il2CppInterop.Runtime.InteropTypes.Arrays.Il2CppStructArray`1<System.Single> envelope
+  M Void .ctor()
+  M Void .ctor(IntPtr pointer)
+== MoonCleaners.MoonAuthoredVehicleView/HoseMesh : Il2CppSystem.Object
+  P UnityEngine.Mesh mesh
+  P UnityEngine.Renderer renderer
+  P Il2CppInterop.Runtime.InteropTypes.Arrays.Il2CppStructArray`1<UnityEngine.Vector3> rest
+  P Il2CppInterop.Runtime.InteropTypes.Arrays.Il2CppStructArray`1<UnityEngine.Vector3> now
+  P Il2CppInterop.Runtime.InteropTypes.Arrays.Il2CppStructArray`1<UnityEngine.Vector3> radial
+  P Il2CppInterop.Runtime.InteropTypes.Arrays.Il2CppStructArray`1<System.Single> along
+  P Il2CppInterop.Runtime.InteropTypes.Arrays.Il2CppStructArray`1<System.Single> swell
+  M Void .ctor()
+  M Void .ctor(IntPtr pointer)
+== MoonCleaners.MoonAuthoredVehicleView/HoseState : Il2CppSystem.Object
+  P System.Single length
+  P Il2CppSystem.Collections.Generic.List`1<MoonCleaners.MoonAuthoredVehicleView/HoseMesh> meshes
+  M Void .ctor()
+  M Void .ctor(IntPtr pointer)

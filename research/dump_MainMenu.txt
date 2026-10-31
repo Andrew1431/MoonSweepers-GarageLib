@@ -1,0 +1,165 @@
+== MoonCleaners.MoonMainMenu : UnityEngine.MonoBehaviour
+  P static UnityEngine.Color Cream
+  P static UnityEngine.Color Faint
+  P static UnityEngine.Color Orange
+  P static UnityEngine.Color Red
+  P static System.Int32 MemberRows
+  P static System.Int32 ColumnRows
+  P static System.Int32 ListingRows
+  P static System.Single Left
+  P static System.Single Right
+  P static System.Single ListY
+  P static System.Single FootY
+  P static System.String DiscordInvite
+  P UnityEngine.Texture2D logo
+  P MoonCleaners.MoonMenuStage stage
+  P MoonCleaners.MoonMenuAudio menuAudio
+  P MoonCleaners.MoonSimpleKit kit
+  P MoonCleaners.MoonWorkshopKit workshop
+  P MoonCleaners.MoonSettingsScreen settings
+  P MoonCleaners.MoonSimpleDialog dialog
+  P UnityEngine.GameObject root
+  P UnityEngine.GameObject inputSystem
+  P UnityEngine.RectTransform frame
+  P UnityEngine.RectTransform home
+  P UnityEngine.RectTransform startScreen
+  P UnityEngine.RectTransform joinScreen
+  P UnityEngine.RectTransform crewScreen
+  P UnityEngine.RectTransform lookScreen
+  P UnityEngine.RectTransform homeKeys
+  P UnityEngine.RectTransform screenKeys
+  P UnityEngine.CanvasGroup group
+  P Il2CppInterop.Runtime.InteropTypes.Arrays.Il2CppReferenceArray`1<MoonCleaners.MoonSimpleKit/Choice> homeRows
+  P MoonCleaners.MoonSimpleKit/Chip lookChip
+  P MoonCleaners.MoonSimpleKit/Chip discordChip
+  P MoonCleaners.MoonSimpleKit/Chip reviewChip
+  P MoonCleaners.MoonSimpleKit/Chip screenBack
+  P MoonCleaners.MoonAstronautEditor lookEditor
+  P System.Int32 choice
+  P System.Int32 lastRow
+  P System.Boolean stickHeld
+  P System.Boolean starting
+  P MoonCleaners.MoonMainMenu/Panel current
+  P System.Boolean settingsDirty
+  P System.Single saveSettingsAt
+  P System.Single nextRefresh
+  P System.Int32 keysDevice
+  P MoonCleaners.MoonMainMenu/Panel keysPanel
+  P System.String startLine
+  P static System.String PrivacyKey
+  P static Il2CppInterop.Runtime.InteropTypes.Arrays.Il2CppStructArray`1<MoonCleaners.MoonSteamLobby/Privacy> PrivacyChoices
+  P Il2CppSystem.Collections.Generic.List`1<MoonCleaners.MoonMainMenu/SlotView> slotRows
+  P MoonCleaners.MoonSimpleKit/Segments privacyTray
+  P MoonCleaners.MoonSimpleKit/Segments crewPrivacy
+  P TMPro.TMP_Text startNote
+  P MoonCleaners.MoonSimpleKit/Chip playChip
+  P MoonCleaners.MoonSimpleKit/Chip deleteChip
+  P System.Int32 chosenSlot
+  P System.Single lastSlotClick
+  P System.Int32 lastSlotClicked
+  P MoonCleaners.MoonSteamLobby/Privacy chosenPrivacy
+  P Il2CppSystem.Collections.Generic.List`1<MoonCleaners.MoonMainMenu/ListingView> listingRows
+  P MoonCleaners.MoonSimpleKit/Chip refreshChip
+  P TMPro.TMP_Text listingsEmpty
+  P System.Int32 chosenListing
+  P System.Single lastListingClick
+  P Il2CppSystem.Collections.Generic.List`1<MoonCleaners.MoonMainMenu/MemberRow> memberRows
+  P TMPro.TMP_Text crewTitle
+  P MoonCleaners.MoonSimpleKit/Chip readyChip
+  P MoonCleaners.MoonSimpleKit/Chip inviteChip
+  P MoonCleaners.MoonSimpleKit/Chip leaveChip
+  P System.Int32 crewChoice
+  P static System.Boolean reopenLanguage
+  P System.Int32 crewColumns
+  P static System.String ReviewPage
+  P MoonCleaners.MoonSimpleDialog MoonCleaners.MoonSettingsScreen.IHost.Dialog
+  M Void OnEnable()
+  M Void OnDestroy()
+  M Void Update()
+  M Void Back()
+  M ValueTuple`3 Steer(Keyboard board)
+  M Void SteerHome(Keyboard board)
+  M Void Build()
+  M Void BuildHome()
+  M Void PlaceLinks()
+  M Choice HomeRow(String label, Action act, Int32 index)
+  M Void Hover(Int32 index)
+  M Void LayoutHome()
+  M Choice ScreenRow(Transform parent, String name, String title, Single y, Single height, Single size, Action click, Action enter)
+  M Void BuildStart()
+  M Segments PrivacyTray(Transform parent, Single y, Action`1 choose)
+  M Void PlaceStartButtons()
+  M Void BuildJoin()
+  M Void BuildCrew()
+  M Void BuildLook()
+  M Void ShowPanel(Panel panel, Tab tab)
+  M Void OnLobbyChanged()
+  M Void Refresh()
+  M Void Animate()
+  M Void RefreshStart()
+  M Void RefreshSlots()
+  M static String SlotLine(Int32 slot)
+  M static String Regions(Int32 regions)
+  M static String PlayTime(Double seconds)
+  M static String LastPlayed(Int64 ticks)
+  M Void RefreshCrew()
+  M Void LayOutCrew(Int32 columns)
+  M Void RefreshJoin()
+  M Void SteerStart(Keyboard board)
+  M Void SteerJoin(Keyboard board)
+  M Void SteerCrew(Keyboard board)
+  M Void RefreshKeys()
+  M Void StartGame()
+  M Void Play()
+  M Void PlayChosen()
+  M Void ClickSlot(Int32 slot)
+  M Void ChoosePrivacy(Privacy privacy)
+  M Void ChooseCrewPrivacy(Privacy privacy)
+  M Void RequestPublic(String question, String accept, Action yes)
+  M Void RequestDelete(Int32 slot)
+  M Void JoinGame()
+  M Void ReadyOrStart()
+  M Void ClickListing(Int32 index)
+  M Void JoinListing(Int32 index)
+  M Void RequestQuit()
+  M Void OpenDiscord()
+  M static Void OpenLink(String url, Boolean overlay)
+  M Void OnLoading(String scene)
+  M Void OnLoadingAbandoned()
+  M Void SettingsChanged()
+  M Void FlushSettings()
+  M MoonSimpleDialog MoonCleaners_MoonSettingsScreen_IHost_get_Dialog()
+  M Void LanguageChanged()
+  M Void SettingsBack()
+  M Void PlaceLookChip()
+  M Void .ctor()
+  M Void _OnEnable_b__77_0(MoonSound sound, Single gain)
+  M Void _OnEnable_b__77_1(MoonSound sound, Single gain)
+  M Void _Build_b__83_0()
+  M Void _Build_b__83_1()
+  M Void _Build_b__83_2()
+  M Void _BuildHome_b__84_0()
+  M Void _BuildHome_b__84_1()
+  M Void _BuildHome_b__84_2()
+  M Void _BuildHome_b__84_4()
+  M Void _BuildHome_b__84_5()
+  M Void _BuildStart_b__90_3()
+  M Void _BuildStart_b__90_0(Int32 i)
+  M Void _BuildStart_b__90_1()
+  M Void _PrivacyTray_b__91_0()
+  M Void _BuildCrew_b__94_0(Int32 i)
+  M Void _BuildCrew_b__94_1()
+  M Void .ctor(IntPtr pointer)
+== MoonCleaners.MoonMainMenu/Panel : System.Enum
+  E None = 0
+  E Crew = 1
+  E Join = 2
+  E Settings = 3
+  E Look = 4
+  E Start = 5
+== MoonCleaners.MoonMainMenu/SlotView : Il2CppSystem.Object
+  P MoonCleaners.MoonSimpleKit/Choice row
+  P TMPro.TMP_Text detail
+  P TMPro.TMP_Text when
+  M Void .ctor()
+  M Void .ctor(IntPtr pointer)

@@ -1,0 +1,292 @@
+== MoonCleaners.MoonGarageMenu : UnityEngine.MonoBehaviour
+  P static System.Single Reach
+  P static System.Single Left
+  P static System.Single LeftW
+  P static System.Single Gutter
+  P static System.Single RightX
+  P static System.Single RightW
+  P static System.Single HeaderY
+  P static System.Single HeaderH
+  P static System.Single MainY
+  P static System.Single MainH
+  P static System.Single Pad
+  P static System.Single PictureSize
+  P static System.Single ActionY
+  P static System.Single BayY
+  P static System.Single BayW
+  P static System.Single BayH
+  P static System.Single Inner
+  P static System.Single BoardH
+  P static System.Single BoardGap
+  P static System.Single Gap
+  P static UnityEngine.Color Cream
+  P static UnityEngine.Color Soft
+  P static UnityEngine.Color Muted
+  P static UnityEngine.Color Cyan
+  P static UnityEngine.Color Green
+  P static UnityEngine.Color Red
+  P static UnityEngine.Color Orange
+  P MoonCleaners.MoonWalker walker
+  P MoonCleaners.MoonDustInventory inventory
+  P MoonCleaners.MoonPlayerAudio audioOut
+  P MoonCleaners.MoonWorkshopKit kit
+  P UnityEngine.GameObject root
+  P UnityEngine.GameObject ownedEventSystem
+  P MoonCleaners.MoonActionPromptCard prompt
+  P UnityEngine.RectTransform frame
+  P UnityEngine.RectTransform keys
+  P UnityEngine.RectTransform vehiclesPage
+  P TMPro.TMP_Text balance
+  P TMPro.TMP_Text category
+  P TMPro.TMP_Text itemName
+  P TMPro.TMP_Text summary
+  P TMPro.TMP_Text status
+  P UnityEngine.UI.Image picture
+  P MoonCleaners.MoonTreeGlyph pictureGlyph
+  P MoonCleaners.MoonWorkshopPop picturePop
+  P MoonCleaners.MoonWorkshopPop glyphPop
+  P UnityEngine.UI.Button action
+  P UnityEngine.UI.Button second
+  P Il2CppInterop.Runtime.InteropTypes.Arrays.Il2CppReferenceArray`1<TMPro.TMP_Text> statCaptions
+  P Il2CppInterop.Runtime.InteropTypes.Arrays.Il2CppReferenceArray`1<TMPro.TMP_Text> statValues
+  P Il2CppInterop.Runtime.InteropTypes.Arrays.Il2CppReferenceArray`1<UnityEngine.GameObject> statRows
+  P Il2CppSystem.Collections.Generic.List`1<MoonCleaners.MoonGarageMenu/Card> cards
+  P Il2CppInterop.Runtime.InteropTypes.Arrays.Il2CppReferenceArray`1<MoonCleaners.MoonWorkshopKit/TabView> tabs
+  P MoonCleaners.MoonGarageMenu/Page page
+  P MoonCleaners.MoonGarageMenu/Card selected
+  P MoonCleaners.MoonGarageMenu/Card shown
+  P MoonCleaners.MoonGarageMenu/Card popped
+  P System.Int32 garage
+  P System.Int32 openedFrame
+  P System.Int32 blockedUntilFrame
+  P System.Int32 keysVersion
+  P System.Single refreshAt
+  P System.Single statusUntil
+  P System.Single lastClickTime
+  P System.Boolean priorVisible
+  P System.Boolean statusGood
+  P UnityEngine.CursorLockMode priorLock
+  P MoonCleaners.MoonGarageMenu/Card lastClick
+  P UnityEngine.Vector2 stickHeld
+  P System.Single stickRepeatAt
+  P Il2CppSystem.Collections.Generic.List`1<UnityEngine.Canvas> hiddenHud
+  P Il2CppInterop.Runtime.InteropTypes.Arrays.Il2CppStructArray`1<UnityEngine.RaycastHit> hits
+  P Il2CppSystem.Collections.Generic.List`1<MoonCleaners.MoonOwnedVehicle> crewOwned
+  P static System.Single FleetRowH
+  P static System.Single FleetPitch
+  P static System.Int32 FleetRows
+  P UnityEngine.RectTransform fleetPage
+  P TMPro.TMP_Text fleetEmpty
+  P Il2CppInterop.Runtime.InteropTypes.Arrays.Il2CppReferenceArray`1<MoonCleaners.MoonGarageMenu/FleetRow> fleetRows
+  P Il2CppSystem.Collections.Generic.List`1<MoonCleaners.MoonOwnedVehicle> fleet
+  P System.String fleetPicked
+  P System.String fleetShown
+  P System.String fleetPopped
+  P System.String fleetLastClick
+  P System.String fleetInView
+  P System.Int32 fleetTop
+  P System.Single fleetClickTime
+  P static System.Single StripH
+  P static System.Single UpgradeRowsY
+  P static System.Single UpgradeRowH
+  P static System.Single UpgradePitch
+  P UnityEngine.RectTransform upgradesPage
+  P Il2CppSystem.Collections.Generic.List`1<MoonCleaners.MoonGarageMenu/StripCard> strip
+  P Il2CppSystem.Collections.Generic.List`1<MoonCleaners.MoonGarageMenu/UpgradeRow> upgradeRows
+  P MoonCleaners.MoonGarageMenu/UpgradeRow upgradePicked
+  P MoonCleaners.MoonGarageMenu/UpgradeRow upgradePopped
+  P MoonCleaners.MoonGarageMenu/UpgradeRow upgradeShown
+  P MoonCleaners.MoonGarageMenu/UpgradeRow upgradeLastClick
+  P System.Single upgradeClickTime
+  P MoonCleaners.MoonGarageMenu/Card stripPopped
+  P System.Boolean IsOpen
+  P System.Int32 Garage
+  P MoonCleaners.MoonWorld World
+  P System.String Player
+  M Void Awake()
+  M Void OnDisable()
+  M Void OnDestroy()
+  M Void Update()
+  M MoonGarage Aimed()
+  M Boolean Open(Int32 id)
+  M Boolean Open(Int32 id, Int32 tab)
+  M Void SetOpen(Boolean open)
+  M Void EnsureInput()
+  M Void Build()
+  M Void BuildBays()
+  M RectTransform PageRect(RectTransform floor, String name)
+  M static Single BaySize(Int32 count, Single rowH)
+  M Void Row(RectTransform floor, List`1 offers, Single y, Single height, Single size)
+  M static Sprite Render(Int32 vehicle)
+  M Void BuildDetails()
+  M Void ShowPage(Page next, Boolean sound)
+  M Void StepPage(Int32 step)
+  M Void HandleKeys()
+  M Void Step(Vector2 way)
+  M static Vector2 Middle(RectTransform rect)
+  M Void Click(Card card)
+  M Void Pick(Card card)
+  M Void Animate()
+  M Void Act()
+  M Void Second()
+  M Void Store(MoonOwnedVehicle v)
+  M MoonGarage GarageView()
+  M Void ShowStatus(String message, Boolean good)
+  M Void Refresh()
+  M Void RefreshDetails(Decimal money, Component occupant)
+  M ValueTuple`2 Holds(Int32 vehicle, MoonOwnedVehicle mine)
+  M Void ShowNeed(String need, Boolean needIsError)
+  M Void SetButtons(String label, Boolean enabled, String secondLabel, Boolean secondEnabled)
+  M Void SetStats(Il2CppReferenceArray`1 stats)
+  M Void RefreshKeys()
+  M String Where(MoonOwnedVehicle v, Component occupant)
+  M String Short(MoonOwnedVehicle v, Component occupant)
+  M Void Crew(Int32 vehicle, Component occupant, List`1 stats, Int32 room)
+  M static String Price(Decimal dollars)
+  M static String Money(Decimal dollars)
+  M static String Capital(String s)
+  M Void BuildFleetPage(RectTransform floor)
+  M Void ClickFleet(Int32 row)
+  M Void PickFleet(String storage)
+  M Void StepFleet(Vector2 way)
+  M Void AnimateFleet()
+  M Void RefreshFleet(Component occupant)
+  M Void FillFleetRows(Component occupant)
+  M String Way(MoonOwnedVehicle v, Component occupant)
+  M Void FleetDetails(MoonOwnedVehicle v, Component occupant)
+  M Void FleetAct(Boolean store)
+  M Void BuildUpgradesPage(RectTransform floor)
+  M Void PickModel(Int32 vehicle)
+  M Void ClickUpgrade(UpgradeRow r)
+  M Void PickUpgrade(UpgradeRow r)
+  M Void StepUpgrades(Vector2 way)
+  M Void AnimateUpgrades()
+  M Void RefreshUpgrades(Decimal money)
+  M Void UpgradeDetails(Decimal money, MoonOwnedVehicle mine, Int32 vehicle)
+  M Void InstallPicked()
+  M Void .ctor()
+  M Boolean _Open_b__87_0(Card c)
+  M Void _Build_b__91_0(MoonSound sound, Single gain)
+  M Void _BuildBays_b__92_1()
+  M Void _Row_b__95_1()
+  M Void _BuildDetails_b__97_0()
+  M Void _BuildDetails_b__97_1()
+  M Void _BuildFleetPage_b__140_1()
+  M Boolean _StepFleet_b__143_0(MoonOwnedVehicle v)
+  M Boolean _FleetAct_b__149_0(MoonOwnedVehicle x)
+  M Void _BuildUpgradesPage_b__165_1()
+  M Void _BuildUpgradesPage_b__165_3()
+  M Boolean _StepUpgrades_b__169_0(StripCard c)
+  M Boolean _AnimateUpgrades_b__170_0(StripCard s)
+  M Void .ctor(IntPtr pointer)
+== MoonCleaners.MoonGarageMenu/Card : Il2CppSystem.Object
+  P System.Int32 vehicle
+  P UnityEngine.RectTransform rect
+  P UnityEngine.RectTransform lift
+  P UnityEngine.RectTransform tag
+  P UnityEngine.RectTransform chip
+  P UnityEngine.UI.Image art
+  P UnityEngine.UI.Image label
+  P TMPro.TMP_Text name
+  P TMPro.TMP_Text tagText
+  P TMPro.TMP_Text chipText
+  P MoonCleaners.MoonWorkshopPop labelPop
+  P MoonCleaners.MoonWorkshopHover hover
+  M Void .ctor()
+  M Void .ctor(IntPtr pointer)
+== MoonCleaners.MoonGarageMenu/Page : System.Enum
+  E Vehicles = 0
+  E Upgrades = 1
+  E Fleet = 2
+== MoonCleaners.MoonGarageMenu/FleetRow : Il2CppSystem.Object
+  P UnityEngine.UI.Image label
+  P UnityEngine.UI.Image art
+  P TMPro.TMP_Text name
+  P TMPro.TMP_Text owner
+  P TMPro.TMP_Text state
+  P TMPro.TMP_Text where
+  P TMPro.TMP_Text driven
+  P MoonCleaners.MoonWorkshopHover hover
+  P MoonCleaners.MoonWorkshopPop pop
+  P System.String storage
+  M Void .ctor()
+  M Void .ctor(IntPtr pointer)
+== MoonCleaners.MoonGarageMenu/StripCard : Il2CppSystem.Object
+  P System.Int32 vehicle
+  P UnityEngine.RectTransform rect
+  P UnityEngine.RectTransform lift
+  P UnityEngine.UI.Image art
+  P UnityEngine.UI.Image label
+  P TMPro.TMP_Text name
+  P MoonCleaners.MoonWorkshopHover hover
+  P MoonCleaners.MoonWorkshopPop pop
+  M Void .ctor()
+  M Void .ctor(IntPtr pointer)
+== MoonCleaners.MoonGarageMenu/UpgradeRow : Il2CppSystem.Object
+  P MoonCleaners.MoonVehicleUpgrades/Kind kind
+  P UnityEngine.UI.Image label
+  P TMPro.TMP_Text title
+  P TMPro.TMP_Text state
+  P TMPro.TMP_Text tagText
+  P MoonCleaners.MoonTreeGlyph glyph
+  P UnityEngine.RectTransform pips
+  P UnityEngine.RectTransform tag
+  P MoonCleaners.MoonWorkshopHover hover
+  P MoonCleaners.MoonWorkshopPop pop
+  P System.Int32 level
+  P System.Int32 max
+  P System.Boolean shown
+  M Void .ctor()
+  M Void .ctor(IntPtr pointer)
+== MoonCleaners.MoonGarageMenu/__c : Il2CppSystem.Object
+  P static MoonCleaners.MoonGarageMenu/__c __9
+  P static Il2CppSystem.Comparison`1<UnityEngine.RaycastHit> __9__86_0
+  P static Il2CppSystem.Comparison`1<MoonCleaners.MoonOwnedVehicle> __9__121_0
+  P static Il2CppSystem.Predicate`1<MoonCleaners.MoonGarageMenu/UpgradeRow> __9__169_1
+  M Void .ctor()
+  M Int32 _Aimed_b__86_0(RaycastHit a, RaycastHit b)
+  M Int32 _Crew_b__121_0(MoonOwnedVehicle a, MoonOwnedVehicle b)
+  M Boolean _StepUpgrades_b__169_1(UpgradeRow r)
+  M Void .ctor(IntPtr pointer)
+== MoonCleaners.MoonGarageMenu/__c__DisplayClass140_0 : Il2CppSystem.Object
+  P System.Int32 index
+  P MoonCleaners.MoonGarageMenu __4__this
+  M Void .ctor()
+  M Void _BuildFleetPage_b__0()
+  M Void .ctor(IntPtr pointer)
+== MoonCleaners.MoonGarageMenu/__c__DisplayClass145_0 : Il2CppSystem.Object
+  P System.String me
+  P MoonCleaners.MoonGarageMenu __4__this
+  M Void .ctor()
+  M Int32 _RefreshFleet_b__0(MoonOwnedVehicle a, MoonOwnedVehicle b)
+  M Boolean _RefreshFleet_b__1(MoonOwnedVehicle v)
+  M Void .ctor(IntPtr pointer)
+== MoonCleaners.MoonGarageMenu/__c__DisplayClass165_0 : Il2CppSystem.Object
+  P MoonCleaners.MoonGarageMenu/StripCard picked
+  P MoonCleaners.MoonGarageMenu __4__this
+  M Void .ctor()
+  M Void _BuildUpgradesPage_b__0()
+  M Void .ctor(IntPtr pointer)
+== MoonCleaners.MoonGarageMenu/__c__DisplayClass165_1 : Il2CppSystem.Object
+  P MoonCleaners.MoonGarageMenu/UpgradeRow picked
+  P MoonCleaners.MoonGarageMenu __4__this
+  M Void .ctor()
+  M Void _BuildUpgradesPage_b__2()
+  M Void .ctor(IntPtr pointer)
+== MoonCleaners.MoonGarageMenu/__c__DisplayClass166_0 : Il2CppSystem.Object
+  P System.Int32 vehicle
+  M Void .ctor()
+  M Boolean _PickModel_b__0(Card c)
+  M Void .ctor(IntPtr pointer)
+== MoonCleaners.MoonGarageMenu/__c__DisplayClass92_0 : Il2CppSystem.Object
+  P MoonCleaners.MoonGarageMenu/Page shownPage
+  P MoonCleaners.MoonGarageMenu __4__this
+  M Void .ctor()
+  M Void _BuildBays_b__0()
+  M Void .ctor(IntPtr pointer)
+== MoonCleaners.MoonGarageMenu/__c__DisplayClass95_0 : Il2CppSystem.Object
+  P MoonCleaners.MoonGarageMenu/Card picked
+  P MoonCleaners.MoonGarageMenu __4__this
+  M Void .ctor()
+  M Void _Row_b__0()
+  M Void .ctor(IntPtr pointer)

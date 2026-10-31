@@ -1,0 +1,24 @@
+== MoonCleaners.MoonPrototypeModels : Il2CppSystem.Object
+  P Il2CppSystem.Collections.Generic.List`1<UnityEngine.Material> materials
+  P Il2CppSystem.Collections.Generic.List`1<UnityEngine.Mesh> meshes
+  P UnityEngine.Material shell
+  P UnityEngine.Material dark
+  P UnityEngine.Material orange
+  P UnityEngine.Material glass
+  P UnityEngine.Material metal
+  P UnityEngine.Material cyan
+  M Void .ctor()
+  M Material Mat(String name, Color color)
+  M GameObject Tool(Int32 index, Transform parent)
+  M GameObject Vehicle(Int32 index, Transform parent)
+  M GameObject Station(Int32 index, Transform parent, MoonWorld world)
+  M GameObject CargoCrate(Transform parent)
+  M GameObject Wearable(Int32 index, Transform parent)
+  M Void Workshop(Transform t)
+  M Void Hex(Transform parent, String name, Single radius, Single height, Single y, Material material, Boolean collider)
+  M Transform Box(Transform parent, String name, Vector3 position, Vector3 size, Material material, Boolean collision)
+  M Transform Cylinder(Transform parent, String name, Vector3 position, Single radius, Single height, Material material, Boolean collision)
+  M Transform Rod(Transform parent, String name, Vector3 a, Vector3 b, Single radius, Material material, Boolean collision)
+  M Transform Part(Transform parent, String name, PrimitiveType type, Vector3 position, Vector3 scale, Material material, Boolean collision)
+  M Void Dispose()
+  M Void .ctor(IntPtr pointer)

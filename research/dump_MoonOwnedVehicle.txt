@@ -1,0 +1,23 @@
+== MoonCleaners.MoonOwnedVehicle : Il2CppSystem.Object
+  P System.Int32 garage
+  P System.Int32 vehicle
+  P System.String owner
+  P System.String ownerName
+  P System.Boolean inWorld
+  P UnityEngine.Vector3 position
+  P UnityEngine.Quaternion rotation
+  P System.String holder
+  P System.Double odometer
+  P Il2CppInterop.Runtime.InteropTypes.Arrays.Il2CppStructArray`1<System.Byte> upgrades
+  P MoonCleaners.MoonOwnedVehicle/StorageName storageName
+  P System.String Storage
+  M MoonOwnedVehicle Copy()
+  M Void .ctor()
+  M Void .ctor(IntPtr pointer)
+== MoonCleaners.MoonOwnedVehicle/StorageName : Il2CppSystem.Object
+  P System.Int32 garage
+  P System.Int32 vehicle
+  P System.String owner
+  P System.String text
+  M Void .ctor()
+  M Void .ctor(IntPtr pointer)
