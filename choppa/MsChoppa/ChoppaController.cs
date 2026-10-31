@@ -30,6 +30,7 @@ namespace MsChoppa
         readonly System.Collections.Generic.List<Renderer> hiddenRenderers = new();
         Vector3 lastPos;
         float relocateAt = -1f;
+        float flipHeld;
         float boundAt;
 
         protected override void OnBound()
@@ -78,6 +79,7 @@ namespace MsChoppa
                 {
                     pilot.TiltDot = Vector3.Dot(transform.up, Up);
                     pilot.Update(flight, ReadInput(), Time.deltaTime);
+                    HoldFlip();
                 }
                 else flight.CommandedRates = Vector3.zero;
 
@@ -139,6 +141,30 @@ namespace MsChoppa
             return true;
         }
 #endif
+
+        // The game's Flip binding (Z by default) rights vehicles; its wheel-physics flip is suppressed here, so hold it
+        // for the game's hold time while tipped over and the choppa is set back upright.
+        void HoldFlip()
+        {
+            bool held = false;
+            try { held = MoonInput.Flip != null && MoonInput.Flip.Held; } catch { }
+            float tilt = Vector3.Angle(transform.up, Up);
+            if (!held || tilt < 60f || body == null) { flipHeld = 0f; return; }
+            flipHeld += Time.deltaTime;
+            float need = MoonPrototypeVehicle.FlipHoldSeconds > 0.1f ? MoonPrototypeVehicle.FlipHoldSeconds : 1f;
+            if (flipHeld < need) return;
+            flipHeld = 0f;
+            Vector3 up = Up;
+            Vector3 fwd = Vector3.ProjectOnPlane(transform.forward, up);
+            if (fwd.sqrMagnitude < 0.01f) fwd = Vector3.ProjectOnPlane(transform.up, up);
+            body.linearVelocity = Vector3.zero;
+            body.angularVelocity = Vector3.zero;
+            body.position += up * 1.5f;
+            body.rotation = Quaternion.LookRotation(fwd.normalized, up);
+            transform.SetPositionAndRotation(body.position, body.rotation);
+            flight.Collective = 0f;
+            Plugin.L.LogInfo($"Choppa flipped upright (was tilted {tilt:F0}°)");
+        }
 
         // Riders are hidden (the borrowed van's seat poses don't fit the cabin), and while the local pilot flies the
         // game's mouse-look is switched off so the camera stays behind the choppa; hold FreeLook to look around.
