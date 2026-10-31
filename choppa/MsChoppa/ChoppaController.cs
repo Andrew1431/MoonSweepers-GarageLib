@@ -17,6 +17,7 @@ namespace MsChoppa
         readonly RotorcraftPilot pilot = new();
         Rigidbody body;
         Transform mainRotor, tailRotor;
+        Vector3 tailAxis = Vector3.right; // tail rotor's local spin axis: whichever local axis points out sideways
         float gravity, skidY, nextLog;
         bool wasDriven, warnedInput, placed;
         MoonWalker rider;          // local walker mounted in this choppa (pilot or passenger)
@@ -37,12 +38,19 @@ namespace MsChoppa
             body = Vehicle.body != null ? Vehicle.body : GetComponent<Rigidbody>();
             mainRotor = FindDeep(transform, "MainRotor");
             tailRotor = FindDeep(transform, "TailRotor");
+            if (tailRotor != null)
+            {
+                // The Blender empty is rotated, so pick its local axis that lines up with the choppa's sideways axis.
+                Vector3 side = tailRotor.InverseTransformDirection(transform.right);
+                Vector3 a = new Vector3(Mathf.Abs(side.x), Mathf.Abs(side.y), Mathf.Abs(side.z));
+                tailAxis = a.x >= a.y && a.x >= a.z ? Vector3.right : a.y >= a.z ? Vector3.up : Vector3.forward;
+            }
             gravity = Plugin.Gravity.Value > 0f ? Plugin.Gravity.Value : GameGravity();
             skidY = SkidBottom();
             ByVehicle[Vehicle.Pointer] = this;
             boundAt = Time.time;
             Plugin.L.LogInfo($"ChoppaController bound: storage={Storage} body={(body != null)} mass={body?.mass} useGravity={body?.useGravity} kinematic={body?.isKinematic} " +
-                             $"Physics.gravity={Physics.gravity} -> using {gravity:F2} m/s², radius {transform.position.magnitude:F0} m, skidY={skidY:F2}, rotors main={mainRotor != null} tail={tailRotor != null}");
+                             $"Physics.gravity={Physics.gravity} -> using {gravity:F2} m/s², radius {transform.position.magnitude:F0} m, skidY={skidY:F2}, rotors main={mainRotor != null} tail={tailRotor != null} tailAxis={tailAxis}");
         }
 
         public override bool SuppressVanillaFixedUpdate => true;
@@ -77,7 +85,7 @@ namespace MsChoppa
 
                 float dt = Time.deltaTime;
                 if (mainRotor != null) mainRotor.Rotate(0f, flight.RotorSpin * 900f * dt, 0f, Space.Self);
-                if (tailRotor != null) tailRotor.Rotate(flight.RotorSpin * 1600f * dt, 0f, 0f, Space.Self);
+                if (tailRotor != null) tailRotor.Rotate(tailAxis, flight.RotorSpin * 1600f * dt, Space.Self);
 
                 if (driven && Plugin.VerboseLogging.Value && Time.time > nextLog && body != null)
                 {
