@@ -47,12 +47,14 @@ Each document in `tasks` (doc id = kebab-case slug, e.g. `vehicle-roverx-suspens
 3. **Claim atomically.** `get` the task, then `update` with `if_version` = the version you read, setting
    `status: "claimed"`, `claimedBy`, `branch`, `claimedAt`, `heartbeatAt`, `updatedAt`. If the write is refused because
    the version moved, someone else got there first: re-read and re-check.
-4. **Work on a branch** named after the task (`<person>/<doc-id>`), never directly on `main`. Keep edits inside your
-   `paths`; if you need another file, add it to `paths` (pinned `update`) after checking overlap again.
+4. **Sync, then work.** `git pull --rebase` before starting, and read `git log` for what landed since your last
+   session. Committing straight to `main` is the normal flow; a branch or PR is optional, whatever your human prefers.
+   Keep edits inside your `paths`; if you need another file, add it to `paths` (pinned `update`) after checking overlap
+   again. Before every push, `git pull --rebase` again, rebuild, and fix anything the incoming commits broke.
 5. **Heartbeat.** Update `heartbeatAt` (pinned) when you finish a work session or at least daily. A claim with no
    heartbeat for 24 h is stale: you may take it over only after your human agrees, and you say so in `notes`.
-6. **Hand off.** When the PR is open: `status: "review"`, `pr` = link, a short `notes` line on what changed and what
-   wasn't tested. When merged: `status: "done"`. If you stop without finishing: `status: "open"`, remove `claimedBy`
+6. **Hand off.** Once pushed to `main`: `status: "done"` with a short `notes` line on what changed, the commit, and
+   what wasn't tested. (If you used a PR instead: `status: "review"` and `pr` = link while it's open, `done` when merged.) If you stop without finishing: `status: "open"`, remove `claimedBy`
    and `branch` (`{"__delete__": true}`), and leave notes for the next agent.
 7. **File what you find.** A bug or follow-up outside your task becomes a new `open` task, not a drive-by edit.
 
@@ -65,10 +67,10 @@ the board, tell your human and work without it rather than guessing.
 
 ## Repo rules agents tend to miss
 
-- Never test on slot 1 (the main save); copy it to slot 2 first. Never commit Steam IDs, tokens or save files.
+- Never commit Steam IDs, tokens or save files: the repo is public.
 - Plugin GUIDs and vehicle ids never change after a release.
 - The build references DLLs from the game install; there is no CI. Build with `dotnet build GarageLib.slnx -c Release`
   and close the game first (DLL lock).
 - New vehicles: `.\new-vehicle.ps1 -Name <Name> -Author <you>`. Releases: `.\package.ps1 -Release`, only when your
   human asks.
-- Commit and push only when your human asks. Open PRs against `main`.
+- Commit and push when your human asks or has told you to push as you go.

@@ -43,14 +43,15 @@ Things to know:
 
 ## Testing
 
-- **Never test on your main save.** Copy a slot first: `%USERPROFILE%\AppData\LocalLow\DragDropGames\MoonSweepers\MoonSessions\slot-1`
-  → `slot-2`, and play on slot 2. GarageLib keeps modded vehicles in `garagelib.json` inside the slot folder.
+- Saves live in `%USERPROFILE%\AppData\LocalLow\DragDropGames\MoonSweepers\MoonSessions\slot-N`. GarageLib keeps
+  modded vehicles in `garagelib.json` inside the slot folder. Copying a slot to test on is a good habit, not a rule.
 - Logs: `BepInEx/LogOutput.log`. GarageLib logs every step it takes with a vehicle (`[Info :GarageLib]`).
 - Dev builds (the default) add a `[Dev]` section to `BepInEx/config/com.andrew1431.garagelib.cfg` with helpers to
   auto-load slot 2 and auto-buy vehicles by id.
 
-## Pull requests
+## Pushing
 
+Maintainers push straight to `main`; pull first, and pull again before you push. PRs are welcome but optional.
 Claim the work on the [work-order board](https://claude.ai/artifact/Wam9isLuKoJkHGHSi3pVJx) first so two people (or
 two AI agents) don't edit the same files; [CLAUDE.md](CLAUDE.md) has the protocol. Ask Andrew for Editor access.
 
