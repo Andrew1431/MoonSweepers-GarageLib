@@ -1,0 +1,12 @@
+<Project Sdk="Microsoft.NET.Sdk">
+  <PropertyGroup>
+    <AssemblyName>MsChoppa</AssemblyName>
+    <RootNamespace>MsChoppa</RootNamespace>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <Compile Include="$(RepoRoot)shared\Rotorcraft\*.cs" LinkBase="Rotorcraft" />
+    <EmbeddedResource Include="Resources\ms_choppa.bin" LogicalName="ms_choppa.bin" />
+    <ProjectReference Include="$(RepoRoot)src\GarageLib\GarageLib.csproj" Private="false" />
+  </ItemGroup>
+</Project>

@@ -1,0 +1,12 @@
+<Project Sdk="Microsoft.NET.Sdk">
+  <PropertyGroup>
+    <AssemblyName>__NAME__</AssemblyName>
+    <RootNamespace>__NAME__</RootNamespace>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <ProjectReference Include="$(RepoRoot)src\GarageLib\GarageLib.csproj" Private="false" />
+    <!-- Flying vehicle? Share the rotorcraft flight model:
+    <Compile Include="$(RepoRoot)shared\Rotorcraft\*.cs" LinkBase="Rotorcraft" /> -->
+  </ItemGroup>
+</Project>

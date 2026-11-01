@@ -1,4 +1,4 @@
-# Moon Vehicle Core — plan
+# GarageLib — plan
 
 A BepInEx library mod that lets other mods register vehicles that appear in the game's garage, can be bought, spawn,
 drive, save and survive the mod being removed. Ms Choppa would be its first consumer.
@@ -100,7 +100,7 @@ Plus events (`Spawned`, `Stored`, `Bought`) and a query API (`IsModded(int index
 ## How the core does it
 
 1. **Index allocation.** Map each string id to a runtime index once per save, and persist the map in a sidecar file
-   in the slot folder (`MoonSessions/slot-N/<identity>/moonvehiclecore.json`) so indices stay the same for that save.
+   in the slot folder (`MoonSessions/slot-N/<identity>/garagelib.json`) so indices stay the same for that save.
    - Preferred: a high range (1000+), patching every place that reads `GarageVehicleMask` so it also accepts registered
      indices. That keeps clear of vehicles the developer adds later.
    - Fallback if the mask checks are too scattered: indices 22–31 (10 slots). These fit the mask, but a game update

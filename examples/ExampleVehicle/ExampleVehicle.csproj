@@ -1,0 +1,12 @@
+<Project Sdk="Microsoft.NET.Sdk">
+  <PropertyGroup>
+    <AssemblyName>GarageLib.ExampleVehicle</AssemblyName>
+    <RootNamespace>ExampleVehicle</RootNamespace>
+    <!-- Example only: don't drop it into the game on every build. dotnet build -p:InstallToGame=true to try it. -->
+    <InstallToGame Condition="'$(InstallToGame)' == ''">false</InstallToGame>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <ProjectReference Include="$(RepoRoot)src\GarageLib\GarageLib.csproj" Private="false" />
+  </ItemGroup>
+</Project>

@@ -5,3 +5,6 @@ bin/
 obj/
 .parked/
 .game-backup/
+dist/
+Directory.Build.local.props
+*.local.md

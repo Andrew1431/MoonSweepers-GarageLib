@@ -1,0 +1,11 @@
+<Solution>
+  <Folder Name="/examples/">
+    <Project Path="examples/ExampleVehicle/ExampleVehicle.csproj" />
+  </Folder>
+  <Folder Name="/src/">
+    <Project Path="src/GarageLib/GarageLib.csproj" />
+  </Folder>
+  <Folder Name="/vehicles/">
+    <Project Path="vehicles/MsChoppa/MsChoppa.csproj" />
+  </Folder>
+</Solution>
