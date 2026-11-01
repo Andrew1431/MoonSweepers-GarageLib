@@ -1,0 +1,11 @@
+== MoonCleaners.MoonConveyorSnapshot : Il2CppSystem.Object
+  P System.Int32 id
+  P System.String owner
+  P UnityEngine.Vector3 start
+  P UnityEngine.Vector3 startDirection
+  P UnityEngine.Vector3 end
+  P UnityEngine.Vector3 endDirection
+  M MoonConveyorSnapshot Copy()
+  M Void .ctor()
+  M Void .ctor()
+  M Void .ctor(IntPtr pointer)

@@ -1,0 +1,27 @@
+== MoonCleaners.MoonSolarPanelView : MoonCleaners.MoonProductionView
+  P UnityEngine.Renderer chargeLights
+  P System.Single batteryKwh
+  P UnityEngine.Transform head
+  P UnityEngine.Transform array
+  P UnityEngine.Transform actuatorBarrel
+  P UnityEngine.Transform actuatorRod
+  P System.Single restTilt
+  P UnityEngine.Vector3 barrelRestDirection
+  P UnityEngine.Vector3 rodRestDirection
+  P UnityEngine.Quaternion headRest
+  P UnityEngine.Quaternion arrayRest
+  P UnityEngine.Quaternion barrelRest
+  P UnityEngine.Quaternion rodRest
+  P System.Single yaw
+  P System.Single tilt
+  P System.Boolean rested
+  P System.Single trackedYaw
+  P System.Single trackedTilt
+  P UnityEngine.AudioSource servo
+  M Void Awake()
+  M Void Rest()
+  M Void Animate(MoonProductionState s, Single dt)
+  M Void Track(Single yawDegrees, Single tiltDegrees)
+  M Void .ctor()
+  M Void .ctor()
+  M Void .ctor(IntPtr pointer)

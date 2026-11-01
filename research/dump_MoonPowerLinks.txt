@@ -1,0 +1,33 @@
+== MoonCleaners.MoonPowerLinks : Il2CppSystem.Object
+  P MoonCleaners.MoonWorld world
+  P UnityEngine.Transform owner
+  P Il2CppSystem.Collections.Generic.List`1<UnityEngine.LineRenderer> lines
+  P Il2CppSystem.Collections.Generic.List`1<Il2CppSystem.ValueTuple`4<UnityEngine.Vector3,UnityEngine.Vector3,System.Single,UnityEngine.Color>> shown
+  P UnityEngine.LineRenderer ring
+  P UnityEngine.Material material
+  P System.Int32 used
+  P static Il2CppInterop.Runtime.InteropTypes.Arrays.Il2CppStructArray`1<UnityEngine.Vector3> arc
+  P static System.Single AmbientDistance
+  P static System.Single AmbientInterval
+  P System.Single nextAmbient
+  P System.Boolean ambientShown
+  P Il2CppSystem.Collections.Generic.HashSet`1<System.Int32> gridPanels
+  P Il2CppSystem.Collections.Generic.HashSet`1<System.Int32> linkedPanels
+  P Il2CppSystem.Collections.Generic.List`1<System.Int32> gridMachines
+  P UnityEngine.Vector3 ringCentre
+  P System.Single ringRadius
+  P UnityEngine.Material Material
+  M LineRenderer Line()
+  M Void Begin()
+  M Void End()
+  M Void Clear()
+  M Void Dispose()
+  M Void Arc(Vector3 from, Vector3 to, Single width, Color color)
+  M Void ShowGrid(Int32 id)
+  M Void ShowAmbient()
+  M Void Link(Int32 a, Int32 b, Single strength)
+  M Void ShowPreview(Int32 kind, Vector3 position, Quaternion rotation, List`1 joined)
+  M Void Ring(Vector3 centre, Single radius, Color color)
+  M Void .ctor()
+  M Void .ctor(MoonWorld world, Transform owner)
+  M Void .ctor(IntPtr pointer)

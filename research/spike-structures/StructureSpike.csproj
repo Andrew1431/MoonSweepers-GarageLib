@@ -1,0 +1,9 @@
+<Project Sdk="Microsoft.NET.Sdk">
+  <!-- Throwaway runtime probe for the structures / production / power research. Not part of the solution.
+       dotnet build research\spike-structures -c Release -p:InstallToGame=true   then launch the game and read BepInEx/LogOutput.log -->
+  <PropertyGroup>
+    <AssemblyName>StructureSpike</AssemblyName>
+    <RootNamespace>StructureSpike</RootNamespace>
+    <InstallToGame Condition="'$(InstallToGame)' == ''">false</InstallToGame>
+  </PropertyGroup>
+</Project>

@@ -1,0 +1,39 @@
+== MoonCleaners.MoonProductionView : UnityEngine.MonoBehaviour
+  P MoonCleaners.MoonWorld world
+  P System.Int32 id
+  P static UnityEngine.MaterialPropertyBlock block
+  P UnityEngine.AudioSource hum
+  P MoonCleaners.MoonAudioLibrary clips
+  P System.Single refreshAt
+  P System.Single previousProgress
+  P System.Single progress
+  P System.Boolean _Refresh_k__BackingField
+  P static System.Int32 LevelId
+  P static System.Int32 FillPlaneId
+  P static System.Int32 EmissionId
+  P Il2CppSystem.Collections.Generic.Dictionary`2<UnityEngine.Renderer,UnityEngine.Vector4> applied
+  P MoonCleaners.MoonProductionState State
+  P System.Boolean Refresh
+  P MoonCleaners.MoonAudioLibrary Clips
+  P static UnityEngine.MaterialPropertyBlock Block
+  M Void Setup(MoonWorld world, Int32 id)
+  M Void OnSetup()
+  M Void Awake()
+  M Void Rest()
+  M Void Animate(MoonProductionState s, Single dt)
+  M Single HumLevel(MoonProductionState s)
+  M Void Update()
+  M Void UpdateHum(Single level)
+  M Void OneShot(AudioClip clip, Single volume)
+  M Boolean Reached(Single at)
+  M Void Loop(AudioSource& source, AudioClip clip, Boolean on, Single volume, Single distance)
+  M Void OnDisable()
+  M Boolean Unchanged(Renderer r, Vector4 value)
+  M Void SetLevel(Renderer r, Single level)
+  M Void SetFill(Renderer r, Single bottom, Single top, Single fill)
+  M Void SetEmission(Renderer r, Color linear)
+  M static Single Ramp(Single p, Single a, Single b)
+  M static Single Pulse(Single p, Single a, Single b, Single c, Single d)
+  M Void .ctor()
+  M Void .ctor()
+  M Void .ctor(IntPtr pointer)

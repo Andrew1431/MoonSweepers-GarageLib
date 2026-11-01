@@ -1,0 +1,499 @@
+== MoonCleaners.MoonDepotBuilder : UnityEngine.MonoBehaviour
+  P static System.Int32 StructuresTab
+  P static Il2CppInterop.Runtime.InteropTypes.Arrays.Il2CppStringArray structureSections
+  P static System.Single SectionH
+  P static System.Single SectionGap
+  P static System.Single FoldedGap
+  P static System.Single ChevronX
+  P static System.Single TitleX
+  P static System.String FoldedKey
+  P Il2CppSystem.Collections.Generic.List`1<MoonCleaners.MoonDepotBuilder/Section> sections
+  P Il2CppSystem.Collections.Generic.HashSet`1<System.String> folded
+  P static System.Single StyleH
+  P static System.Single StyleBelow
+  P static System.Single StyleCaptionW
+  P static System.Single StyleTitleX
+  P static System.Single StyleArt
+  P static System.Single StyleLabelW
+  P static System.Single StyleLabelH
+  P UnityEngine.RectTransform styleRow
+  P Il2CppSystem.Collections.Generic.List`1<MoonCleaners.MoonDepotBuilder/StyleChip> styleChips
+  P System.Int32 shownFoundationStyle
+  P System.Int32 poppedFoundationStyle
+  P static Il2CppInterop.Runtime.InteropTypes.Arrays.Il2CppReferenceArray`1<MoonCleaners.MoonDepotBuilder/CatalogEntry> baseStructures
+  P Il2CppInterop.Runtime.InteropTypes.Arrays.Il2CppReferenceArray`1<MoonCleaners.MoonDepotBuilder/CatalogEntry> structureEntries
+  P static Il2CppSystem.Collections.Generic.HashSet`1<System.String> SkinnedFinishes
+  P static Il2CppInterop.Runtime.InteropTypes.Arrays.Il2CppStringArray catalogCategories
+  P static System.Single MenuLeft
+  P static System.Single MenuLeftW
+  P static System.Single MenuGutter
+  P static System.Single MenuRightX
+  P static System.Single MenuRightW
+  P static System.Single MenuHeaderY
+  P static System.Single MenuHeaderH
+  P static System.Single MenuMainY
+  P static System.Single MenuMainH
+  P static System.Single MenuPad
+  P static System.Single BayTop
+  P static System.Single BayWidth
+  P static System.Single BayHeight
+  P static System.Single BayInner
+  P static System.Single CardGap
+  P static System.Single CardHeight
+  P static System.Single RowPitch
+  P static System.Int32 Columns
+  P static System.Single CardWidth
+  P static UnityEngine.Color SoftRed
+  P Il2CppSystem.Collections.Generic.List`1<MoonCleaners.MoonDepotBuilder/Card> cards
+  P Il2CppSystem.Collections.Generic.List`1<MoonCleaners.MoonWorkshopKit/TabView> tabViews
+  P Il2CppSystem.Collections.Generic.Dictionary`2<System.String,UnityEngine.Sprite> catalogArt
+  P System.Int32 selectedStructure
+  P System.Int32 selectedCategory
+  P MoonCleaners.MoonWorkshopKit catalogKit
+  P UnityEngine.UI.ScrollRect catalogScroll
+  P UnityEngine.RectTransform catalogContent
+  P UnityEngine.UI.Image detailArt
+  P MoonCleaners.MoonWorkshopPop detailPop
+  P UnityEngine.RectTransform detailTag
+  P TMPro.TMP_Text detailTagText
+  P TMPro.TMP_Text detailCategory
+  P TMPro.TMP_Text detailName
+  P TMPro.TMP_Text detailFootprint
+  P TMPro.TMP_Text detailHeight
+  P TMPro.TMP_Text detailPrice
+  P TMPro.TMP_Text detailNote
+  P UnityEngine.RectTransform menuKeys
+  P System.Int32 menuKeysDevice
+  P static System.Single RevertDelay
+  P System.Single revertAt
+  P static System.Int32 RecentCount
+  P static System.String RecentKey
+  P Il2CppSystem.Collections.Generic.List`1<System.Int32> recent
+  P System.Boolean recentChanged
+  P TMPro.TMP_Text recentEmpty
+  P System.Int32 shownStructure
+  P System.Boolean warmingMenu
+  P System.Boolean menuWarmed
+  P static System.Int32 WarmFrames
+  P static UnityEngine.Color MoveBlue
+  P System.Boolean moveMode
+  P System.Int32 carried
+  P Il2CppSystem.Collections.Generic.List`1<System.Int32> carriedSet
+  P UnityEngine.RectTransform moveKeys
+  P UnityEngine.RectTransform carryKeys
+  P System.Single moveKeysWidth
+  P System.Single carryKeysWidth
+  P Il2CppSystem.Collections.Generic.List`1<Il2CppSystem.ValueTuple`4<UnityEngine.Mesh,UnityEngine.Renderer,System.Int32,System.Boolean>> moveParts
+  P System.Int32 moveTarget
+  P UnityEngine.Color moveColor
+  P UnityEngine.Material moveGlow
+  P UnityEngine.Matrix4x4 carriedFrom
+  P Il2CppInterop.Runtime.InteropTypes.Arrays.Il2CppStructArray`1<UnityEngine.RaycastHit> aimHits
+  P static System.Single RemoveReach
+  P static UnityEngine.Color RemoveRed
+  P static UnityEngine.Color RemoveAmber
+  P System.Boolean removing
+  P UnityEngine.GameObject removeView
+  P Il2CppSystem.Collections.Generic.List`1<Il2CppSystem.ValueTuple`3<UnityEngine.Mesh,UnityEngine.Renderer,System.Int32>> removeParts
+  P UnityEngine.Material removeGlow
+  P UnityEngine.Color removeColor
+  P UnityEngine.RectTransform removeKeys
+  P System.Single removeKeysWidth
+  P Il2CppInterop.Runtime.InteropTypes.Arrays.Il2CppStructArray`1<UnityEngine.RaycastHit> robotHits
+  P static System.Int32 ConveyorKind
+  P static System.Single LanePitch
+  P static System.Single DeckStep
+  P static System.Single StackPitch
+  P System.Boolean laneReverse
+  P System.Boolean onLane
+  P System.String freeShape
+  P System.Boolean endOnLane
+  P Il2CppSystem.Collections.Generic.Dictionary`2<System.Int32,Il2CppSystem.ValueTuple`2<MoonCleaners.MoonConveyorSnapshot,MoonCleaners.MoonConveyorPath>> lanePaths
+  P System.Boolean conveyorMode
+  P System.Boolean haveFirst
+  P System.Boolean reversed
+  P MoonCleaners.MoonDepotBuilder/Anchor first
+  P System.Single anchorHeight
+  P System.Single anchorYaw
+  P System.Single rise
+  P Il2CppInterop.Runtime.InteropTypes.Arrays.Il2CppReferenceArray`1<MoonCleaners.MoonDepotBuilder/PreviewSlot> previews
+  P System.Int32 previewCount
+  P System.Boolean previewValid
+  P UnityEngine.Material conveyorMaterial
+  P UnityEngine.Material markerMaterial
+  P UnityEngine.Material snapMaterial
+  P UnityEngine.Material chevronMaterial
+  P UnityEngine.LineRenderer heightPole
+  P Il2CppSystem.Collections.Generic.List`1<UnityEngine.Material> previewMaterials
+  P Il2CppSystem.Collections.Generic.List`1<MoonCleaners.MoonWorld/ConveyorPort> conveyorPorts
+  P Il2CppSystem.Collections.Generic.List`1<UnityEngine.MeshRenderer> portMarkers
+  P Il2CppSystem.Collections.Generic.List`1<UnityEngine.MeshRenderer> portRings
+  P UnityEngine.Mesh arrowMesh
+  P UnityEngine.Mesh ringMesh
+  P System.Single nextPreview
+  P MoonCleaners.MoonWorld/ConveyorPlan conveyorPlan
+  P Il2CppSystem.Collections.Generic.List`1<MoonCleaners.MoonWorld/ConveyorPlan> conveyorRoute
+  P UnityEngine.Vector4 routeKey
+  P System.Boolean routeFound
+  P System.Single nextRoute
+  P Il2CppSystem.Collections.Generic.List`1<System.Int32> builtBelts
+  P Il2CppSystem.Collections.Generic.List`1<MoonCleaners.MoonDepotBuilder/UndoStep> undo
+  P System.Boolean hadSnap
+  P UnityEngine.Vector3 lastSnap
+  P System.String lastShape
+  P System.String notice
+  P System.Single noticeUntil
+  P UnityEngine.RectTransform conveyorKeys
+  P System.Single conveyorKeysWidth
+  P static System.Single OwnEndReach
+  P static Il2CppSystem.Collections.Generic.HashSet`1<MoonCleaners.MoonDepotBuilder> cameraOwners
+  P UnityEngine.Sprite placeIcon
+  P UnityEngine.Sprite rotateIcon
+  P UnityEngine.Sprite reverseIcon
+  P UnityEngine.Sprite menuIcon
+  P UnityEngine.Sprite exitIcon
+  P static UnityEngine.Color Amber
+  P static UnityEngine.Color Silver
+  P static UnityEngine.Color Blue
+  P static UnityEngine.Color Red
+  P MoonCleaners.MoonWalker walker
+  P MoonCleaners.MoonDustInventory inventory
+  P UnityEngine.GameObject ui
+  P UnityEngine.GameObject menu
+  P UnityEngine.GameObject placementHud
+  P UnityEngine.GameObject ghost
+  P UnityEngine.GameObject eventSystem
+  P UnityEngine.RectTransform window
+  P TMPro.TMP_Text balance
+  P TMPro.TMP_Text menuStatus
+  P TMPro.TMP_Text prompt
+  P TMPro.TMP_Text controls
+  P UnityEngine.Material ghostMaterial
+  P static UnityEngine.Material ghostDepth
+  P Il2CppSystem.Collections.Generic.List`1<Il2CppSystem.ValueTuple`2<UnityEngine.MeshFilter,UnityEngine.Renderer>> ghostShells
+  P UnityEngine.RectTransform buildKeys
+  P System.Single buildKeysWidth
+  P UnityEngine.LineRenderer footprint
+  P System.Boolean placing
+  P System.Boolean valid
+  P System.Boolean priorVisible
+  P UnityEngine.CursorLockMode priorLock
+  P System.Single yaw
+  P System.Single nextCheck
+  P MoonCleaners.MoonWorld/DepotPlacementCheck placementCheck
+  P System.Int32 suppressedUntil
+  P UnityEngine.Vector3 direction
+  P System.Int32 selectedBuildId
+  P System.Boolean freeMode
+  P TMPro.TMP_Text buildHeading
+  P System.String reason
+  P MoonCleaners.MoonDepotBuilder/TestBuildInput _TestInput_k__BackingField
+  P System.Int32 ghostKind
+  P System.Boolean openedFromIdle
+  P System.Int32 keyRowsDevice
+  P MoonCleaners.MoonWorld/StructurePlan structurePlan
+  P System.Single freeLift
+  P System.Boolean freeSnapped
+  P System.Int32 snapTurn
+  P System.Single builtGhostUntil
+  P UnityEngine.Vector3 builtGhostAt
+  P MoonCleaners.MoonWorld/DepotPlacementCheck lastValid
+  P MoonCleaners.MoonWorld/DepotPlacementCheck shown
+  P System.Boolean looksValid
+  P System.Int32 machineChoice
+  P System.Boolean machineSnapped
+  P UnityEngine.Vector3 machineJoint
+  P System.Int32 reshapedBelt
+  P System.Boolean ghostRaised
+  P Il2CppSystem.Collections.Generic.HashSet`1<System.String> Folded
+  P Il2CppInterop.Runtime.InteropTypes.Arrays.Il2CppReferenceArray`1<MoonCleaners.MoonDepotBuilder/CatalogEntry> structures
+  P UnityEngine.Sprite PlacingArt
+  P Il2CppSystem.Collections.Generic.List`1<System.Int32> Recent
+  P System.Boolean WarmingMenu
+  P System.Boolean IsMoving
+  P System.Int32 Carried
+  P System.Boolean IsRemoving
+  P System.Boolean ConveyorMode
+  P System.Boolean ConveyorHasStart
+  P System.Int32 ConveyorPreviewBelts
+  P System.Boolean ConveyorPreviewValid
+  P System.Boolean IsOpen
+  P System.Boolean IsPlacing
+  P System.Boolean PlacementValid
+  P System.String PlacementReason
+  P System.String PromptText
+  P System.Boolean ShowsBuildLines
+  P System.String HeadingText
+  P UnityEngine.Color PromptColor
+  P MoonCleaners.MoonWorld World
+  P MoonCleaners.MoonDepotBuilder/TestBuildInput TestInput
+  P System.Boolean HoldingBuildTool
+  P System.Int32 BuildToolSlot
+  P MoonCleaners.MoonWorld/DepotPlacementCheck Ticket
+  M Void BuildSections()
+  M List`1 LayOutCatalog()
+  M Single PlaceCards(List`1 list, Single y, List`1 shown)
+  M Void ToggleSection(Section s)
+  M Void AnimateSections()
+  M Void BuildStyleRow()
+  M Single PlaceStyleRow(Single y)
+  M Void ChooseFoundationStyle(Int32 style)
+  M Void AnimateStyleRow()
+  M Void RefreshFoundationStyle()
+  M String CardImage(CatalogEntry entry)
+  M static Il2CppReferenceArray`1 WithFoundationKit(Il2CppReferenceArray`1 existing)
+  M Void BuildCatalog()
+  M Void BuildTabs(RectTransform plate)
+  M Void BuildCatalogScroll(RectTransform bay)
+  M Void BuildCard(CatalogEntry entry)
+  M Sprite CardArt(String image)
+  M Void BuildDetails()
+  M TMP_Text Readout(RectTransform plate, String caption, Single x, Single y, Single width)
+  M Void RefreshMenuKeys()
+  M Boolean CanBuild(Int32 kind)
+  M Void FilterCatalog(Int32 category)
+  M List`1 RecentCards()
+  M Void NoteBuilt(Int32 kind)
+  M Void SelectStructure(Int32 kind)
+  M Void ShowDetails(Int32 kind)
+  M Void AnimateCatalog()
+  M String ProductionNote(Int32 kind)
+  M static String Metres(Single value)
+  M static String Price(Decimal dollars)
+  M static Boolean Available(MoonDepotBuildDefinition definition)
+  M Void RefreshCatalog()
+  M Void ShowPrice(RectTransform tag, TMP_Text text, Int32 kind, Decimal money, MoonConveyorKit kit)
+  M Void FitCatalogWindow()
+  M Void DisposeCatalogMaterials()
+  M Void WarmMenu()
+  M IEnumerator WarmMenuFrames()
+  M Void BeginMove()
+  M Void ShowMoveKeys()
+  M Void EndMove()
+  M Boolean UpdateMove(BuildInput& input)
+  M Void PickUp(Int32 id)
+  M Void PutDown()
+  M Void MovedThere(String message)
+  M Boolean AimAt(Ray ray, Single reach, RaycastHit& hit)
+  M Void SetMoveTarget(Int32 id)
+  M Void DrawMoveParts()
+  M Void PickAimed(BuildInput input)
+  M Void BeginRemoval()
+  M Void EndRemoval()
+  M Void UpdateRemoval(BuildInput input)
+  M Int32 RobotAt(Ray ray, Single& distance)
+  M Void SetRemoveTarget(GameObject view)
+  M Void LateUpdate()
+  M Void OnGUI()
+  M Void BeginConveyor()
+  M Void EnsureMarkerMaterials(Material hologram)
+  M Void EndConveyor()
+  M Void ClearMarkers()
+  M Void ShowConveyorPreview(Boolean show)
+  M Void ShowPortMarkers(Boolean show)
+  M Void ResetPreviewKeys()
+  M Void Notice(String text)
+  M static String Shown(String shape)
+  M Void UpdateConveyor(BuildInput input)
+  M Void SetPrompt(String text, Boolean ok, Boolean guide)
+  M Void UndoBelts()
+  M Void SnapFeedback(Anchor current, String shape)
+  M Boolean IsUTurn(ConveyorPlan plan)
+  M Boolean Route(ConveyorPlan plan, Boolean now)
+  M Anchor Aim(Ray ray, Boolean hit, RaycastHit aim, MoonConveyorKit kit, String& shape, String& height)
+  M Boolean StackOn(Int32 id, Vector3 aim, Vector3& point, Vector3& flow)
+  M Boolean LaneBeside(Vector3 point, Int32 skip, Single vertical, Vector3& lane, Vector3& flow, Boolean held)
+  M MoonConveyorPath LanePath(MoonConveyorSnapshot belt)
+  M Boolean DeckAt(RaycastHit aim, Vector3& centre, Quaternion& rotation, Single& step)
+  M static Vector3 KeepToDeck(Vector3 direction, Vector3 deckForward, Vector3 up, Single step)
+  M static Vector3 DeckGrid(Vector3 point, Vector3 centre, Quaternion rotation)
+  M String HeightLabel(Vector3 from, Vector3 point)
+  M Boolean FreeEnd(Vector3 from, Vector3 outward, Boolean shaped, Vector3 aimPoint, MoonConveyorKit kit, Single deckStep, Vector3 deckForward, Vector3& point, Vector3& away, String& shape, String& height)
+  M Boolean Compatible(ConveyorPort port)
+  M Void BuildPreview(Int32 index, MoonConveyorKit kit, MoonConveyorPath path, Ends ends, Boolean ok)
+  M Void UpdateHeightPole(Vector3 free, Boolean show)
+  M Void UpdateMarkers(Vector3 snapped)
+  M Void ShowMarker(Int32 index, Vector3 position, Vector3 direction, Boolean snapped)
+  M Void HideMarkersFrom(Int32 shown)
+  M static MeshRenderer MarkerObject(String name, Mesh mesh)
+  M Void DrawConveyorChevrons()
+  M static Mesh Arrow()
+  M static Mesh Ring()
+  M static MoonDepotBuilder ForCamera(Camera camera)
+  M Boolean PlacementPose(Int32& kind, Vector3& position, Quaternion& rotation)
+  M BuildInput ReadInput()
+  M Void Awake()
+  M Void OnEnable()
+  M Void Update()
+  M Void UpdatePlacing(BuildInput input)
+  M Void SetOpen(Boolean open)
+  M Void ToggleBuildMode()
+  M Boolean BeginPlacementFromShop(Int32 kind)
+  M Void BeginPlacement()
+  M Void MakeGhost(MoonDepotBuildDefinition def, Int32 kind)
+  M Void SetPreviewColor(Color color)
+  M Void DrawGhostDepth()
+  M Void MachineBuilt(MoonDepotBuildDefinition def)
+  M Void CancelPlacement()
+  M Void RefreshMenu()
+  M Void EnsureBuildUI()
+  M Void BuildUI()
+  M Void BuildKeyRows()
+  M static String P(PadButton button)
+  M GameObject PadCard()
+  M static RectTransform Rect(Transform parent, String name, Vector2 pos, Vector2 size)
+  M Void FitBuildKeys()
+  M static MoonHudPanel Panel(Transform parent, String name, Vector2 pos, Vector2 size, Color color, Single radius)
+  M static TMP_Text Label(Transform parent, String value, Vector2 pos, Vector2 size, Single fontSize, Color color)
+  M static Button ButtonAt(Transform parent, String name, Vector2 pos, Vector2 size, UnityAction action, TMP_Text& label)
+  M Void OnDisable()
+  M Void OnDestroy()
+  M Void UpdateFoundationPlacement(MoonDepotBuildDefinition def, Ray ray, RaycastHit hit, Int32 target, BuildInput input)
+  M Void ShowPlan(MoonDepotBuildDefinition def, StructurePlan next, Boolean surface, BuildInput input, String extra)
+  M Void AdvanceCheck(Boolean finish)
+  M Void SetFoundationOutline(MoonDepotBuildDefinition def)
+  M static Il2CppStructArray`1 FootprintLine(MoonFoundationModule module)
+  M Boolean UpdateMachineSnap(MoonDepotBuildDefinition def, BuildInput input)
+  M Void ShowRaised(MoonDepotBuildDefinition def, Boolean raised)
+  M Void EndMachineSnap()
+  M Void PreviewReshapedBelt(StructurePlan plan)
+  M Int32 MarkBeltEnds(MoonDepotBuildDefinition def, Vector3 snapped)
+  M Void _BuildSections_b__13_1()
+  M Boolean _LayOutCatalog_b__14_0(Card c)
+  M Void _BuildStyleRow_b__30_1()
+  M Void _BuildCatalog_b__87_0(MoonSound sound, Single gain)
+  M Void _BuildTabs_b__88_1()
+  M Boolean _FilterCatalog_b__98_0(Card c)
+  M Boolean _BuildPreview_b__258_0(Vector3 from, Vector3 down, Int32& under, Single& distance, Vector3& flow, Single& side)
+  M Void .ctor()
+  M Void .ctor()
+  M Void .ctor(IntPtr pointer)
+== MoonCleaners.MoonDepotBuilder/__c : Il2CppSystem.Object
+  P static MoonCleaners.MoonDepotBuilder/__c __9
+  P static Il2CppSystem.Predicate`1<MoonCleaners.MoonDepotBuilder/CatalogEntry> __9__40_0
+  M Boolean _get_structures_b__40_0(CatalogEntry e)
+  M Void .ctor()
+  M Void .ctor()
+  M Void .ctor(IntPtr pointer)
+== MoonCleaners.MoonDepotBuilder/Anchor : Il2CppSystem.ValueType
+  P UnityEngine.Vector3 position
+  P UnityEngine.Vector3 direction
+  P System.Boolean valid
+  P System.Boolean snapped
+  P System.Boolean output
+  P System.Boolean manual
+  P System.Boolean lane
+  P System.Boolean stacked
+  P System.Int32 structure
+  P System.Int32 belt
+  P System.String label
+  P System.Single deckStep
+  P UnityEngine.Vector3 deckForward
+  M Void .ctor()
+  M Void .ctor(IntPtr pointer)
+  M Void .ctor()
+== MoonCleaners.MoonDepotBuilder/BuildInput : System.ValueType
+  F UnityEngine.Ray aim
+  F System.Boolean place
+  F System.Boolean back
+  F System.Boolean cancel
+  F System.Boolean menu
+  F System.Boolean remove
+  F System.Boolean move
+  F System.Boolean fine
+  F System.Boolean free
+  F System.Boolean freeToggle
+  F System.Boolean undo
+  F System.Boolean belt
+  F System.Boolean ctrl
+  F System.Boolean pick
+  F System.Boolean freeHeld
+  F System.Single wheel
+  F System.Int32 slot
+  M Object BoxIl2CppObject()
+  M Void .ctor()
+== MoonCleaners.MoonDepotBuilder/Card : Il2CppSystem.Object
+  P MoonCleaners.MoonDepotBuilder/CatalogEntry entry
+  P UnityEngine.RectTransform rect
+  P UnityEngine.RectTransform lift
+  P UnityEngine.RectTransform tag
+  P UnityEngine.UI.Image label
+  P UnityEngine.UI.Image art
+  P TMPro.TMP_Text name
+  P TMPro.TMP_Text tagText
+  P UnityEngine.UI.Button button
+  P System.Single shine
+  M Void .ctor()
+  M Void .ctor()
+  M Void .ctor(IntPtr pointer)
+== MoonCleaners.MoonDepotBuilder/CatalogEntry : Il2CppSystem.Object
+  P System.Int32 kind
+  P System.String name
+  P System.String category
+  P System.String image
+  M Void .ctor()
+  M Void .ctor(Int32 kind, String name, String category, String image)
+  M Void .ctor(IntPtr pointer)
+== MoonCleaners.MoonDepotBuilder/PreviewSlot : Il2CppSystem.Object
+  P UnityEngine.GameObject root
+  P UnityEngine.Mesh mesh
+  P UnityEngine.MeshRenderer renderer
+  P UnityEngine.Vector4 key
+  P MoonCleaners.MoonConveyorPath path
+  M Void .ctor()
+  M Void .ctor()
+  M Void .ctor(IntPtr pointer)
+== MoonCleaners.MoonDepotBuilder/Section : Il2CppSystem.Object
+  P System.String name
+  P UnityEngine.RectTransform rect
+  P UnityEngine.RectTransform chevron
+  P TMPro.TMP_Text title
+  P TMPro.TMP_Text count
+  P UnityEngine.UI.Image line
+  P Il2CppInterop.Runtime.InteropTypes.Arrays.Il2CppReferenceArray`1<UnityEngine.UI.Image> arms
+  P MoonCleaners.MoonWorkshopHover hover
+  P System.Single turn
+  P System.Single lit
+  P System.Boolean measured
+  M Void .ctor()
+  M Void .ctor()
+  M Void .ctor(IntPtr pointer)
+== MoonCleaners.MoonDepotBuilder/StyleChip : Il2CppSystem.Object
+  P System.Int32 style
+  P UnityEngine.RectTransform rect
+  P UnityEngine.RectTransform lift
+  P UnityEngine.UI.Image label
+  P UnityEngine.UI.Image art
+  P TMPro.TMP_Text text
+  P MoonCleaners.MoonWorkshopHover hover
+  P MoonCleaners.MoonWorkshopPop pop
+  P System.Single shine
+  P System.Single lit
+  M Void .ctor()
+  M Void .ctor()
+  M Void .ctor(IntPtr pointer)
+== MoonCleaners.MoonDepotBuilder/TestBuildInput : Il2CppSystem.Object
+  P UnityEngine.Ray aim
+  P System.Boolean place
+  P System.Boolean back
+  P System.Boolean fine
+  P System.Boolean free
+  P System.Boolean freeToggle
+  P System.Boolean undo
+  P System.Boolean belt
+  P System.Boolean ctrl
+  P System.Boolean pick
+  P System.Boolean remove
+  P System.Boolean move
+  P System.Single wheel
+  M Void .ctor()
+  M Void .ctor()
+  M Void .ctor(IntPtr pointer)
+== MoonCleaners.MoonDepotBuilder/UndoStep : Il2CppSystem.Object
+  P Il2CppSystem.Collections.Generic.List`1<System.Int32> belts
+  P System.Boolean hadFirst
+  P System.Boolean reversed
+  P MoonCleaners.MoonDepotBuilder/Anchor first
+  M Void .ctor()
+  M Void .ctor()
+  M Void .ctor(IntPtr pointer)
