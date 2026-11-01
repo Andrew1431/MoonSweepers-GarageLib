@@ -34,14 +34,14 @@ namespace GarageLib
 #endif
             var h = new Harmony(Guid);
             int ok = 0, failed = 0;
-            foreach (var t in new[] { typeof(CatalogPatches), typeof(SeatPatches), typeof(GarageMenuPatches), typeof(GarageTraces),
+            foreach (var t in new[] { typeof(CatalogPatches), typeof(SeatPatches), typeof(GarageMenuPatches), typeof(MenuLayout), typeof(GarageTraces),
                                       typeof(ModelPatches), typeof(ControllerPatches), typeof(PurchasePatches),
                                       typeof(UpgradeRulePatches), typeof(SavePatches) })
             {
                 try { h.CreateClassProcessor(t).Patch(); ok++; CoreLog.Debug($"Patched {t.Name}"); }
                 catch (Exception e) { failed++; CoreLog.Error($"Patching {t.Name} failed: {e}"); }
             }
-            AddComponent<CoreDriver>();
+            CoreDriver.Instance = AddComponent<CoreDriver>();
             CoreLog.Info($"GarageLib {Version} loaded ({ok} patch groups, {failed} failed). Vehicles register from other plugins' Load().");
         }
 
@@ -74,6 +74,7 @@ namespace GarageLib
     public class CoreDriver : MonoBehaviour
     {
         public CoreDriver(IntPtr ptr) : base(ptr) { }
+        internal static CoreDriver Instance;
         float nextEnsure;
         bool wasInGame;
 

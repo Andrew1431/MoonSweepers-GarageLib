@@ -13,9 +13,13 @@ namespace GarageLib
     {
         static ConfigEntry<bool> autoLoad, autoBringOut, autoSave, autoQuit;
         static ConfigEntry<string> autoBuy;
-        static ConfigEntry<int> autoOpenMenu;
+        static ConfigEntry<int> autoOpenMenu, fillers;
+        static ConfigEntry<bool> dumpMenu;
         static bool menuOpened;
-        static float menuT, gameT;
+        static float menuT, gameT, dumpAt = -1;
+        static float tabAt = -1, shotAt = -1, pickAt = -1;
+        static bool pickedLast;
+        static int shots;
         static bool loadRequested, bought, saveRequested, quitRequested;
         static float saveAt = -1;
 
@@ -27,6 +31,14 @@ namespace GarageLib
             autoSave = cfg.Bind("Dev", "AutoSave", false, "Dev build: request a save 10 s after the AutoBuy step.");
             autoQuit = cfg.Bind("Dev", "AutoQuit", false, "Dev build: quit the game once that save finished.");
             autoOpenMenu = cfg.Bind("Dev", "AutoOpenGarageMenu", -1, "Dev build: open the first garage's menu on this tab (0 vehicles, 1 upgrades, 2 fleet) 20 s into the game. -1 = off.");
+            fillers = cfg.Bind("Dev", "FillerVehicles", 0, "Dev build: register this many dummy ride-on clones to stress the garage menu layout.");
+            dumpMenu = cfg.Bind("Dev", "DumpGarageMenu", false, "Dev build: after AutoOpenGarageMenu, log the menu's UI hierarchy, then reopen it on the upgrades tab.");
+            for (int i = 1; i <= fillers.Value; i++)
+                MoonVehicles.Register(new VehicleDefinition
+                {
+                    Id = $"dev.filler-{i:D2}", Name = $"Filler {i}", Summary = $"Dev filler vehicle {i} for menu layout tests.",
+                    Price = 100m * i, BaseVehicle = i % 2 == 0 ? 1 : 0,
+                }, Plugin.Guid);
             CoreLog.Info($"[dev] AutoLoadSlot2={autoLoad.Value} AutoBuy='{autoBuy.Value}' AutoBringOut={autoBringOut.Value} AutoSave={autoSave.Value} AutoQuit={autoQuit.Value}");
         }
 
@@ -48,7 +60,12 @@ namespace GarageLib
                 if (menus != null && menus.Length > 0 && g != null && g.Count > 0)
                     CoreLog.Info($"[dev] open garage menu tab {autoOpenMenu.Value}: {menus[0].Open(g.get_Item(0).Id, autoOpenMenu.Value)}");
                 else CoreLog.Warn($"[dev] no garage menu ({menus?.Length}) or garage");
+                if (dumpMenu.Value) dumpAt = gameT + 3f;
             }
+            if (dumpAt > 0 && gameT > dumpAt) { dumpAt = -1; DumpMenu(); tabAt = gameT + 5f; }
+            if (tabAt > 0 && gameT > tabAt) { tabAt = -1; OpenTab(1); shotAt = gameT + 2f; }
+            if (shotAt > 0 && gameT > shotAt) { shotAt = -1; Shot(); if (!pickedLast) pickAt = gameT + 2f; }
+            if (pickAt > 0 && gameT > pickAt) { pickAt = -1; pickedLast = true; PickLast(); shotAt = gameT + 2f; }
             if (!string.IsNullOrEmpty(autoBuy.Value) && !bought && gameT > 15f) { bought = true; foreach (var id in autoBuy.Value.Split(',', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries)) Buy(id); saveAt = gameT + 10f; }
             if (autoSave.Value && bought && !saveRequested && saveAt > 0 && gameT > saveAt)
             {
@@ -68,6 +85,68 @@ namespace GarageLib
                     Application.Quit();
                 }
             }
+        }
+
+        // Second step of the menu check: switch the open garage menu to another tab (screenshots are taken from outside).
+        static void OpenTab(int tab)
+        {
+            var menus = UnityEngine.Object.FindObjectsByType<MoonGarageMenu>(FindObjectsSortMode.None);
+            var g = MoonGarage.all;
+            if (menus == null || menus.Length == 0 || g == null || g.Count == 0) return;
+            menus[0].ShowPage((MoonGarageMenu.Page)tab, false);
+            CoreLog.Info($"[dev] garage menu switched to {menus[0].page}");
+        }
+
+        // Back on the vehicles tab, select the last card: the list should scroll it into view.
+        static void PickLast()
+        {
+            var menus = UnityEngine.Object.FindObjectsByType<MoonGarageMenu>(FindObjectsSortMode.None);
+            if (menus == null || menus.Length == 0 || menus[0].cards == null || menus[0].cards.Count == 0) return;
+            var m = menus[0];
+            m.ShowPage(MoonGarageMenu.Page.Vehicles, false);
+            var last = m.cards.get_Item(m.cards.Count - 1);
+            m.Pick(last);
+            CoreLog.Info($"[dev] picked last card #{last.vehicle}, content y={last.rect.parent?.TryCast<RectTransform>()?.anchoredPosition.y}");
+        }
+
+        static void DumpMenu()
+        {
+            var menus = UnityEngine.Object.FindObjectsByType<MoonGarageMenu>(FindObjectsSortMode.None);
+            if (menus == null || menus.Length == 0) return;
+            var m = menus[0];
+            CoreLog.Info($"[dev] menu dump: page={m.page} cards={m.cards?.Count} strip={m.strip?.Count} BayY={MoonGarageMenu.BayY} BayW={MoonGarageMenu.BayW} BayH={MoonGarageMenu.BayH} Inner={MoonGarageMenu.Inner} Gap={MoonGarageMenu.Gap} StripH={MoonGarageMenu.StripH} MainY={MoonGarageMenu.MainY} MainH={MoonGarageMenu.MainH} LeftW={MoonGarageMenu.LeftW} Left={MoonGarageMenu.Left}");
+            foreach (var page in new[] { m.vehiclesPage, m.upgradesPage })
+                if (page != null) Dump(page, 0);
+            Shot();
+        }
+
+        // ScreenCapture.CaptureScreenshot(string) breaks in interop; grab a texture at the end of the frame instead.
+        internal static void Shot()
+        {
+            if (CoreDriver.Instance == null) return;
+            CoreDriver.Instance.StartCoroutine(BepInEx.Unity.IL2CPP.Utils.Collections.CollectionExtensions.WrapToIl2Cpp(ShotAtEndOfFrame()));
+        }
+
+        static System.Collections.IEnumerator ShotAtEndOfFrame()
+        {
+            yield return new WaitForEndOfFrame();
+            var tex = ScreenCapture.CaptureScreenshotAsTexture();
+            string dir = System.IO.Path.Combine(BepInEx.Paths.CachePath, "garagelib");
+            System.IO.Directory.CreateDirectory(dir);
+            string f = System.IO.Path.Combine(dir, $"menu-{shots++}.png");
+            System.IO.File.WriteAllBytes(f, ImageConversion.EncodeToPNG(tex));
+            UnityEngine.Object.Destroy(tex);
+            CoreLog.Info("[dev] screenshot " + f);
+        }
+
+        static void Dump(Transform t, int depth)
+        {
+            if (depth > 5) return;
+            var rt = t.TryCast<RectTransform>();
+            var comps = string.Join(",", t.GetComponents<Component>().Select(c => c.GetIl2CppType().Name).Where(n => n != "RectTransform" && n != "Transform"));
+            string geo = rt == null ? "" : $" amin={rt.anchorMin} amax={rt.anchorMax} piv={rt.pivot} pos={rt.anchoredPosition} size={rt.sizeDelta} rect={rt.rect.size}";
+            CoreLog.Info($"[dev] {new string(' ', depth * 2)}{t.name} active={t.gameObject.activeSelf}{geo} [{comps}]");
+            for (int i = 0; i < t.childCount && i < 40; i++) Dump(t.GetChild(i), depth + 1);
         }
 
         static void LoadSlot2()

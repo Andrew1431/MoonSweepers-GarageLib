@@ -36,6 +36,9 @@ Register from `Load()`. The registry freezes on the first frame after plugins lo
   - The core grows `MoonPrototypeCatalog.Vehicles` and `MoonWorld.GarageOffers`.
   - Static per-index lookups (prefab, seats, card picture, upgrade rules) are remapped to the base vehicle unless the definition overrides them.
   - `GarageVehicleMask` is a compile-time constant and can't be extended, but buying and spawning work without it.
+- **Garage menu.** Up to 6 vehicles keep the vanilla layout. With more, the vehicles page becomes a scrolling list
+  of fixed-size cards, 6 per shelf, and the upgrades page's vehicle strip scrolls sideways, 7 at a time. Selecting a card
+  (keys, gamepad or click) scrolls it into view (`Patches/MenuLayout.cs`).
 - **Save.**
   - When the game writes a save, modded owned vehicles and their hopper storage are taken out of the snapshot and written to `garagelib.json` in the save folder.
   - On load they are put back into the snapshot before the world restores it. The vanilla save never contains a modded vehicle.
@@ -57,6 +60,9 @@ That build copies both DLLs into the game's `BepInEx/plugins`. Dev builds (`DevB
 - `AutoLoadSlot2`: load the cloned test save. It refuses any other slot.
 - `AutoBuy`: comma-separated vehicle ids to buy.
 - `AutoBringOut`, `AutoSave`, `AutoQuit`: the remaining steps of an unattended test run.
+- `FillerVehicles`: register N dummy vehicles to stress the garage menu.
+- `AutoOpenGarageMenu` + `DumpGarageMenu`: open the garage menu, log its UI tree and save screenshots of both pages to
+  `BepInEx/cache/garagelib`.
 
 Never test against slot-1, the primary save.
 
