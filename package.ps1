@@ -55,8 +55,9 @@ function Zip($from, $zip) {
 }
 
 function Publish($tag, $title, $notes, $zip) {
-    gh release view $tag 2>$null | Out-Null
-    if ($LASTEXITCODE -eq 0) { Write-Host "  $tag already released, skipped"; return }
+    # Not `gh release view`: its "not found" goes to stderr, which Windows PowerShell turns into a terminating error.
+    $existing = gh release list --limit 1000 --json tagName --jq '.[].tagName'
+    if ($existing -contains $tag) { Write-Host "  $tag already released, skipped"; return }
     gh release create $tag $zip --title $title --notes $notes | Out-Host
     if ($LASTEXITCODE) { throw "gh release create $tag failed" }
 }
