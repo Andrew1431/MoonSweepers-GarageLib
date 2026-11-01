@@ -1,0 +1,862 @@
+{
+  "vehicles": [
+    {
+      "index": 0,
+      "name": "Push sweeper",
+      "hint": "W drive | S brake/reverse | A/D steer | Shift boost | F exit | T cargo | LMB toggle cleaning",
+      "work": "Clean",
+      "width": 0.9,
+      "depth": 0.8,
+      "reach": 6,
+      "speed": 2.8,
+      "turn": 145,
+      "capacity": 1,
+      "storageKg": 100,
+      "prefab": "Moon/Vehicles/PushSweeper",
+      "sweeper": true,
+      "upgradePriceScale": 0.5,
+      "offer": {
+        "price": 300,
+        "summary": "Walk behind it: a 1.35 m sweep and a 100 kg hopper."
+      },
+      "upgrades": [
+        {
+          "kind": "Speed",
+          "applies": true,
+          "prices": [
+            300,
+            750,
+            0
+          ]
+        },
+        {
+          "kind": "Hopper",
+          "applies": true,
+          "prices": [
+            250,
+            600,
+            0
+          ]
+        },
+        {
+          "kind": "Turbo",
+          "applies": true,
+          "prices": [
+            600,
+            0
+          ]
+        },
+        {
+          "kind": "Cruise",
+          "applies": true,
+          "prices": [
+            0
+          ]
+        },
+        {
+          "kind": "Suction",
+          "applies": true,
+          "prices": [
+            450,
+            1000,
+            0
+          ]
+        },
+        {
+          "kind": "Unload",
+          "applies": true,
+          "prices": [
+            200,
+            0
+          ]
+        },
+        {
+          "kind": "Lights",
+          "applies": true,
+          "prices": [
+            150,
+            0
+          ]
+        }
+      ]
+    },
+    {
+      "index": 1,
+      "name": "Ride-on sweeper",
+      "hint": "W drive | S brake/reverse | A/D steer | Shift boost | F exit | T cargo | LMB toggle cleaning",
+      "work": "Clean",
+      "width": 1.5,
+      "depth": 0.8,
+      "reach": 6,
+      "speed": 7.2,
+      "turn": 100,
+      "capacity": 2,
+      "storageKg": 500,
+      "prefab": "Moon/Vehicles/RideOnSweeper",
+      "sweeper": true,
+      "upgradePriceScale": 1,
+      "offer": {
+        "price": 1000,
+        "summary": "Ride it, fast: a 2 m sweep and a 500 kg hopper."
+      },
+      "upgrades": [
+        {
+          "kind": "Speed",
+          "applies": true,
+          "prices": [
+            600,
+            1500,
+            0
+          ]
+        },
+        {
+          "kind": "Hopper",
+          "applies": true,
+          "prices": [
+            500,
+            1200,
+            0
+          ]
+        },
+        {
+          "kind": "Turbo",
+          "applies": true,
+          "prices": [
+            1200,
+            0
+          ]
+        },
+        {
+          "kind": "Cruise",
+          "applies": true,
+          "prices": [
+            0
+          ]
+        },
+        {
+          "kind": "Suction",
+          "applies": true,
+          "prices": [
+            900,
+            2000,
+            0
+          ]
+        },
+        {
+          "kind": "Unload",
+          "applies": true,
+          "prices": [
+            400,
+            0
+          ]
+        },
+        {
+          "kind": "Lights",
+          "applies": true,
+          "prices": [
+            300,
+            0
+          ]
+        }
+      ]
+    },
+    {
+      "index": 2,
+      "name": "Compact utility rover",
+      "hint": "W drive | S brake/reverse | A/D steer | Shift boost | F exit | T cargo | Cargo transport",
+      "work": "Transport",
+      "width": 1,
+      "depth": 0.8,
+      "reach": 6,
+      "speed": 9,
+      "turn": 85,
+      "capacity": 2,
+      "storageKg": null,
+      "prefab": null,
+      "sweeper": false,
+      "upgradePriceScale": null,
+      "offer": null,
+      "upgrades": []
+    },
+    {
+      "index": 3,
+      "name": "Long-range scout",
+      "hint": "W drive | S brake/reverse | A/D steer | Shift boost | F exit | T cargo | LMB scan",
+      "work": "Scan",
+      "width": 1,
+      "depth": 0.8,
+      "reach": 6,
+      "speed": 14,
+      "turn": 72,
+      "capacity": 1,
+      "storageKg": null,
+      "prefab": null,
+      "sweeper": false,
+      "upgradePriceScale": null,
+      "offer": null,
+      "upgrades": []
+    },
+    {
+      "index": 4,
+      "name": "Crew transport",
+      "hint": "W drive | S brake/reverse | A/D steer | Shift boost | F exit | T cargo | Cargo transport",
+      "work": "Transport",
+      "width": 1,
+      "depth": 0.8,
+      "reach": 6,
+      "speed": 7,
+      "turn": 55,
+      "capacity": 4,
+      "storageKg": 400,
+      "prefab": "Moon/Vehicles/CrewTransportVan",
+      "sweeper": false,
+      "upgradePriceScale": 2,
+      "offer": {
+        "price": 2000,
+        "summary": "Drive the crew\u0027s van from its cab, seen through its windows: quick between worksites, with room for four capsules (T)."
+      },
+      "upgrades": [
+        {
+          "kind": "Speed",
+          "applies": true,
+          "prices": [
+            1200,
+            3000,
+            0
+          ]
+        },
+        {
+          "kind": "Hopper",
+          "applies": false,
+          "prices": [
+            1000,
+            2400,
+            0
+          ]
+        },
+        {
+          "kind": "Turbo",
+          "applies": true,
+          "prices": [
+            2400,
+            0
+          ]
+        },
+        {
+          "kind": "Cruise",
+          "applies": true,
+          "prices": [
+            0
+          ]
+        },
+        {
+          "kind": "Suction",
+          "applies": false,
+          "prices": [
+            1800,
+            4000,
+            0
+          ]
+        },
+        {
+          "kind": "Unload",
+          "applies": false,
+          "prices": [
+            800,
+            0
+          ]
+        },
+        {
+          "kind": "Lights",
+          "applies": true,
+          "prices": [
+            600,
+            0
+          ]
+        }
+      ]
+    },
+    {
+      "index": 5,
+      "name": "Cargo buggy",
+      "hint": "W drive | S brake/reverse | A/D steer | Shift boost | F exit | T cargo | Cargo transport",
+      "work": "Transport",
+      "width": 1,
+      "depth": 0.8,
+      "reach": 6,
+      "speed": 8,
+      "turn": 80,
+      "capacity": 3,
+      "storageKg": null,
+      "prefab": null,
+      "sweeper": false,
+      "upgradePriceScale": null,
+      "offer": null,
+      "upgrades": []
+    },
+    {
+      "index": 6,
+      "name": "Capsule carrier",
+      "hint": "W drive | S brake/reverse | A/D steer | Shift boost | F exit | T cargo | Cargo transport",
+      "work": "Transport",
+      "width": 1,
+      "depth": 0.8,
+      "reach": 6,
+      "speed": 6,
+      "turn": 65,
+      "capacity": 8,
+      "storageKg": null,
+      "prefab": null,
+      "sweeper": false,
+      "upgradePriceScale": null,
+      "offer": null,
+      "upgrades": []
+    },
+    {
+      "index": 7,
+      "name": "Heavy dust hauler",
+      "hint": "W drive | S brake/reverse | A/D steer | Shift boost | F exit | T cargo | Cargo transport",
+      "work": "Transport",
+      "width": 1,
+      "depth": 0.8,
+      "reach": 6,
+      "speed": 5,
+      "turn": 40,
+      "capacity": 12,
+      "storageKg": null,
+      "prefab": null,
+      "sweeper": false,
+      "upgradePriceScale": null,
+      "offer": null,
+      "upgrades": []
+    },
+    {
+      "index": 8,
+      "name": "Articulated hauler",
+      "hint": "W drive | S brake/reverse | A/D steer | Shift boost | F exit | T cargo | Cargo transport",
+      "work": "Transport",
+      "width": 1,
+      "depth": 0.8,
+      "reach": 6,
+      "speed": 6,
+      "turn": 55,
+      "capacity": 10,
+      "storageKg": null,
+      "prefab": null,
+      "sweeper": false,
+      "upgradePriceScale": null,
+      "offer": null,
+      "upgrades": []
+    },
+    {
+      "index": 9,
+      "name": "Tracked sweeper",
+      "hint": "W drive | S brake/reverse | A/D steer | Shift boost | F exit | T cargo | LMB toggle cleaning",
+      "work": "Clean",
+      "width": 2,
+      "depth": 0.8,
+      "reach": 6,
+      "speed": 4,
+      "turn": 95,
+      "capacity": 4,
+      "storageKg": null,
+      "prefab": null,
+      "sweeper": true,
+      "upgradePriceScale": null,
+      "offer": null,
+      "upgrades": []
+    },
+    {
+      "index": 10,
+      "name": "Wide-area sweeper",
+      "hint": "W drive | S brake/reverse | A/D steer | Shift boost | F exit | T cargo | LMB toggle cleaning",
+      "work": "Clean",
+      "width": 3.2,
+      "depth": 0.8,
+      "reach": 6,
+      "speed": 5.5,
+      "turn": 45,
+      "capacity": 4,
+      "storageKg": null,
+      "prefab": null,
+      "sweeper": true,
+      "upgradePriceScale": null,
+      "offer": null,
+      "upgrades": []
+    },
+    {
+      "index": 11,
+      "name": "Vacuum tanker",
+      "hint": "W drive | S brake/reverse | A/D steer | Shift boost | F exit | T cargo | LMB toggle cleaning",
+      "work": "Clean",
+      "width": 2.4,
+      "depth": 0.8,
+      "reach": 6,
+      "speed": 4.5,
+      "turn": 50,
+      "capacity": 8,
+      "storageKg": null,
+      "prefab": null,
+      "sweeper": true,
+      "upgradePriceScale": null,
+      "offer": null,
+      "upgrades": []
+    },
+    {
+      "index": 12,
+      "name": "Regolith loader",
+      "hint": "W drive | S brake/reverse | A/D steer | Shift boost | F exit | T cargo | LMB toggle cleaning",
+      "work": "Clean",
+      "width": 1.8,
+      "depth": 0.8,
+      "reach": 6,
+      "speed": 4,
+      "turn": 65,
+      "capacity": 4,
+      "storageKg": null,
+      "prefab": null,
+      "sweeper": true,
+      "upgradePriceScale": null,
+      "offer": null,
+      "upgrades": []
+    },
+    {
+      "index": 13,
+      "name": "Excavator crawler",
+      "hint": "W drive | S brake/reverse | A/D steer | Shift boost | F exit | T cargo | LMB toggle cleaning",
+      "work": "Clean",
+      "width": 1.1,
+      "depth": 0.8,
+      "reach": 6,
+      "speed": 2.8,
+      "turn": 85,
+      "capacity": 3,
+      "storageKg": null,
+      "prefab": null,
+      "sweeper": true,
+      "upgradePriceScale": null,
+      "offer": null,
+      "upgrades": []
+    },
+    {
+      "index": 14,
+      "name": "Crane rover",
+      "hint": "W drive | S brake/reverse | A/D steer | Shift boost | F exit | T cargo | Hold LMB lift",
+      "work": "Lift",
+      "width": 1,
+      "depth": 0.8,
+      "reach": 6,
+      "speed": 4,
+      "turn": 55,
+      "capacity": 2,
+      "storageKg": null,
+      "prefab": null,
+      "sweeper": false,
+      "upgradePriceScale": null,
+      "offer": null,
+      "upgrades": []
+    },
+    {
+      "index": 15,
+      "name": "Forklift rover",
+      "hint": "W drive | S brake/reverse | A/D steer | Shift boost | F exit | T cargo | Hold LMB lift",
+      "work": "Lift",
+      "width": 1,
+      "depth": 0.8,
+      "reach": 6,
+      "speed": 3.5,
+      "turn": 90,
+      "capacity": 2,
+      "storageKg": null,
+      "prefab": null,
+      "sweeper": false,
+      "upgradePriceScale": null,
+      "offer": null,
+      "upgrades": []
+    },
+    {
+      "index": 16,
+      "name": "Mobile workshop",
+      "hint": "W drive | S brake/reverse | A/D steer | Shift boost | F exit | T cargo | LMB service tools",
+      "work": "Service",
+      "width": 1,
+      "depth": 0.8,
+      "reach": 6,
+      "speed": 6,
+      "turn": 50,
+      "capacity": 4,
+      "storageKg": null,
+      "prefab": null,
+      "sweeper": false,
+      "upgradePriceScale": null,
+      "offer": null,
+      "upgrades": []
+    },
+    {
+      "index": 17,
+      "name": "Battery tender",
+      "hint": "W drive | S brake/reverse | A/D steer | Shift boost | F exit | T cargo | LMB recharge",
+      "work": "Power",
+      "width": 1,
+      "depth": 0.8,
+      "reach": 6,
+      "speed": 5,
+      "turn": 60,
+      "capacity": 4,
+      "storageKg": null,
+      "prefab": null,
+      "sweeper": false,
+      "upgradePriceScale": null,
+      "offer": null,
+      "upgrades": []
+    },
+    {
+      "index": 18,
+      "name": "Survey crawler",
+      "hint": "W drive | S brake/reverse | A/D steer | Shift boost | F exit | T cargo | LMB scan",
+      "work": "Scan",
+      "width": 1,
+      "depth": 0.8,
+      "reach": 6,
+      "speed": 3.5,
+      "turn": 100,
+      "capacity": 1,
+      "storageKg": null,
+      "prefab": null,
+      "sweeper": false,
+      "upgradePriceScale": null,
+      "offer": null,
+      "upgrades": []
+    },
+    {
+      "index": 19,
+      "name": "Autonomous sweeper",
+      "hint": "W drive | S brake/reverse | A/D steer | Shift boost | F exit | T cargo | LMB toggle autopilot",
+      "work": "Auto",
+      "width": 0.95,
+      "depth": 0.8,
+      "reach": 6,
+      "speed": 3,
+      "turn": 90,
+      "capacity": 1,
+      "storageKg": null,
+      "prefab": null,
+      "sweeper": true,
+      "upgradePriceScale": null,
+      "offer": null,
+      "upgrades": []
+    },
+    {
+      "index": 20,
+      "name": "Lunar sweeper",
+      "hint": "W drive | S brake/reverse | A/D steer | Shift boost | F exit | T cargo | LMB toggle cleaning",
+      "work": "Clean",
+      "width": 2.8,
+      "depth": 0.8,
+      "reach": 6,
+      "speed": 6.5,
+      "turn": 70,
+      "capacity": 4,
+      "storageKg": 1200,
+      "prefab": "Moon/Vehicles/LunarSweeper",
+      "sweeper": true,
+      "upgradePriceScale": 2.5,
+      "offer": {
+        "price": 2500,
+        "summary": "Drive it from the cab: three brushes sweep a 2.8 m strip into a 1,200 kg hopper."
+      },
+      "upgrades": [
+        {
+          "kind": "Speed",
+          "applies": true,
+          "prices": [
+            1500,
+            3750,
+            0
+          ]
+        },
+        {
+          "kind": "Hopper",
+          "applies": true,
+          "prices": [
+            1250,
+            3000,
+            0
+          ]
+        },
+        {
+          "kind": "Turbo",
+          "applies": true,
+          "prices": [
+            3000,
+            0
+          ]
+        },
+        {
+          "kind": "Cruise",
+          "applies": true,
+          "prices": [
+            0
+          ]
+        },
+        {
+          "kind": "Suction",
+          "applies": true,
+          "prices": [
+            2250,
+            5000,
+            0
+          ]
+        },
+        {
+          "kind": "Unload",
+          "applies": true,
+          "prices": [
+            1000,
+            0
+          ]
+        },
+        {
+          "kind": "Lights",
+          "applies": true,
+          "prices": [
+            750,
+            0
+          ]
+        }
+      ]
+    },
+    {
+      "index": 21,
+      "name": "Mega vacuum rover",
+      "hint": "W drive | S brake/reverse | A/D steer | Shift boost | F exit | T cargo | LMB toggle cleaning",
+      "work": "Clean",
+      "width": 3.7,
+      "depth": 0.8,
+      "reach": 6,
+      "speed": 5,
+      "turn": 48,
+      "capacity": 6,
+      "storageKg": 3000,
+      "prefab": "Moon/Vehicles/MegaVacuumRover",
+      "sweeper": true,
+      "upgradePriceScale": 3,
+      "offer": {
+        "price": 6000,
+        "summary": "Six wheels and a 4 m front intake roller vacuum a 3.7 m strip into a 3,000 kg tank."
+      },
+      "upgrades": [
+        {
+          "kind": "Speed",
+          "applies": true,
+          "prices": [
+            1800,
+            4500,
+            0
+          ]
+        },
+        {
+          "kind": "Hopper",
+          "applies": true,
+          "prices": [
+            1500,
+            3600,
+            0
+          ]
+        },
+        {
+          "kind": "Turbo",
+          "applies": true,
+          "prices": [
+            3600,
+            0
+          ]
+        },
+        {
+          "kind": "Cruise",
+          "applies": true,
+          "prices": [
+            0
+          ]
+        },
+        {
+          "kind": "Suction",
+          "applies": true,
+          "prices": [
+            2700,
+            6000,
+            0
+          ]
+        },
+        {
+          "kind": "Unload",
+          "applies": true,
+          "prices": [
+            1200,
+            0
+          ]
+        },
+        {
+          "kind": "Lights",
+          "applies": true,
+          "prices": [
+            900,
+            0
+          ]
+        }
+      ]
+    }
+  ],
+  "upgradeDefs": [
+    {
+      "kind": "Speed",
+      "title": "Tuned Motors",
+      "summary": "Retuned wheel motors: a higher top speed, and quicker to reach it.",
+      "maxLevel": 3,
+      "sweepersOnly": false,
+      "basePrices": [
+        250,
+        600,
+        1500
+      ],
+      "effects": [
+        "\u002B10% top speed and pull",
+        "\u002B20% top speed and pull",
+        "\u002B30% top speed and pull"
+      ]
+    },
+    {
+      "kind": "Hopper",
+      "title": "Big Hopper",
+      "summary": "A bigger dust hopper: more dust before you have to unload.",
+      "maxLevel": 3,
+      "sweepersOnly": true,
+      "basePrices": [
+        200,
+        500,
+        1200
+      ],
+      "effects": [
+        "\u002B30% hopper",
+        "\u002B60% hopper",
+        "\u002B90% hopper"
+      ]
+    },
+    {
+      "kind": "Turbo",
+      "title": "Turbo Kit",
+      "summary": "An overdrive for the motors: boost pushes it further past its cruising speed.",
+      "maxLevel": 2,
+      "sweepersOnly": false,
+      "basePrices": [
+        400,
+        1200
+      ],
+      "effects": [
+        "Boost to 150% of cruising speed",
+        "Boost to 165% of cruising speed"
+      ]
+    },
+    {
+      "kind": "Cruise",
+      "title": "Cruise Control",
+      "summary": "Holds the speed you set, so you can steer and sweep without holding the throttle. S or the brake lets go.",
+      "maxLevel": 1,
+      "sweepersOnly": false,
+      "basePrices": [
+        500
+      ],
+      "effects": [
+        "Holds your speed"
+      ]
+    },
+    {
+      "kind": "Suction",
+      "title": "Suction Control",
+      "summary": "Set the intake\u0027s suction while sweeping: higher sweeps a wider strip but holds the vehicle to a lower speed.",
+      "maxLevel": 3,
+      "sweepersOnly": true,
+      "basePrices": [
+        400,
+        900,
+        2000
+      ],
+      "effects": [
+        "Up to HIGH: \u002B25% width",
+        "Up to MAX: \u002B50% width",
+        "Up to FULL: \u002B75% width"
+      ]
+    },
+    {
+      "kind": "Unload",
+      "title": "Quick Release",
+      "summary": "Wider hopper gates: it empties into a garage\u0027s silo faster on the collector pad.",
+      "maxLevel": 2,
+      "sweepersOnly": true,
+      "basePrices": [
+        150,
+        400
+      ],
+      "effects": [
+        "\u002B50% unloading speed",
+        "\u002B100% unloading speed"
+      ]
+    },
+    {
+      "kind": "Lights",
+      "title": "Floodlights",
+      "summary": "Brighter, wider headlights that reach further across the night side.",
+      "maxLevel": 2,
+      "sweepersOnly": false,
+      "basePrices": [
+        100,
+        300
+      ],
+      "effects": [
+        "\u002B50% brightness, \u002B40% reach",
+        "\u002B100% brightness, \u002B80% reach"
+      ]
+    }
+  ],
+  "tuning": {
+    "speedStep": 0.1,
+    "hopperStep": 0.3,
+    "boostByLevel": [
+      1.35,
+      1.5,
+      1.6500001,
+      1.6500001,
+      1.6500001,
+      1.6500001,
+      1.6500001,
+      1.6500001
+    ],
+    "suctionNames": [
+      "ECO",
+      "NORMAL",
+      "HIGH",
+      "MAX",
+      "FULL"
+    ],
+    "suctionWidth": [
+      0.8,
+      1,
+      1.25,
+      1.5,
+      1.75
+    ],
+    "suctionSpeed": [
+      1,
+      1,
+      0.85,
+      0.72,
+      0.6
+    ],
+    "suctionNormal": 1,
+    "driftTurn": 1.4,
+    "driftGrip": 2.4,
+    "springHz": 1.75,
+    "dampingRatio": 0.7,
+    "downforce": 2.5
+  }
+}
