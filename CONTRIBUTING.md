@@ -55,5 +55,5 @@ Maintainers push straight to `main`; pull first, and pull again before you push.
 Claim the work on the [work-order board](https://claude.ai/artifact/Wam9isLuKoJkHGHSi3pVJx) first so two people (or
 two AI agents) don't edit the same files; [CLAUDE.md](CLAUDE.md) has the protocol. Ask Andrew for Editor access.
 
-One vehicle per PR is easiest to review. Don't commit `bin/`, `obj/`, `dist/` or `*.blend1`. Large binaries
+One mod per commit (or PR) keeps history readable. Don't commit `bin/`, `obj/`, `dist/` or `*.blend1`. Large binaries
 (blend files, exported meshes) are fine while they stay under a few MB each.
