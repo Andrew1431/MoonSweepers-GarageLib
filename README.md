@@ -1,8 +1,12 @@
 # MoonSweepers-GarageLib
 
-Mods that add new vehicles to [Moon Sweepers](https://store.steampowered.com/). **GarageLib** is the shared library:
-it sells modded vehicles at the garage, spawns them, keeps them out of the vanilla save (so uninstalling never
-breaks a save) and hands custom controllers the driving. Each vehicle is its own optional mod on top.
+A suite of end-game enhancement mods for [Moon Sweepers](https://store.steampowered.com/): new vehicles, and over
+time new buildings and mechanics. Every mod is its own optional package; the modpack bundles them all.
+
+**GarageLib** is the shared vehicle library: it sells modded vehicles at the garage, spawns them, keeps them out of
+the vanilla save (so uninstalling never breaks a save) and hands custom controllers the driving.
+
+Maintainers: Andrew (Andrew1431) and Ryan (ryanhartwig), with equal say on what goes in and on merging.
 
 | Package | What | Folder |
 |---|---|---|
@@ -24,6 +28,7 @@ mod and its vehicles wait in that file until you reinstall it.
 ```
 src/GarageLib/          the library
 vehicles/<Name>/        one folder per vehicle mod (own Plugin.cs, version, README, blend files)
+mods/<Name>/            any other mod: buildings, mechanics, tweaks (same shape: Plugin.cs with Version, README)
 shared/Rotorcraft/      helicopter flight model, compiled into vehicles that fly
 examples/ExampleVehicle two test vehicles showing the API (not released)
 templates/Vehicle/      what new-vehicle.ps1 copies

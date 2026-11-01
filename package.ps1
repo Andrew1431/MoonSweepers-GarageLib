@@ -12,7 +12,7 @@ $stage = Join-Path $dist 'stage'
 Add-Type -AssemblyName System.IO.Compression.FileSystem
 
 function Get-Packages {
-    Get-ChildItem (Join-Path $root 'src'), (Join-Path $root 'vehicles') -Directory | ForEach-Object {
+    Get-ChildItem (Join-Path $root 'src'), (Join-Path $root 'vehicles'), (Join-Path $root 'mods') -Directory -ErrorAction SilentlyContinue | ForEach-Object {
         $proj = Join-Path $_.FullName "$($_.Name).csproj"
         $plugin = Join-Path $_.FullName 'Plugin.cs'
         if (-not (Test-Path $proj) -or -not (Test-Path $plugin)) { return }
