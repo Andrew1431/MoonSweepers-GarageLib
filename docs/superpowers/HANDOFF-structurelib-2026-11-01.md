@@ -90,29 +90,45 @@ library after each library change). Nothing pushed; no PR yet.
 | `structurelib-lib` | 2–3 | Router rules (pure), `RouterDefinition`, `Footprint` with the collider swap, the hop on the `HandOff` prefix, `CargoRouted`; fix round 1 | 2cbdc8d, 0b10986, 7fcb494 |
 | `beltboxes` | 4 | The mod: both boxes, declared ports, README | dfb3c78, aa696b9 |
 | `beltboxes-models` → `beltboxes` | 5 | Models (`box_splitter.bin`, `box_merger.bin`), ports from the models | 284e7df, 4edeedc |
-| `structurelib-lib` | 6 | Box self-test (`DevBoxes.cs`), `[Dev] AutoBuildGap`, honest "not applicable" for checks whose setup a run lacks; README and recon | 028b729, e9be18b |
+| `structurelib-lib` | 6 | Box self-test (`DevBoxes.cs`), `[Dev] AutoBuildGap`, honest "not applicable" for checks whose setup a run lacks; README and recon; fix round 1 (two-box reload, removal in the reload run, strict conservation) | 028b729, e9be18b, eaadf43 |
 
-Unit tests: 148 green. In game (slot-2), the BeltBoxes self-test proved the following.
+Unit tests: 148 green. In game (slot-2), the BeltBoxes self-test proved the following (after fix round 1).
 
-The chain run ended `45 passed, 0 failed`. Its line was chamber → grinder → splitter → (Forward, Left, Right) →
+The chain run ended `46 passed, 0 failed`. Its line was chamber → grinder → splitter → (Forward, Left, Right) →
 merger → burner, with 5 m between the boxes.
-- `beltboxes-registered` and `beltboxes-model` passed.
+- `beltboxes-registered` and `beltboxes-model` (both boxes) passed.
 - `beltboxes-split-even`: 12 hops, 4 to each output.
-- `beltboxes-merge-fair`: six hops in turn order, two from each input.
-- `beltboxes-conserve`: 23 kg of grit in, 23 kg out.
-- `beltboxes-heavy`: a 3 kg canister hopped whole.
-- `beltboxes-split-skips`: with the Forward belt removed, six hops went to Left and Right only, and none was lost.
-- `beltboxes-save-clean`: a save with the chain backed up to the splitter's input wrote cleanly.
-- `beltboxes-remove-clean`: the merger was removed with a canister waiting at Back. Nothing threw and the belts were
+- `beltboxes-merge-fair`: six hops in turn order, two from each input, starting once two canisters queued at the end
+  of each input.
+- `beltboxes-conserve`: after the merge window, 21 kg of grit in and 21 kg accounted for, to 0.01 kg.
+- `beltboxes-heavy`: a 3 kg canister hopped and rode on at 3 kg, capacity 3.
+- `beltboxes-split-skips`: with the Forward belt removed, six hops went to Left and Right only, none lost; the belt
+  was rebuilt.
+- `beltboxes-save-clean`: a save with canisters stopped at the end of the splitter's input and of all three middle
+  belts wrote cleanly, with both boxes and 39 grit canisters in the sidecar. The grit balance over the whole run held
+  exactly: 62 kg in, 62 kg accounted for (burner, riding, and 1 kg removed by the test).
+- `power-node-registered` and `power-grid-joined` passed. The other three power checks were not applicable: the
+  burner is fed through the merger.
+
+The reload run ended `34 passed, 0 failed`.
+- `beltboxes-reload`: both boxes came back with their views, with all five belts at their ports. All 39 saved grit
+  canisters were restored; one had hopped before the check began. Once the sand holder was removed, the burner took
+  grit 0.7 s later.
+- `beltboxes-model` passed for both boxes.
+- `beltboxes-remove-clean` then removed the merger with a canister waiting at Back: nothing threw, and the belts were
   kept.
 
-The reload run ended `33 passed, 0 failed`. In `beltboxes-reload` the splitter, all five belts and 38 grit canisters
-came back, and a hop followed 0.2 s after the open belt ends were cleared. The merger was not saved: the game saved
-again right after its removal. `beltboxes-model` passed again.
+Standard library configs on the same DLL:
+- Belt input (`96,ryanhartwig.example-grinder,94`, ring) ended `34 passed, 0 failed`: all four `belt-in-*` checks and
+  `belt-canister-modded` passed.
+- Belt output and power (grinder, burner and lamp, with the burner fed by `AutoFeed`) ended `49 passed, 0 failed`:
+  all five power checks, `belt-out-emits`, `belt-chain-feeds` and `belt-save-clean` passed.
+- Both families in one run fail the belt-input checks, because the chamber's sand queues on the grinder's belt. That
+  is how the configs interact, and the README says so.
 
-A run without BeltBoxes ended `38 passed, 0 failed`, with every `beltboxes-*` check not applicable. `Moon save failed`
-was 0 in every run. The report and logs are in `.superpowers/sdd/2026-11-02-belt-boxes/task-6-report.md` and
-`task-6-logs/`.
+The run without BeltBoxes (before fix round 1) ended `38 passed, 0 failed`. Since the fix, a burner fed straight by a
+machine with no `AutoFeed` fails the five power checks again, as it always used to. `Moon save failed` was 0 in every
+run. The report and logs are in `.superpowers/sdd/2026-11-02-belt-boxes/task-6-report.md` and `task-6-logs/`.
 
 **By hand for BeltBoxes** (not covered by any self-test):
 - The belt tool onto every port at the 0.7 m port spacing, the side ports included. The self-test builds belts through

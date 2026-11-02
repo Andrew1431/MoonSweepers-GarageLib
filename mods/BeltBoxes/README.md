@@ -75,28 +75,31 @@ join when the two players' mods differ, so both players need Belt Boxes.
 
 StructureLib's dev self-test (`beltboxes-*` checks, single player, slot-2) built a chain from its example grinder
 through both boxes into its example burner: grinder → splitter `In`; splitter `Forward`, `Left`, `Right` → merger
-`Back`, `Left`, `Right`; merger `Out` → burner. The run ended `45 passed, 0 failed`, with no exception and no failed
-save. It showed:
+`Back`, `Left`, `Right`; merger `Out` → burner. The chain run ended `46 passed, 0 failed` and the reload run
+`34 passed, 0 failed`, with no exception and no failed save. They showed:
 - **Registration.** Both boxes register as routers (a splitter with 1 input and 3 outputs, a merger with 3 inputs and
   1 output), with four ports each and a 1.4 × 1.4 m footprint.
-- **Models.** Each placed box shows its own model, the floodlight's meshes are hidden, and one box collider covers the
-  footprint. Every port sits at its model node.
+- **Models.** In both runs each placed box shows its own model, the floodlight's meshes are hidden, and one box
+  collider covers the footprint. Every port sits at its model node.
 - **Even split.** Of the first 12 hops through the splitter, each output took 4, in the order Forward, Left, Right,
   repeated.
-- **Fair merge.** With all three merger inputs backed up, the next six hops came from each input twice, in turn
-  (Right, Back, Left, Right, Back, Left).
-- **Nothing lost.** Grit in (the grinder's 12 kg plus 11 kg the test added) equalled grit out: 13 kg into the burner
-  and 10 kg riding the belts.
-- **Heavy canisters.** A 3 kg grit canister went through whole: it came out as 3 kg, capacity 3.
+- **Fair merge.** The merger's inputs were backed up until two canisters queued at the end of each. The next six hops
+  then came from each input twice, in turn (Right, Back, Left, Right, Back, Left).
+- **Nothing lost.** The grit was counted twice, and both counts balanced exactly.
+  - After the even split and the fair merge: 21 kg in (12 kg from the grinder, 9 kg added by the test) and 21 kg
+    accounted for (13 kg into the burner, 8 kg riding the belts).
+  - Over the whole chain run, up to the save (the heavy canister and the removed belt included): 62 kg in and 62 kg
+    accounted for (20 kg into the burner, 41 kg riding, and 1 kg the test picked up where the removed belt had been).
+- **Heavy canisters.** A 3 kg grit canister went through whole and rode on as 3 kg, capacity 3.
 - **Skipping.** With the `Forward` belt removed, the splitter sent the next six canisters to `Left` and `Right` only,
   and as many left the input belt as hopped.
-- **Saving a full chain.** A save with canisters waiting at the splitter's input and on all three middle belts wrote
-  cleanly. It recorded both boxes and all 37 grit canisters on the belts.
-- **Removing a box.** The merger was removed while a canister waited at its `Back` input. Nothing threw, every belt
-  stayed, and the canister stayed waiting at the open end of its belt.
-- **Reload.** In the next launch the splitter came back with its model, along with all five belts and all 38 grit
-  canisters from the save. The merger was not saved, because the game saved again right after it was removed. Once the
-  canister at each open belt end was taken off, the splitter routed again at once.
+- **Saving a full chain.** A save wrote cleanly with canisters stopped at the end of the splitter's input belt and of
+  all three middle belts. It recorded both boxes and all 39 grit canisters on the belts.
+- **Reload.** In the next launch both boxes came back with their models, along with all five belts at their ports and
+  all 39 saved grit canisters (one had already hopped through the splitter before the check started).
+  - The test took off the sand canister it had used to hold the merger, and the burner then took grit within 0.7 s.
+- **Removing a box.** After the reload, the merger was removed while a canister waited at the end of its `Back` belt.
+  Nothing threw, every belt stayed, and the canister stayed at the open end of its belt.
 
 ### Not checked yet, by hand, worth a look before a release
 
