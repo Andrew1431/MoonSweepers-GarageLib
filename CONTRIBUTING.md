@@ -15,6 +15,14 @@
 4. Build everything once: `dotnet build GarageLib.slnx -c Release`. Each build copies the DLLs into
    `BepInEx/plugins/<Name>/`, so you only need to launch the game afterwards (close it first: Windows locks the DLLs).
 
+## Dev loop
+
+```powershell
+.\dev.ps1 -Only GarageLib -Tail
+```
+
+That closes the game if it is running, builds the named projects (all of them without `-Only`), installs them into the game, launches `MoonSweepers.exe` and tails the log for your projects and BepInEx. `-Release` builds without the `[Dev]` helpers; `-NoLaunch` stops after the build; `-WhatIf` prints the plan. It builds per project because `GarageLib.slnx` needs .NET SDK 9.0.200 or newer; on an older SDK, build per project or use `dev.ps1`.
+
 ## New package
 
 ```powershell

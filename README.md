@@ -31,17 +31,17 @@ vehicles/<Name>/        one folder per vehicle mod (own Plugin.cs, version, READ
 mods/<Name>/            any other mod: buildings, mechanics, tweaks (same shape: Plugin.cs with Version, README)
 shared/Rotorcraft/      helicopter flight model, compiled into vehicles that fly
 examples/ExampleVehicle two test vehicles showing the API (not released)
-templates/Vehicle/      what new-vehicle.ps1 copies
+templates/Vehicle|Mod|Lib/ what new-package.ps1 copies
 research/               interop dumps and design notes from reverse engineering the game
 ```
 
-## Making a vehicle
+## Making a package
 
 See [CONTRIBUTING.md](CONTRIBUTING.md). Short version:
 
 ```powershell
-.\new-vehicle.ps1 -Name RoverX -Author yourname
-dotnet build vehicles\RoverX -c Release
+.\new-package.ps1 -Kind vehicle -Name RoverX -Author yourname
+.\dev.ps1 -Only RoverX -Tail   # close the game, build, install, launch, follow the log
 ```
 
 ## Releasing
