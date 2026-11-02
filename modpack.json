@@ -1,6 +1,6 @@
 {
   "name": "MoonSweepers-GarageModpack",
-  "version": "0.1.0",
+  "version": "0.2.0",
   "description": "GarageLib, Late Game Vehicles and the other mods in this repo, ready to drop into the game folder.",
   "packages": [
     "GarageLib",
