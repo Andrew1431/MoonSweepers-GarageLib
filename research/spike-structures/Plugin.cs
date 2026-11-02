@@ -14,14 +14,17 @@ using UnityEngine;
 namespace StructureSpike
 {
     // Research-only: logs how the game defines, lists, builds, powers, runs and saves structures (depots, machines,
-    // solar panels, conveyors) and cargo. Nothing here changes game state unless [Dev] AutoLoadSlot is set; then
-    // WorldProbe builds a test rig in the loaded (cloned) save.
+    // solar panels, conveyors) and cargo. Only WorldProbe changes game state (money, lunar clock, two structures, a
+    // save), and it refuses to run unless [Dev] AutoLoadSlot is 2 or more AND the loaded slot's folder is that
+    // slot-<n> (WorldProbe.Allowed). In any other world, including slot-1 loaded by hand, it logs a refusal and does
+    // nothing.
     [BepInPlugin("com.ryanhartwig.ms.structurespike", "Structure Spike", "0.0.1")]
     public class Plugin : BasePlugin
     {
         internal static ManualLogSource L;
         internal static ConfigEntry<int> AutoLoadSlot;
         internal static ConfigEntry<bool> Probe, ProbeLoad, ProbeSave, ProbeSpec, SunOverhead, SunExperiment;
+        internal static ConfigEntry<double> LoadKg;
         internal static ConfigEntry<float> ForceLunarTime;
 
         public override void Load()
@@ -29,7 +32,8 @@ namespace StructureSpike
             L = Log;
             AutoLoadSlot = Config.Bind("Dev", "AutoLoadSlot", -1, "Load the existing save in folder slot-<n> from the main menu so the world-time dump and probe run. -1 = off. Refuses slot 1 (the real save); clone it first with research/tools/copy-slot.ps1.");
             Probe = Config.Bind("Probe", "Build", true, "20 s into a loaded world: add money, build a solar twin and a pressure chamber in front of the walker, then log production and power every second for 120 s.");
-            ProbeLoad = Config.Bind("Probe", "LoadChamber", true, "30 s after building: CrewProcessorLoad 10 kg of dust into the chamber.");
+            ProbeLoad = Config.Bind("Probe", "LoadChamber", true, "30 s after building: CrewProcessorLoad LoadKg of dust into the chamber.");
+            LoadKg = Config.Bind("Probe", "LoadKg", 10.0, "Kilograms of dust for LoadChamber (the chamber input slot holds 20). More than 10 tests whether the 10 kg sand output slot stalls the cycle.");
             ProbeSave = Config.Bind("Probe", "SaveAtEnd", true, "After the 120 s window: RequestSave() into the loaded slot so the save-side traces run.");
             ProbeSpec = Config.Bind("Probe", "ReadPanelSpec", true, "Let the SolvePower trace read PowerNode.spec (a non-blittable interop struct). Turn off if the game dies right after '[trace] SolvePower reading node.spec'.");
             ForceLunarTime = Config.Bind("Probe", "ForceLunarTime", -1f, "If >= 0, MoonSolarSystem.SetLunarTime(value) before building (0..1 lunar-day fraction), for a save that is at night. -1 = leave the clock alone.");
@@ -38,7 +42,7 @@ namespace StructureSpike
             ClassInjector.RegisterTypeInIl2Cpp<SpikeDriver>();
             AddComponent<SpikeDriver>();
             Traces.PatchAll(new Harmony("com.ryanhartwig.ms.structurespike"));
-            L.LogInfo($"Structure spike loaded: AutoLoadSlot={AutoLoadSlot.Value} Probe={Probe.Value} LoadChamber={ProbeLoad.Value} SaveAtEnd={ProbeSave.Value} ReadPanelSpec={ProbeSpec.Value} ForceLunarTime={ForceLunarTime.Value} SunOverhead={SunOverhead.Value}");
+            L.LogInfo($"Structure spike loaded: AutoLoadSlot={AutoLoadSlot.Value} Probe={Probe.Value} LoadChamber={ProbeLoad.Value} LoadKg={LoadKg.Value} SaveAtEnd={ProbeSave.Value} ReadPanelSpec={ProbeSpec.Value} ForceLunarTime={ForceLunarTime.Value} SunOverhead={SunOverhead.Value}");
         }
     }
 
@@ -81,6 +85,8 @@ namespace StructureSpike
             if (worldDumped && !probeStarted && Plugin.Probe.Value)
             {
                 probeStarted = true;
+                string why = WorldProbe.Allowed();
+                if (why != null) { probeStopped = true; Plugin.L.LogWarning("[probe] refused, nothing changed: " + why); return; }
                 try { WorldProbe.Start(inGameT); } catch (Exception e) { probeStopped = true; Plugin.L.LogError("[probe] start failed: " + e); }
             }
             if (probeStarted && !probeStopped)
@@ -305,6 +311,17 @@ namespace StructureSpike
 
         internal static bool IsProbe(int id) => id >= 0 && (id == TwinId || id == ChamberId);
 
+        // Null when the probe may change this world; otherwise the reason it must not. The probe writes money, the
+        // lunar clock, structures and a save, so it only runs in the cloned slot AutoLoad was told to load (never slot-1).
+        internal static string Allowed()
+        {
+            int slot = Plugin.AutoLoadSlot.Value;
+            if (slot < 2) return $"[Dev] AutoLoadSlot={slot}; the probe only runs in a cloned slot (2 or more) loaded by AutoLoad";
+            string active = (SpikeDriver.Safe(() => MoonSaveSlots.SlotFolder(MoonSaveSlots.Active)) ?? "").Replace('\\', '/').TrimEnd('/');
+            if (!active.EndsWith("/slot-" + slot)) return $"the loaded slot (index {MoonSaveSlots.Active}, folder '{active.Substring(active.LastIndexOf('/') + 1)}') is not slot-{slot}";
+            return null;
+        }
+
         internal static void Start(float now)
         {
             L.LogInfo("[probe] step: find MoonWorld");
@@ -473,8 +490,8 @@ namespace StructureSpike
         static void LoadChamber()
         {
             L.LogInfo($"[probe] chamber before load: {Stores(world.ProductionOf(ChamberId))}");
-            L.LogInfo($"[probe] step: CrewProcessorLoad(player, {ChamberId}, Dust, 10)");
-            world.CrewProcessorLoad(player, ChamberId, MoonCargo.Dust, 10.0);
+            L.LogInfo($"[probe] step: CrewProcessorLoad(player, {ChamberId}, Dust, {Plugin.LoadKg.Value})");
+            world.CrewProcessorLoad(player, ChamberId, MoonCargo.Dust, Plugin.LoadKg.Value);
             L.LogInfo($"[probe] chamber after load: {Stores(world.ProductionOf(ChamberId))}");
         }
 

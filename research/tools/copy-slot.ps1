@@ -9,6 +9,7 @@ param(
 )
 $ErrorActionPreference = 'Stop'
 if ($From -eq $To) { throw "From and To are the same slot ($From)." }
+if ($To -eq 1) { throw "Refusing to write slot-1: it is the real save. Copy it to another slot instead." }
 $root = Join-Path $env:USERPROFILE 'AppData\LocalLow\DragDropGames\MoonSweepers\MoonSessions'
 $src = Join-Path $root "slot-$From"
 $dst = Join-Path $root "slot-$To"
