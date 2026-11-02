@@ -82,13 +82,21 @@ existing belt hooks.
   freeze with the other definition rules.
 - **Ports on a router.** `PortRules` accepts, for a router, between one and four ports: a splitter has exactly one
   input and one to three outputs; a merger one to three inputs and exactly one output. Router ports carry **no
-  cargo**: they are written into the clone as `sl:*:<Name>` (a wildcard token in the cargo field), and the `PortCargo`
-  prefix answers for a wildcard what vanilla answers for its own splitter ports (recon section 1: dust). A model's
-  `Port_*` nodes on a router therefore need no cargo in their names; a declared `PortDefinition` on a router ignores
-  its `Cargo`. The existing rules (ports must lie on the footprint, at deck height 0.85, unique names) still apply.
+  cargo**: they are written into the clone with the dust byte (`sl:0:<Name>`), which is what vanilla's own splitter
+  ports answer to `PortCargo` (recon section 1), and the hop ignores cargo. A model's `Port_*` nodes on a router
+  therefore need no cargo property; a declared `PortDefinition` on a router ignores its `Cargo`. The existing rules (ports must lie on the footprint, at deck height 0.85, unique names) still apply.
 - **`StructureDefinition.Footprint`** (new, optional): full width and depth in metres, written into the clone's
   `halfFootprint`. Needed because the box is 1.4 m square and no small vanilla donor matches; harmless for other
-  structures. When unset, the donor's footprint stays, as today.
+  structures. When unset, the donor's footprint stays, as today. When set together with a `Model`, the model swap
+  also replaces the donor's root colliders with one box collider covering the footprint and the model's height, so
+  a big donor's collision does not outlive its mesh.
+- **Donor.** The builder picks it in the spike from the small vanilla kinds (the vanilla splitter 11 first, since it
+  is a Logistics item with no production, power or solar view, stands on dust and costs $5; else the packager 10 or
+  the floodlight 4), by reading each prefab's components and confirming that a clone of it with a hashed kind gets
+  no vanilla routing (`Routes`, cut-in offers) and no stray view. The solar post 93 is not it: its view carries a
+  production view and a solar-panel view.
+- **Co-op.** Routers inherit belt input's standing: the host decides, clients untested (README support table). No
+  new guard this milestone; the README and handoff say so, next to the two-player test already owed.
 - **Hop.** `BeltPatches.Intake` (the `HandOff` prefix) gains a router branch; vanilla kinds are untouched as today.
   - *Splitter.* Per depot a transient `nextOut` index. Starting at `nextOut`, take the first output port, in port
     order, whose belt exists and whose entrance is clear; move the canister there; set `nextOut` to the port after
@@ -104,6 +112,11 @@ existing belt hooks.
     `EmitCargo` onto the output belt followed by `RemoveCanister` of the arriving one (design B), which the library
     already uses, provided `EmitCargo` carries the kilograms through. Either way the two steps happen in one prefix
     call, and a failure between them must be impossible or logged and left in the "waiting" state, never a loss.
+    If (2) is the mechanism and `EmitCargo` makes 1 kg capacity-1 canisters whatever it is given (recon fact (b)),
+    the hop rewrites the new canister's kilograms, capacity and owner from the arriving one through
+    `MoveCanisterRecord` (the call the library already uses to shrink a partly taken canister). Only if that too
+    fails do canisters over 1 kg wait at the input as a documented limit; a canister is never split, buffered or
+    dropped.
   - Events: `CargoEntered` is **not** raised for routers (nothing enters a slot). A new `CargoRouted { Definition,
     DepotId, Cargo, Kilograms, FromBeltId, ToBeltId }` is raised per hop, so the self-test can count distribution.
 - **Throughput.** One hop per input belt per frame; the output belt's own `EntranceClear` spacing bounds the rate
@@ -179,8 +192,10 @@ attached; removing a belt mid-traffic.
 ## Left to the builder
 
 - The hop mechanism (spike, see above) and whether `EntranceClear` is safe from the prefix.
-- Exact wildcard token and its parsing; where `nextOut`/`turn` live (a dictionary keyed by depot id in the belt
-  patches is fine, dropped with the belt caches on world change).
+- Where `nextOut`/`turn` live (a dictionary keyed by depot id in the belt patches is fine, dropped with the belt
+  caches on world change).
+- The footprint is a tunable between 1.4 and 1.6 m until Ryan's by-hand belt-tool check at the 0.7 m port spacing;
+  a misjoin there grows the box rather than blocking release.
 - Self-test timing windows and the stopped-canister trick for check 3.
 - The models' detailing within the form above; the Logistics accent colour.
 - Whether `CONTRIBUTING.md` needs a line (only if it lists mods by name).
