@@ -37,6 +37,12 @@ namespace StructureLib
         /// into one of its Input slots (the canister is removed, or reduced when only part of it fit).
         /// </summary>
         public static event Action<CargoEntered> CargoEntered;
+        /// <summary>
+        /// Fired on the main thread when a modded machine puts a canister of its output on the belt joined to its output
+        /// port. The game emits by itself (EmitProduct, every 0.35 s while the output slot holds cargo and the belt's
+        /// entrance is clear): one 1 kg canister per emit.
+        /// </summary>
+        public static event Action<CargoEmitted> CargoEmitted;
 
         /// <summary>Register a structure. Call from your plugin's Load().</summary>
         public static StructureDefinition Register(StructureDefinition def, string ownerGuid = null)
@@ -290,6 +296,11 @@ namespace StructureLib
         internal static void RaiseCargoEntered(CargoEntered c)
         {
             try { CargoEntered?.Invoke(c); } catch (Exception e) { CoreLog.Error($"CargoEntered handler threw for {c.Definition} depot {c.DepotId}: {e}"); }
+        }
+
+        internal static void RaiseCargoEmitted(CargoEmitted c)
+        {
+            try { CargoEmitted?.Invoke(c); } catch (Exception e) { CoreLog.Error($"CargoEmitted handler threw for {c.Definition} depot {c.DepotId}: {e}"); }
         }
 
         internal static void RaiseCycleFinished(CycleFinished c)

@@ -197,14 +197,29 @@ namespace StructureLib.Patches
             return d?.Processor == null || !d.Processor.ProducesPower;
         }
 
-        // Only called with a connected outfeed belt (fact (d)).
+        // Only called with a connected outfeed belt (fact (d)). Vanilla EmitProduct emits a modded machine's output by itself
+        // (one 1 kg canister per call, recon fact (f)); this postfix only reports it: for a canister put on the belt (__result)
+        // by a modded machine (resolved from the belt's start, BeltPatches.EmitterOf) it raises MoonStructures.CargoEmitted.
         [HarmonyPatch(typeof(MoonWorld), nameof(MoonWorld.EmitCargo)), HarmonyPostfix]
-        static void EmitCargo(MoonCargo cargo, double kg, bool __result)
+        static void EmitCargo(MoonWorld __instance, MoonConveyorSnapshot outfeed, MoonCargo cargo, double kg, bool __result)
         {
             var c = CargoPatches.Live(cargo);
-            if (c == null) return;
-            ModdedCargoEmits++;
-            CoreLog.Once("emit:" + c.Id, $"EmitCargo put {kg} kg of '{c.Id}' on a belt: {__result}", 3);
+            if (c != null)
+            {
+                ModdedCargoEmits++;
+                CoreLog.Once("emit:" + c.Id, $"EmitCargo put {kg} kg of '{c.Id}' on a belt: {__result}", 3);
+            }
+            if (!__result || !MoonStructures.Frozen || MoonStructures.Disabled) return;
+            try
+            {
+                var e = BeltPatches.EmitterOf(__instance, outfeed);
+                if (e?.Definition == null) return;
+                MoonStructures.RaiseCargoEmitted(new CargoEmitted
+                {
+                    Definition = e.Definition, DepotId = e.Depot, Cargo = new Cargo((byte)cargo, BeltPatches.CargoId(cargo)), Kilograms = kg, BeltId = outfeed.id,
+                });
+            }
+            catch (Exception ex) { CoreLog.Once("emit-resolve", $"EmitCargo on belt {outfeed?.id}: resolving the emitting machine threw: {ex}", 1); }
         }
     }
 }

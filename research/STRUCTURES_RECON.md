@@ -746,6 +746,35 @@ Belt input into modded machines (Task 3, 2026-11-02; logs `task-3-logs/`, run2 =
   whose sun is overhead at the walker 5 s after load (`LunarTime 0.612 -> 0.822 (sun dot up 0.689), Daylight 1.00`);
   the belt checks need it.
 
+Belt output and save with belts (Task 4, 2026-11-02; logs `task-4-logs/`, run1 = 45 passed, 0 failed; run2 (reload)
+= 33 passed, 0 failed):
+- **Layout.** `AutoBuild = ryanhartwig.example-grinder,ryanhartwig.example-burner,ryanhartwig.example-lamp`: grinder at
+  0°, burner at 180° (90° blocked for the burner), lamp at 90° (the smaller lamp fits there). The grinder's
+  `Grit out` faces the burner's `Grit in` along +X; `AutoBelt` built belt 1 on the first route tried (`+start,+end`,
+  17.07 m). Adding the solar twin (`...,94,...`) puts the grid on solar power, and the Task 11 check
+  `power-grinder-runs-on-burner` then fails for config reasons (the burner supplies 0 kW while the twin covers the
+  grinder; `task-4-logs/run1a-with-twin.log`). The burner alone (fed 4 kg of grit by `AutoFeed`) powers the grinder.
+- **Emit cadence (fact (b), again for a modded machine):** `CargoEmitted` 1 kg grit per `EmitCargo` call, gap 0.70 s
+  between two emits (run1a); the canister is 1 kg / capacity 1 although grit's `UnitKilograms` is 3. The first emitted
+  canister is a rider at `d 0.00` (moving) right after the emit.
+- **The outfeed path has no machine argument.** `EmitCargo` is an instance method `bool EmitCargo(MoonConveyorSnapshot
+  outfeed, string owner, MoonCargo cargo, double kg, out string reason)`, and `MoonConveyorSnapshot` holds only `id`,
+  `owner`, `start`, `startDirection`, `end`, `endDirection` (no structure ids; checked by reflection on the interop
+  assembly). `MachineWithPort(outfeed.start, true)` names the emitting machine (`Belt 1 carries the output of
+  'ryanhartwig.example-grinder' depot 26`).
+- **Chain.** The grinder's grit rode the 17.07 m belt into the burner's `Grit in` and was taken (`CargoEntered` slot 0
+  grit 1 kg). A vanilla sand canister put at the belt end is refused by the burner (`'A moon sand capsule is waiting at
+  the grit input'`) and holds every grit canister behind it on the belt.
+- **Save with canisters on a belt.** Write #7 (requested at t≈47 s; `SoonSaveSeconds` 60, yet the write followed within
+  a few seconds) recorded 6 grit canisters (ids 9–13, 15) in the sidecar while they rode belt 1; no `Moon save failed`,
+  no vanilla write threw, `vanilla-save-clean` PASS. The belt is a vanilla record (endpoints only) and needs nothing.
+- **Reload.** The sidecar restored the 6 grit canisters under their own ids (`restoring a 'ryanhartwig.example-grit'
+  canister as canister 9 (1/1 kg)`, …, `6 of 6 restored canisters hold their modded cargo`), and they were riders on
+  belt 1 again by the time the self-test ran (20 s after load), queued behind the sand at 17.07, 16.42, 15.92, 15.17,
+  14.42, 13.67, 12.92 m, all `moving False`, cargo 250. The vanilla sand canister came back on the belt the same way.
+  `MoonConveyorSave` restored belt 1 between the restored grinder (26) and burner (27); the burner's production state
+  came back as saved (`stores [0:1 1:0]`).
+
 ## Still open
 
 - `PlaceCarriedOnBelt` with a carried canister (needs a walker in reach). What vanilla code calls `PortCargo`,

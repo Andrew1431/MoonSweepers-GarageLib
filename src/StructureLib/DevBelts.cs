@@ -28,6 +28,7 @@ namespace StructureLib
 
         static void TickBelts(float gameT)
         {
+            SelfTest.HookBeltEvents();
             if (SunOverhead.Value && !sunSet && gameT > 5f) { sunSet = true; SetSunOverhead(); }
             if (DumpCards.Value && !cardsDumped && gameT > 30f)
             {
@@ -499,11 +500,7 @@ namespace StructureLib
 
         static void BeltChecks()
         {
-            if (!enteredHooked)
-            {
-                enteredHooked = true;
-                MoonStructures.CargoEntered += e => { if (e != null) entered.Add(e); };
-            }
+            HookBeltEvents();
             var world = CoreState.World ?? CoreState.FindWorld();
             var grinder = MoonStructures.Definition(GrinderId);
             if (world == null || grinder == null) { CoreLog.Info("[selftest] no world or no example grinder: belt checks not applicable"); return; }
@@ -670,11 +667,13 @@ namespace StructureLib
         // A 1 kg canister at distance d along the belt: packed from the walker's carried dust (DevSetCarriedDust +
         // PackDustCanister), then moved onto the belt at the ride height with the given cargo through MoveCanisterRecord
         // (recon fact (c)); the game boards it.
-        static int Spawn(MoonWorld world, float d, MoonCargo cargo, out string why)
+        static int Spawn(MoonWorld world, float d, MoonCargo cargo, out string why) => Spawn(world, inPath, d, cargo, out why);
+
+        static int Spawn(MoonWorld world, MoonConveyorPath path, float d, MoonCargo cargo, out string why)
         {
             why = null;
-            var p = inPath.Point(d);
-            var up = inPath.Up(p);
+            var p = path.Point(d);
+            var up = path.Up(p);
             if (up.sqrMagnitude < 0.5f) up = p.normalized;
             string player = MoonWorld.LocalPlayer;
             world.DevSetCarriedDust(player, 1.0);
@@ -699,12 +698,14 @@ namespace StructureLib
             return true;
         }
 
-        static string RidersText(MoonWorld world)
+        static string RidersText(MoonWorld world) => RidersText(world, inBelt);
+
+        static string RidersText(MoonWorld world, int beltId)
         {
             var parts = new List<(float d, string text)>();
             foreach (var kv in world.riders)
             {
-                if (kv.Value.belt != inBelt) continue;
+                if (kv.Value.belt != beltId) continue;
                 int cargo = world.canisters.ContainsKey(kv.Key) ? (byte)world.canisters.get_Item(kv.Key).cargo : -1;
                 parts.Add((kv.Value.distance, $"[{kv.Key} cargo {cargo} d {kv.Value.distance:F2} moving {kv.Value.moving}]"));
             }
@@ -721,6 +722,239 @@ namespace StructureLib
         static string SafeStatus(MoonProductionState s)
         {
             try { return s?.Status; } catch (Exception e) { return "threw " + e.Message; }
+        }
+    }
+
+    // Belt output and save safety with belts (config: AutoBuild ryanhartwig.example-grinder,ryanhartwig.example-burner,94,
+    // ryanhartwig.example-lamp; AutoFeed ryanhartwig.example-grinder:Dust:6;ryanhartwig.example-burner:ryanhartwig.example-grit:4;
+    // AutoBelt ryanhartwig.example-grinder:Grit out->ryanhartwig.example-burner:Grit in; AutoSave true). The game emits a
+    // modded machine's output by itself (recon fact (f)); these checks follow it end to end:
+    //  1 belt-out-emits: a CargoEmitted of grit (250) from the grinder onto that belt, and a grit canister riding it (40 s).
+    //  2 belt-chain-feeds: a CargoEntered of grit into the burner's slot 0 (60 s).
+    //  3 belt-save-clean, first run: a sand canister put at the belt's end (the burner refuses it, so it waits there) and a
+    //    grit canister right behind it; once both wait, a save is requested. The write after it must record the grit
+    //    canister in the sidecar, with the belt still in world.conveyors, the canister still riding with cargo 250, and no
+    //    refused save ("Moon save failed", a vanilla write that threw); vanilla-save-clean then checks the same write.
+    //    Second run (AutoBuild, AutoFeed, AutoBelt empty, the first run's slot): the belt from the restored grinder to the
+    //    restored burner is in world.conveyors, a grit canister the sidecar held is riding it with cargo 250 (within 20 s),
+    //    and the burner's production state came back with the grit it held when saved.
+    internal static partial class SelfTest
+    {
+        const string BurnerOutId = "ryanhartwig.example-burner";
+        static readonly string[] OutNames = { "belt-out-emits", "belt-chain-feeds", "belt-save-clean" };
+        static readonly List<(float t, CargoEmitted e)> emitted = new();
+        static bool emittedHooked;
+        static int outPhase, outBelt = -1, outFrom = -1, outTo = -1, blockId = -1, keepId = -1, outSaveSeq = -1;
+        static float outUntil = -1f, outGrace = -1f, outPhaseFrom;
+        static string firstRider;
+        static MoonConveyorPath outPath;
+        static List<int> loadedGrit;
+
+        internal static bool OutPending => outPhase != 0;
+
+        // Hooked from the first in-game frame, so the grinder's first emits (they can come before the self-test starts)
+        // and intakes are seen.
+        internal static void HookBeltEvents()
+        {
+            if (!enteredHooked)
+            {
+                enteredHooked = true;
+                MoonStructures.CargoEntered += e => { if (e != null) entered.Add(e); };
+            }
+            if (!emittedHooked)
+            {
+                emittedHooked = true;
+                MoonStructures.CargoEmitted += e => { if (e != null) emitted.Add((Time.unscaledTime, e)); };
+            }
+        }
+
+        static void OutChecks()
+        {
+            HookBeltEvents();
+            var world = CoreState.World ?? CoreState.FindWorld();
+            var grinder = MoonStructures.Definition(GrinderId);
+            var burner = MoonStructures.Definition(BurnerOutId);
+            if (world == null || grinder == null || burner == null) { CoreLog.Info("[selftest] no world, example grinder or example burner: belt output checks not applicable"); return; }
+            var r = AutoBelter.Results.FirstOrDefault(x => x.From >= 0 && world.depots != null && world.depots.ContainsKey(x.From) && world.depots.get_Item(x.From).kind == grinder.Kind);
+            if (r == null) { StartReloadChecks(world, grinder, burner); return; }
+            if (!r.Ok) { foreach (var n in OutNames) Assert(n, false, $"AutoBelt '{r.Entry}' did not build: {r.Reason}"); return; }
+            outBelt = r.Belt;
+            outFrom = r.From;
+            outTo = r.To;
+            outPath = world.BeltPath(outBelt);
+            if (outPath == null) { foreach (var n in OutNames) Assert(n, false, $"BeltPath({outBelt}) is null"); return; }
+            CoreLog.Info($"[selftest] belt output checks on belt {outBelt} (length {outPath.Length:F2} m) from grinder depot {outFrom} to depot {outTo}; grinder {StateText(world.ProductionOf(outFrom))}");
+            outPhase = 1;
+            outPhaseFrom = Time.unscaledTime;
+            outUntil = outPhaseFrom + 40f;
+        }
+
+        static void TickOutChecks()
+        {
+            var world = CoreState.World ?? CoreState.FindWorld();
+            float now = Time.unscaledTime;
+            try
+            {
+                switch (outPhase)
+                {
+                    case 1: TickEmits(world, now); break;
+                    case 2: TickChain(world, now); break;
+                    case 3: TickBlocked(world, now); break;
+                    case 4: TickOutSave(world, now); break;
+                    case 5: TickReload(world, now); break;
+                }
+            }
+            catch (Exception e) { FailOut(outPhase, "threw " + e.GetType().Name + ": " + e.Message); }
+        }
+
+        static bool GritRider(MoonWorld world, int beltId, out int id, out float d)
+        {
+            id = -1; d = -1f;
+            foreach (var kv in world.riders)
+            {
+                if (kv.Value.belt != beltId || !world.canisters.ContainsKey(kv.Key)) continue;
+                if ((byte)world.canisters.get_Item(kv.Key).cargo != GritValue) continue;
+                id = kv.Key; d = kv.Value.distance;
+                return true;
+            }
+            return false;
+        }
+
+        static void TickEmits(MoonWorld world, float now)
+        {
+            if (firstRider == null && GritRider(world, outBelt, out int rid, out float rd))
+            {
+                var c = world.canisters.get_Item(rid);
+                firstRider = $"canister {rid} cargo {(byte)c.cargo} {c.kilograms} kg (capacity {c.capacity}) d {rd:F2}";
+            }
+            var mine = emitted.Where(x => x.e.DepotId == outFrom && x.e.BeltId == outBelt && x.e.Cargo.Value == GritValue).ToList();
+            bool ok = mine.Count > 0 && firstRider != null && mine.All(x => x.e.Definition?.Id == GrinderId);
+            if (!ok && now < outUntil) return;
+            var gaps = mine.Zip(mine.Skip(1), (a, b) => b.t - a.t).ToList();
+            CoreLog.Info($"[selftest] belt-out-emits: CargoEmitted {mine.Count}x from depot {outFrom} on belt {outBelt} [{string.Join(", ", mine.Take(8).Select(x => $"{x.e.Cargo} {x.e.Kilograms} kg"))}]; gaps between emits [{string.Join(" ", gaps.Take(8).Select(g => g.ToString("F2")))}] s; first grit rider: {firstRider ?? "none"}; riders on belt {outBelt}: {RidersText(world, outBelt)}");
+            Assert("belt-out-emits", ok, $"CargoEmitted of grit from depot {outFrom} on belt {outBelt}: {mine.Count} (all events {emitted.Count}); grit rider on the belt: {firstRider ?? "none"}; grinder {StateText(world.ProductionOf(outFrom))}");
+            outPhase = 2;
+            outUntil = outPhaseFrom + 60f;
+        }
+
+        static void TickChain(MoonWorld world, float now)
+        {
+            var mine = entered.Where(e => e.DepotId == outTo && e.Slot == 0 && e.Cargo.Id == GritId).ToList();
+            bool ok = mine.Count > 0;
+            if (!ok && now < outUntil) return;
+            CoreLog.Info($"[selftest] belt-chain-feeds: CargoEntered into burner depot {outTo}: {mine.Count}x [{string.Join(", ", mine.Take(8).Select(e => $"slot {e.Slot} {e.Cargo} {e.Kilograms} kg"))}]; burner {StateText(world.ProductionOf(outTo))}");
+            Assert("belt-chain-feeds", ok, $"no CargoEntered of grit into slot 0 of burner depot {outTo} within 60 s; burner {StateText(world.ProductionOf(outTo))}");
+            StartBlocked(world);
+        }
+
+        // A sand canister at the belt's end (the burner refuses it, so it waits there for good) and a grit canister behind it.
+        static void StartBlocked(MoonWorld world)
+        {
+            outPhase = 3;
+            blockId = Spawn(world, outPath, outPath.Length - 0.4f, MoonCargo.Sand, out string why);
+            if (blockId < 0) { FailOut(3, "spawning the sand canister: " + why); return; }
+            keepId = Spawn(world, outPath, outPath.Length - 0.4f - MoonWorld.BeltSpacing, (MoonCargo)GritValue, out why);
+            if (keepId < 0) { FailOut(3, "spawning the grit canister: " + why); return; }
+            CoreLog.Info($"[selftest] belt-save-clean: sand canister {blockId} put at the end of belt {outBelt}, grit canister {keepId} behind it");
+            outUntil = Time.unscaledTime + 20f;
+        }
+
+        static void TickBlocked(MoonWorld world, float now)
+        {
+            bool sand = Rider(world, blockId, out int sb, out float sd, out bool sm) && sb == outBelt && !sm && sd >= outPath.Length - 0.1f;
+            bool grit = Rider(world, keepId, out int gb, out _, out bool gm) && gb == outBelt && !gm;
+            if (!(sand && grit) && now < outUntil) return;
+            CoreLog.Info($"[selftest] belt-save-clean: riders on belt {outBelt} before the save: {RidersText(world, outBelt)}; burner status '{SafeStatus(world.ProductionOf(outTo))}'");
+            if (!(sand && grit)) { FailOut(3, $"the canisters did not settle on belt {outBelt} within 20 s: sand {blockId} waiting {sand}, grit {keepId} waiting {grit}"); return; }
+            DevTools.RequestSave();
+            outSaveSeq = DevTools.SaveSeqAtRequest;
+            outPhase = 4;
+            outGrace = -1f;
+            outUntil = now + 120f;
+        }
+
+        static void TickOutSave(MoonWorld world, float now)
+        {
+            if (outGrace < 0f)
+            {
+                bool written = Sidecar.WriteSeq > outSaveSeq;
+                Il2CppSystem.Threading.Tasks.Task pending = null;
+                try { pending = world?.PendingSave; } catch (Exception) { }
+                if (written && (pending == null || pending.IsCompleted)) outGrace = now + 3f;
+                else if (now < outUntil) return;
+            }
+            if (outGrace >= 0f && now < outGrace) return;
+            outPhase = 0;
+            var w = Sidecar.LastWrite;
+            bool beltThere = world.conveyors != null && world.conveyors.ContainsKey(outBelt);
+            bool riding = Rider(world, keepId, out int gb, out float gd, out _) && gb == outBelt;
+            int cargo = world.canisters.ContainsKey(keepId) ? (byte)world.canisters.get_Item(keepId).cargo : -1;
+            string recorded = "no sidecar";
+            bool inSidecar = false;
+            string path = SidecarPath();
+            if (path != null && File.Exists(path))
+            {
+                var file = SidecarCodec.Deserialize(File.ReadAllText(path));
+                var rec = file.Canisters.FirstOrDefault(c => c.Id == keepId);
+                inSidecar = rec != null && rec.CargoId == GritId;
+                recorded = $"{file.Canisters.Count} canister record(s) [{string.Join(", ", file.Canisters.Select(c => $"{c.Id}:{c.CargoId} {c.Kilograms} kg"))}]";
+            }
+            int refused = Sidecar.VanillaFailures - vanillaFailuresAtWatch;
+            CoreLog.Info($"[selftest] belt-save-clean: write #{w?.Seq} after the request (#{outSaveSeq}); belt {outBelt} in world.conveyors {beltThere}; grit canister {keepId} riding {riding} d {gd:F2} cargo {cargo}; sidecar {recorded}; 'Moon save failed' {saveFailures}x, vanilla writes that threw {refused}");
+            bool ok = w != null && w.Seq > outSaveSeq && beltThere && riding && cargo == GritValue && inSidecar && saveFailures == 0 && refused == 0;
+            Assert("belt-save-clean", ok, $"write after the request {(w != null && w.Seq > outSaveSeq)}, belt in world {beltThere}, grit canister riding {riding} cargo {cargo}, in the sidecar {inSidecar}, 'Moon save failed' {saveFailures}x, refused writes {refused}");
+        }
+
+        // Second run: the first run's belt, grit canister and burner state, restored from the save and its sidecar.
+        static void StartReloadChecks(MoonWorld world, StructureDefinition grinder, StructureDefinition burner)
+        {
+            if (DevTools.AutoBuildNames(GrinderId) || DevTools.AutoBuildNames(BurnerOutId)) { CoreLog.Info("[selftest] AutoBelt built no belt out of the example grinder this run: belt output checks not applicable"); return; }
+            loadedGrit = Sidecar.LoadedCanisters().Where(c => c.CargoId == GritId).Select(c => c.Id).ToList();
+            outFrom = DepotOfKind(world, grinder.Kind);
+            outTo = DepotOfKind(world, burner.Kind);
+            if (outFrom < 0 || outTo < 0 || loadedGrit.Count == 0)
+            {
+                CoreLog.Info($"[selftest] no restored grinder ({outFrom}), burner ({outTo}) or sidecar grit canister ({loadedGrit.Count}): belt output checks not applicable");
+                return;
+            }
+            outBelt = -1;
+            foreach (var kv in world.conveyors)
+                if (kv.Value != null && world.MachineWithPort(kv.Value.start, true) == outFrom && world.MachineWithPort(kv.Value.end, false) == outTo) { outBelt = kv.Key; break; }
+            CoreLog.Info($"[selftest] belt-save-clean (reload): restored grinder depot {outFrom}, burner depot {outTo}, belt between them {outBelt} ({world.conveyors.Count} belts); sidecar grit canisters [{string.Join(", ", loadedGrit)}]");
+            outPhase = 5;
+            outUntil = Time.unscaledTime + 20f;
+        }
+
+        static void TickReload(MoonWorld world, float now)
+        {
+            int found = -1;
+            float d = -1f;
+            if (outBelt >= 0)
+                foreach (var kv in world.riders)
+                {
+                    if (kv.Value.belt != outBelt || !loadedGrit.Contains(kv.Key) || !world.canisters.ContainsKey(kv.Key)) continue;
+                    if ((byte)world.canisters.get_Item(kv.Key).cargo != GritValue) continue;
+                    found = kv.Key; d = kv.Value.distance;
+                    break;
+                }
+            var r = Sidecar.RestoredProduction.FirstOrDefault(x => x.StructureId == BurnerOutId);
+            bool burnerOk = r != null && r.Saved.Sum() > 0 && r.Saved.Length == r.Loaded.Length && r.Saved.Zip(r.Loaded, (a, b) => Math.Abs(a - b) <= 0.01).All(x => x);
+            bool ok = outBelt >= 0 && found >= 0 && burnerOk;
+            if (!ok && now < outUntil) return;
+            outPhase = 0;
+            var canisters = loadedGrit.Select(id => world.canisters.ContainsKey(id)
+                ? $"{id}: cargo {(byte)world.canisters.get_Item(id).cargo} {world.canisters.get_Item(id).kilograms} kg rider {(Rider(world, id, out int b, out float rd, out bool m) ? $"belt {b} d {rd:F2} moving {m}" : "no")}"
+                : $"{id}: not in world.canisters").ToList();
+            string burnerText = r == null ? "no burner production restored" : $"burner depot {r.Depot} saved kg [{string.Join(" ", r.Saved)}], at load [{string.Join(" ", r.Loaded)}]";
+            CoreLog.Info($"[selftest] belt-save-clean (reload): riders on belt {outBelt}: {(outBelt >= 0 ? RidersText(world, outBelt) : "no belt")}; sidecar grit canisters now [{string.Join("; ", canisters)}]; {burnerText}; burner now {StateText(world.ProductionOf(outTo))}");
+            Assert("belt-save-clean", ok, $"belt from grinder {outFrom} to burner {outTo}: {(outBelt >= 0 ? outBelt.ToString() : "none")}; sidecar grit canister riding it: {(found >= 0 ? $"{found} d {d:F2}" : "none")}; {burnerText}");
+        }
+
+        static void FailOut(int phase, string why)
+        {
+            int from = phase >= 3 ? 2 : Math.Max(1, phase) - 1;
+            for (int i = from; i < OutNames.Length; i++) Assert(OutNames[i], false, why);
+            outPhase = 0;
         }
     }
 }

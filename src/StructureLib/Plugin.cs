@@ -38,6 +38,7 @@ namespace StructureLib
             "MoonCleaners.MoonDepotConstruction:Spawn", "MoonCleaners.MoonDepotConstruction:ViewOf", "MoonCleaners.MoonWorld:RemoveStructureNow",
             "MoonCleaners.MoonWorld:PortCargo", "MoonCleaners.MoonDepotBuildDefinition:conveyorPorts",
             "MoonCleaners.MoonWorld:HandOff", "MoonCleaners.MoonWorld:MachineWithPort", "MoonCleaners.MoonWorld:canisters", "MoonCleaners.MoonProductionState:Flow",
+            "MoonCleaners.MoonConveyorSnapshot:start", "MoonCleaners.MoonConveyorSnapshot:id",
         };
 
         public override void Load()

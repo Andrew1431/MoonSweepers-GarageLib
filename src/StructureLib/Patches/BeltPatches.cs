@@ -23,6 +23,10 @@ namespace StructureLib.Patches
     // depot's view pose, lies within MoonWorld.PortTolerance of the belt's end (as the dev AutoBelt matches ports). The
     // cache is dropped when the world, the number of belts or the number of depots changes, and an entry whose belt end
     // moved is resolved again.
+    //
+    // Belt output needs no patch: the game's own EmitProduct puts a modded machine's output on the belt joined to its output
+    // port (one 1 kg canister per EmitCargo call, recon fact (f)). EmitterOf only names the machine behind an outfeed belt,
+    // so the EmitCargo postfix (ProductionPatches) can raise MoonStructures.CargoEmitted.
     [HarmonyPatch]
     internal static class BeltPatches
     {
@@ -59,14 +63,7 @@ namespace StructureLib.Patches
         // The modded machine and port at the belt's end; an entry with no Definition for any other belt.
         static Joined Resolve(MoonWorld world, int belt, MoonConveyorPath path)
         {
-            int belts = world.conveyors?.Count ?? -1, depots = world.depots?.Count ?? -1;
-            if (!ReferenceEquals(world, cacheWorld) || belts != cacheBelts || depots != cacheDepots)
-            {
-                cache.Clear();
-                cacheWorld = world;
-                cacheBelts = belts;
-                cacheDepots = depots;
-            }
+            Fresh(world);
             Vector3 end;
             if (path != null) end = path.end;
             else if (world.conveyors != null && world.conveyors.ContainsKey(belt)) end = world.conveyors.get_Item(belt).end;
@@ -116,6 +113,51 @@ namespace StructureLib.Patches
             }
             if (keep) cache[belt] = j;
             return j;
+        }
+
+        // Both caches are dropped when the world, the number of belts or the number of depots changes.
+        static void Fresh(MoonWorld world)
+        {
+            int belts = world.conveyors?.Count ?? -1, depots = world.depots?.Count ?? -1;
+            if (ReferenceEquals(world, cacheWorld) && belts == cacheBelts && depots == cacheDepots) return;
+            cache.Clear();
+            emitters.Clear();
+            cacheWorld = world;
+            cacheBelts = belts;
+            cacheDepots = depots;
+        }
+
+        // The machine whose output port an outfeed belt starts at (EmitCargo has no machine argument): MachineWithPort(start,
+        // true), cached per belt like the intake side (the cached depot must still exist with the same kind, and the belt
+        // start must not have moved). Null when no machine record is there. Definition is null for a vanilla machine.
+        internal sealed class Emitter
+        {
+            internal Vector3 Start;
+            internal int Depot = -1, Kind = -1;
+            internal StructureDefinition Definition;
+        }
+
+        static readonly Dictionary<int, Emitter> emitters = new();
+
+        internal static Emitter EmitterOf(MoonWorld world, MoonConveyorSnapshot outfeed)
+        {
+            if (world == null || outfeed == null) return null;
+            Fresh(world);
+            int belt = outfeed.id;
+            Vector3 start = outfeed.start;
+            if (emitters.TryGetValue(belt, out var e) && e.Start == start)
+            {
+                int? liveKind = world.depots != null && world.depots.ContainsKey(e.Depot) ? world.depots.get_Item(e.Depot)?.kind : null;
+                if (BeltIntake.CacheValid(e.Depot, e.Kind, liveKind)) return e;
+                emitters.Remove(belt);
+            }
+            int depot = world.MachineWithPort(start, true);
+            var rec = depot >= 0 && world.depots != null && world.depots.ContainsKey(depot) ? world.depots.get_Item(depot) : null;
+            if (rec == null) return null;
+            e = new Emitter { Start = start, Depot = depot, Kind = rec.kind, Definition = Remap.Live(rec.kind) };
+            emitters[belt] = e;
+            if (e.Definition != null) CoreLog.Info($"Belt {belt} carries the output of '{e.Definition.Id}' depot {depot}");
+            return e;
         }
 
         // True when the canister was taken whole (the game then forgets its rider); false when it waits.
@@ -192,7 +234,7 @@ namespace StructureLib.Patches
             catch (Exception e) { CoreLog.Once("handoff-status:" + j.Depot, $"Setting the waiting status of depot {j.Depot} threw: {e.Message}", 1); }
         }
 
-        static string CargoId(MoonCargo cargo) => (byte)cargo switch
+        internal static string CargoId(MoonCargo cargo) => (byte)cargo switch
         {
             0 => Cargo.Dust.Id,
             1 => Cargo.Sand.Id,

@@ -187,4 +187,17 @@ namespace StructureLib
         /// <summary>The canister's owner (player id), under whose share the kilograms were stored.</summary>
         public string Owner;
     }
+
+    /// <summary>Payload of <see cref="MoonStructures.CargoEmitted"/>.</summary>
+    public sealed class CargoEmitted
+    {
+        public StructureDefinition Definition;
+        /// <summary>The game's depot id of the machine that emitted.</summary>
+        public int DepotId;
+        public Cargo Cargo;
+        /// <summary>Kilograms in the new canister: the game emits 1 kg per canister, whatever the cargo's UnitKilograms.</summary>
+        public double Kilograms;
+        /// <summary>The outfeed belt's id (key of <c>MoonWorld.conveyors</c>).</summary>
+        public int BeltId;
+    }
 }

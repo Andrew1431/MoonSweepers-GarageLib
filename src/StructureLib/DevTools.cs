@@ -106,7 +106,7 @@ namespace StructureLib
         }
 
         // The same call GarageLib's AutoSave uses. The save itself runs later (and possibly off the main thread).
-        static void RequestSave()
+        internal static void RequestSave()
         {
             var w = CoreState.World ?? CoreState.FindWorld();
             if (w == null) { CoreLog.Warn("[dev] AutoSave: no MoonWorld"); return; }
@@ -445,6 +445,7 @@ namespace StructureLib
             SandPowerChecks();
             PortChecks();
             BeltChecks();
+            OutChecks();
             int expected = KindAllocator.KindOf("ryanhartwig.example-lamp");
             Assert("example-kind-hashed", lamp != null && lamp.Kind == expected,
                 lamp == null ? "'ryanhartwig.example-lamp' is not registered (is ExampleStructure installed?)" : $"kind {lamp.Kind}, expected {expected}");
@@ -498,9 +499,10 @@ namespace StructureLib
             if (PowerPending) TickPower();
             if (sandOpen.Count > 0) TickSandPower();
             if (BeltPending) TickBeltChecks();
+            if (OutPending) TickOutChecks();
             if (artUntil >= 0f) { TickCardArt(); return; }
             if (renderUntil >= 0f) { TickRendered(); return; }
-            if (saveUntil >= 0f && cycleUntil < 0f && !PowerPending && sandOpen.Count == 0 && !BeltPending) TickSaveWait();
+            if (saveUntil >= 0f && cycleUntil < 0f && !PowerPending && sandOpen.Count == 0 && !BeltPending && !OutPending) TickSaveWait();
         }
 
         // cardart-modded: CardArt answers something once nothing is pending, or after 5 s.
@@ -1056,7 +1058,7 @@ namespace StructureLib
             bool grit = Stored(s, 2) > 0, raised = cycleEvents.Contains(grinderDepot);
             if (!(grit && raised) && Time.unscaledTime < cycleUntil) return;
             cycleUntil = -1f;
-            CoreLog.Info($"[selftest] grinder depot {grinderDepot} after its cycle: {StateText(s)}; CycleFinished raised: {raised}; EmitCargo called with grit {Patches.ProductionPatches.ModdedCargoEmits}x (no outfeed belt, none expected)");
+            CoreLog.Info($"[selftest] grinder depot {grinderDepot} after its cycle: {StateText(s)}; CycleFinished raised: {raised}; EmitCargo called with grit {Patches.ProductionPatches.ModdedCargoEmits}x (only with an outfeed belt)");
             if (DevTools.ForcePower.Value) { Assert("cycle-produces-grit", false, "[Dev] ForcePower is on: the cycle ran on forced power, which proves nothing about the grid"); return; }
             Assert("cycle-produces-grit", grit && raised, $"within 30 s of the feed: Stored(2) = {Stored(s, 2)}, CycleFinished raised: {raised}; {StateText(s)}");
         }

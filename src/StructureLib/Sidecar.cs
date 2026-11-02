@@ -40,6 +40,7 @@ namespace StructureLib
 
         /// <summary>Structure ids of the production records in the file loaded for this session (orphans included).</summary>
         internal static List<string> LoadedProductionIds() { lock (gate) return loaded.Production.Select(p => p.Id).ToList(); }
+        internal static List<CanisterRecord> LoadedCanisters() { lock (gate) return loaded.Canisters.ToList(); }
 
         /// <summary>A production record the last load restored: where, and each slot as saved and as the world held it right after RestoreProduction.</summary>
         internal sealed class ProductionRestore
