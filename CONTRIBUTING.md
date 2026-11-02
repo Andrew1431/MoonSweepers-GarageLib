@@ -15,14 +15,22 @@
 4. Build everything once: `dotnet build GarageLib.slnx -c Release`. Each build copies the DLLs into
    `BepInEx/plugins/<Name>/`, so you only need to launch the game afterwards (close it first: Windows locks the DLLs).
 
-## New vehicle
+## New package
 
 ```powershell
-.\new-vehicle.ps1 -Name RoverX -Author yourname -Title "Rover X"
+.\new-package.ps1 -Kind vehicle|mod|lib -Name RoverX -Author yourname [-Title "Rover X"]
 ```
 
-That creates `vehicles/RoverX/` with a `Plugin.cs` that registers a vehicle, and adds it to the solution.
-Things to know:
+The kind decides where it lands, and every kind is added to the solution:
+
+- `vehicle`: `vehicles/RoverX/`, a `Plugin.cs` that registers a vehicle with GarageLib.
+- `mod`: `mods/RoverX/`, a plain plugin with no library references (the csproj has commented lines for GarageLib and StructureLib).
+- `lib`: `src/RoverX/`, a library other mods depend on, with a public `Guid` and a `Version` (libraries are released packages).
+
+A name can't be reused across kinds, because every project installs to `BepInEx/plugins/<Name>/`.
+`.\new-vehicle.ps1 -Name RoverX -Author yourname` still works for one release; it just calls `new-package.ps1 -Kind vehicle`.
+
+For vehicles, things to know:
 
 - **Ids are forever.** `Guid` (`com.yourname.roverx`) and `VehicleId` (`yourname.rover-x`) can't change after a
   release: players' configs and saves refer to them.
