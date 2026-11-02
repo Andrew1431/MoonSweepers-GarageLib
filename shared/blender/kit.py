@@ -4,6 +4,8 @@
 # then kit.reset(), builds parts under kit.root(...), and calls kit.save / kit.preview / kit.export.
 #
 # Conventions (see vehicles/STYLE.md): metres, Z up, nose at -Y, +X is the vehicle's left. Ground at Z = 0.
+# Structures (machines built by StructureLib): see shared/blender/STRUCTURES.md and smoke_structure.py (port, hopper,
+# chute, footprint_guide, preview(..., structure=True)).
 # Materials are named after the game materials the loader maps them to; never invent new names.
 import bpy, bmesh, math, os, sys
 from mathutils import Vector
@@ -164,7 +166,135 @@ def lamp(name, loc, size=(0.18, 0.04, 0.10), parent=None, mat=LAMP):
     return box(name, size, loc, mat, parent, 0.01)
 
 
+# --- Structures (see shared/blender/STRUCTURES.md) ---------------------------------------------------------------
+# Objects whose name starts with GUIDE_PREFIX are build aids: previews show them, export skips them (and their children).
+GUIDE_PREFIX = "Guide_"
+STRUCTURE_TRIANGLES = 10000
+
+
+def _heading(direction):
+    """Z rotation that turns local +Y onto the horizontal part of `direction`."""
+    d = Vector(direction)
+    return math.atan2(-d.x, d.y)
+
+
+def port(name, loc, direction, output, cargo, parent):
+    """Belt port `Port_<name>`: an empty at `loc` (the exact point a belt end snaps to) whose local +Y is the flow
+    direction (into the machine for an input, out of it for an output; a unit vector in Blender space). Its ID
+    properties `output` (0.0 / 1.0) and `cargo` ("Sand", "Dust", "Stone" or a cargo id) are written by the exporter as
+    node props, which StructureLib reads. Put it at the hopper mouth (input) or chute lip (output)."""
+    o = _link(bpy.data.objects.new("Port_" + name, None), parent)
+    o.empty_display_type = "ARROWS"
+    o.empty_display_size = 0.35
+    o.location = loc
+    o.rotation_mode = "QUATERNION"
+    o.rotation_quaternion = Vector((0, 1, 0)).rotation_difference(Vector(direction).normalized())
+    o["output"] = 1.0 if output else 0.0
+    o["cargo"] = str(cargo)
+    return o
+
+
+def _guide_material():
+    m = bpy.data.materials.get(GUIDE_PREFIX + "Wire")
+    if m is None:
+        m = bpy.data.materials.new(GUIDE_PREFIX + "Wire")
+        m.use_nodes = True
+        b = next(n for n in m.node_tree.nodes if n.type == "BSDF_PRINCIPLED")
+        b.inputs["Base Color"].default_value = (1.0, 0.85, 0.1, 1)
+        b.inputs["Emission Color"].default_value = (1.0, 0.85, 0.1, 1)
+        b.inputs["Emission Strength"].default_value = 1.5
+        m.diffuse_color = (1.0, 0.85, 0.1, 1)
+    return m
+
+
+def footprint_guide(half_x, half_y, height, parent):
+    """The donor's footprint and height as a yellow wireframe box (`Guide_Footprint`) from Z = 0, centred on the root.
+    Previews show it; export skips it. Take the numbers from the donor's `halfFootprint` (x, z) and `height`."""
+    _guide_material()
+    bm = bmesh.new()
+    bmesh.ops.create_cube(bm, size=1.0)
+    bmesh.ops.scale(bm, vec=Vector((half_x * 2, half_y * 2, height)), verts=bm.verts)
+    o = _mesh_obj(GUIDE_PREFIX + "Footprint", bm, GUIDE_PREFIX + "Wire", parent, (0, 0, height / 2), (0, 0, 0))
+    o.display_type = "WIRE"
+    w = o.modifiers.new("Wire", "WIREFRAME")
+    w.thickness = 0.025
+    w.use_replace = True
+    return o
+
+
+def hopper(name, loc, width, depth, height, parent, mat=BLACK, lip=ORANGE, throat=0.45, wall=0.04):
+    """Open-top tapered intake: the mouth (width along X, depth along Y) is centred on `loc` at the top and the walls
+    taper down `height` to a throat of `throat` x the mouth. Put `loc` at the input port so the belt end sits on the
+    rim. The rim faces take `lip` (orange intake lip; None for the body material)."""
+    hw, hd, tw, td = width / 2, depth / 2, width * throat / 2, depth * throat / 2
+    t = wall
+    bm = bmesh.new()
+
+    def ring(x, y, z):
+        return [bm.verts.new(p) for p in ((-x, -y, z), (x, -y, z), (x, y, z), (-x, y, z))]
+
+    ot, ob = ring(hw, hd, 0), ring(tw, td, -height)                    # outer top / bottom
+    it, ib = ring(hw - t, hd - t, 0), ring(max(tw - t, t), max(td - t, t), -height + t)
+    for i in range(4):
+        j = (i + 1) % 4
+        bm.faces.new((ob[i], ob[j], ot[j], ot[i]))                     # outer walls
+        bm.faces.new((ib[j], ib[i], it[i], it[j]))                     # inner walls
+        bm.faces.new((ot[i], ot[j], it[j], it[i])).material_index = 1  # rim
+    bm.faces.new(list(reversed(ob)))
+    bm.faces.new(ib)
+    bmesh.ops.recalc_face_normals(bm, faces=bm.faces)
+    o = _mesh_obj(name, bm, mat, parent, loc, (0, 0, 0))
+    o.data.materials.append(bpy.data.materials[lip or mat])
+    return o
+
+
+def chute(name, loc, length, width, parent, mat=STEEL, direction=(0, 1, 0), angle=30, depth=0.14, wall=0.03):
+    """Angled outlet trough: a U channel whose lip (open end) is centred on `loc` with its floor at `loc`, rising
+    `length` (horizontal) back against `direction` at `angle` degrees into the machine. Put `loc` at the output port."""
+    rise = length * math.tan(math.radians(angle))
+    hw, t = width / 2, wall
+    prof = [(-hw, 0), (hw, 0), (hw, depth), (hw - t, depth), (hw - t, t), (-hw + t, t), (-hw + t, depth), (-hw, depth)]
+    bm = bmesh.new()
+    lip = [bm.verts.new((x, 0, z - t)) for x, z in prof]
+    back = [bm.verts.new((x, -length, z - t + rise)) for x, z in prof]
+    n = len(prof)
+    for i in range(n):
+        j = (i + 1) % n
+        bm.faces.new((lip[i], lip[j], back[j], back[i]))
+    bm.faces.new(lip)
+    bm.faces.new(list(reversed(back)))
+    bmesh.ops.recalc_face_normals(bm, faces=bm.faces)
+    return _mesh_obj(name, bm, mat, parent, loc, (0, 0, _heading(direction)))
+
+
+def _is_guide(o):
+    while o is not None:
+        if o.name.startswith(GUIDE_PREFIX):
+            return True
+        o = o.parent
+    return False
+
+
+def _parts(obj):
+    """Mesh/curve objects under `obj` that export writes (guides excluded)."""
+    return [o for o in [obj, *obj.children_recursive] if o.type in ("MESH", "CURVE") and not _is_guide(o)]
+
+
+def triangles(obj):
+    """Triangles export would write for `obj` (evaluated: bevels and other modifiers included)."""
+    dg = bpy.context.evaluated_depsgraph_get()
+    n = 0
+    for o in _parts(obj):
+        ev = o.evaluated_get(dg)
+        me = ev.to_mesh()
+        me.calc_loop_triangles()
+        n += len(me.loop_triangles)
+        ev.to_mesh_clear()
+    return n
+
+
 def bounds(obj):
+    bpy.context.view_layer.update()   # matrix_world is stale until the scene is evaluated
     pts = []
     for o in [obj, *obj.children_recursive]:
         if o.type in ("MESH", "CURVE"):
@@ -231,7 +361,20 @@ def _stage():
     return sc
 
 
-def _camera(sc, lo, hi, view):
+def stage_structure(obj=None):
+    """Preview stage for structures: the usual lit ground plane at Z = 0, and the 1.8 m figure standing beside the
+    model's +X side (level with its middle, 0.8 m out) so the footprint and height read against a person.
+    Returns (scene, figure); the figure is None when there is no `obj` or one already exists."""
+    sc = _stage()
+    fig = None
+    if obj is not None and "ScaleFigure" not in bpy.data.objects:
+        lo, hi = bounds(obj)
+        fig = scale_figure()
+        fig.location = (hi.x + 0.8, (lo.y + hi.y) / 2, 0)
+    return sc, fig
+
+
+def _camera(sc, lo, hi, view, structure=False):
     centre = (lo + hi) / 2
     size = hi - lo
     cam = bpy.data.objects.get("PreviewCam") or bpy.data.objects.new("PreviewCam", bpy.data.cameras.new("PreviewCam"))
@@ -245,7 +388,8 @@ def _camera(sc, lo, hi, view):
         dist = max(size.length, 2.0) * 1.9
     else:
         cd.type = "ORTHO"
-        direction = {"side": Vector((1, 0, 0.0001)), "front": Vector((0, -1, 0.0001)), "top": Vector((0.0001, -0.0001, 1))}[view]
+        up = 0.12 if structure else 0.0001   # structures: look slightly down so the ground plane shows as a floor
+        direction = {"side": Vector((1, 0, up)), "front": Vector((0, -1, up)), "top": Vector((0.0001, -0.0001, 1))}[view].normalized()
         dist = max(size.length, 2.0) * 3
         span = {"side": max(size.y, size.z * 1.6), "front": max(size.x, size.z * 1.6), "top": max(size.x, size.y)}[view]
         cd.ortho_scale = span * 1.25
@@ -255,20 +399,32 @@ def _camera(sc, lo, hi, view):
     sc.camera = cam
 
 
-def preview(obj, path_base, views=("hero", "side", "front", "rear"), figure=True):
-    """Render PNGs of `obj` to <path_base>_<view>.png. Look at them with Read before calling the model done."""
-    sc = _stage()
+def preview(obj, path_base, views=("hero", "side", "front", "rear"), figure=True, structure=False):
+    """Render PNGs of `obj` to <path_base>_<view>.png. Look at them with Read before calling the model done.
+    Prints `TRIANGLES <n>` (what export would write). With structure=True: the structure stage (figure beside the +X
+    side, ground visible in every view) and a RuntimeError, after rendering, above STRUCTURE_TRIANGLES."""
+    tris = triangles(obj)
+    if structure:
+        sc, fig = stage_structure(obj if figure else None)
+    else:
+        sc = _stage()
+        fig = None
     lo, hi = bounds(obj)
-    fig = None
-    if figure and "ScaleFigure" not in bpy.data.objects:
+    if figure and not structure and "ScaleFigure" not in bpy.data.objects:
         fig = scale_figure()
         fig.location = ((lo.x + hi.x) / 2 + (hi.x - lo.x) / 2 + 0.6, hi.y + 0.5, 0)   # behind the left rear corner
     out = []
     for v in views:
         flo, fhi = (lo, hi)
-        if fig and v != "front":
+        # Vehicles: the figure stands behind the rear corner and the front view is framed without it. Structures: it
+        # stands beside the +X side, in every view but the side view, where it would hide the +X face.
+        show_fig = fig is not None and (v != "side" if structure else v != "front")
+        if fig and structure:
+            for o in [fig, *fig.children_recursive]:
+                o.hide_render = not show_fig
+        if show_fig:
             flo, fhi = bounds_union(lo, hi, *bounds(fig))
-        _camera(sc, flo, fhi, v)
+        _camera(sc, flo, fhi, v, structure)
         sc.render.filepath = os.path.abspath(f"{path_base}_{v}.png")
         bpy.ops.render.render(write_still=True)
         out.append(sc.render.filepath)
@@ -276,6 +432,9 @@ def preview(obj, path_base, views=("hero", "side", "front", "rear"), figure=True
         for o in [fig, *fig.children_recursive]:
             bpy.data.objects.remove(o, do_unlink=True)
     print("PREVIEW", *out)
+    print("TRIANGLES", tris)
+    if structure and tris > STRUCTURE_TRIANGLES:
+        raise RuntimeError(f"{obj.name}: {tris} triangles, over the structure budget of {STRUCTURE_TRIANGLES}")
     return out
 
 
@@ -286,7 +445,19 @@ def save(path):
 
 
 def export(obj, out_path):
-    """Write the mesh model (.bin) the loader reads, via the shared exporter."""
+    """Write the mesh model (.bin) the loader reads, via the shared exporter.
+    Raises ValueError, writing nothing, if a part uses a material outside PALETTE (or an empty slot): the game would show
+    it as a flat fallback colour. `Guide_*` objects (and their children) are left out of the file."""
+    bad = sorted({f"{o.name}: {s.material.name if s.material else '<empty slot>'}"
+                  for o in _parts(obj) for s in (o.material_slots or [None])
+                  if s is None or s.material is None or s.material.name not in PALETTE})
+    if bad:
+        raise ValueError("materials outside the kit palette: " + "; ".join(bad))
+    guides = [o for o in obj.children_recursive if o.name.startswith(GUIDE_PREFIX) and not _is_guide(o.parent)]
+    held = [(g, g.parent, g.matrix_parent_inverse.copy()) for g in guides]
+    for g, _, _ in held:
+        g.parent = None
+    bpy.context.view_layer.update()
     exporter = os.path.join(REPO, "shared", "blender", "export_mesh_model.py")
     argv = sys.argv
     sys.argv = [argv[0]]
@@ -295,6 +466,10 @@ def export(obj, out_path):
         exec(code, {"__name__": "export_mesh_model", "ROOT_NAME": obj.name, "OUT_PATH": os.path.abspath(out_path)})
     finally:
         sys.argv = argv
+        for g, p, inv in held:
+            g.parent = p
+            g.matrix_parent_inverse = inv
+        bpy.context.view_layer.update()
 
 
 def stats(vehicle_id):
