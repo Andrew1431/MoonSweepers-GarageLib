@@ -1,9 +1,17 @@
 <Solution>
   <Folder Name="/examples/">
+    <Project Path="examples/ExampleStructure/ExampleStructure.csproj" />
     <Project Path="examples/ExampleVehicle/ExampleVehicle.csproj" />
+  </Folder>
+  <Folder Name="/mods/">
+    <Project Path="mods/SandPower/SandPower.csproj" />
   </Folder>
   <Folder Name="/src/">
     <Project Path="src/GarageLib/GarageLib.csproj" />
+    <Project Path="src/StructureLib/StructureLib.csproj" />
+  </Folder>
+  <Folder Name="/tests/">
+    <Project Path="tests/StructureLib.Tests/StructureLib.Tests.csproj" />
   </Folder>
   <Folder Name="/vehicles/">
     <Project Path="vehicles/MsChoppa/MsChoppa.csproj" />

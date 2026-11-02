@@ -15,6 +15,9 @@
 4. Build everything once: `dotnet build GarageLib.slnx -c Release`. Each build copies the DLLs into
    `BepInEx/plugins/<Name>/`, so you only need to launch the game afterwards (close it first: Windows locks the DLLs).
 
+The `.slnx` solution needs the .NET SDK 9.0.200 or newer. With an older SDK (8 works for every project), build
+one project at a time instead: `dotnet build mods\SandPower\SandPower.csproj -c Release`.
+
 ## New vehicle
 
 ```powershell
@@ -40,6 +43,34 @@ Things to know:
   game's materials. Ms Choppa is the worked example.
 - **Bump `Version`** in your `Plugin.cs` and add a changelog line to your README when you change something players
   will get.
+
+## New structure mod (StructureLib)
+
+Buildings, machines, cargo and power sources go in `mods/<Name>/` on top of
+[StructureLib](src/StructureLib/README.md). [`mods/SandPower`](mods/SandPower) is the worked example; copy its shape:
+
+- `<Name>.csproj` with `AssemblyName` = the folder name and a `ProjectReference` to
+  `$(RepoRoot)src\StructureLib\StructureLib.csproj` with `Private="false"`.
+- `Plugin.cs` with `public const string Guid` (`com.yourname.<name>`) and `public const string Version`,
+  `[BepInDependency(StructureLib.Plugin.Guid)]`, and every `MoonStructures.Register` / `RegisterCargo` call in
+  `Load()`. `package.ps1` picks the folder up from the `Version` constant.
+- A `README.md` with the numbers players see and a changelog.
+- Add the project to `GarageLib.slnx` (folder `/mods/`) and the package name to `modpack.json` to ship it in the
+  modpack.
+
+Things to know:
+
+- **Ids are forever.** The plugin GUID, every structure id (`yourname.structure`) and every cargo id and value can't
+  change after a release: saves and co-op peers refer to them.
+- **Claim cargo values.** A new cargo needs a byte value in 3..255 claimed in
+  [`docs/cargo-registry.md`](docs/cargo-registry.md) before you use it; two mods with the same value are both dropped.
+- **Start from a vanilla structure.** `BaseStructure` lends the model, footprint and build rules. A machine needs a
+  donor with a production view (the stone press, the pressure chamber; for a generator, the solar post).
+- **Know the limits.** The [StructureLib status table](src/StructureLib/README.md#status) lists what works, what is
+  unsupported (walker loading, fuel generators feeding vanilla machines) and what is untested (belts, co-op).
+- **Test with the dev self-test.** Dev builds of StructureLib add a `[Dev]` section to
+  `BepInEx/config/com.ryanhartwig.structurelib.cfg`: `AutoLoadSlot`, `AutoBuild` (structure ids or vanilla kinds),
+  `AutoFeed` (load cargo into a built machine) and `SelfTest`, which logs `[selftest] PASS` / `FAIL` lines.
 
 ## Testing
 

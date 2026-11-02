@@ -1,5 +1,106 @@
 # StructureLib
 
+The shared library for modded structures in Moon Sweepers: new buildings in the build menu, machines that turn one
+cargo into another, new cargo kinds, and fuel generators. A modded structure borrows a vanilla structure's prefab and
+rules, is kept out of the vanilla save (uninstalling a mod never breaks a save), and is checked between co-op players.
+[SandPower](../../mods/SandPower) is the first mod built on it; [ExampleStructure](../../examples/ExampleStructure)
+shows every registration pattern.
+
+## Using it
+
+Reference `src/StructureLib/StructureLib.csproj` (`Private="false"`), add `[BepInDependency(StructureLib.Plugin.Guid)]`,
+and register everything from your plugin's `Load()`. Registering later is refused: the registry freezes when the first
+world loads. Pass your plugin GUID as the owner; the co-op handshake reports it with your plugin's version.
+
+```csharp
+var fuel = MoonStructures.RegisterCargo(new CargoDefinition
+{
+    Id = "you.fuel", Value = 42,                 // claim the byte in docs/cargo-registry.md; never change either
+    Name = "fuel pellet", ShortName = "pellet", UnitKilograms = 2, Price = 5m,
+}, Guid);
+
+MoonStructures.Register(new StructureDefinition
+{
+    Id = "you.press", Name = "Press", Category = "Production", Price = 800m,
+    Note = "Presses 4 kg of sand into fuel every 8 s. Needs 12 kW.",
+    BaseStructure = MoonWorld.StonePressKind,    // the vanilla kind it borrows from
+    Processor = new ProcessorDefinition
+    {
+        RunningKw = 12, CycleSeconds = 8,
+        Slots = { Slot.Input("Sand", Cargo.Sand, 16), Slot.Batch("Pressing", Cargo.Sand, 4), Slot.Output("Fuel", fuel, 10) },
+    },
+}, Guid);
+```
+
+- **Structures** (`MoonStructures.Register(StructureDefinition, ownerGuid)`): `Id` (stable, `author.structure`),
+  `Name`, `Category` (a build-menu tab; a new name adds a tab), `Note` (the card line), `Price`, `BaseStructure` (a
+  vanilla kind; foundations, decks, building parts, catwalk supports and the world grid are refused). Optional
+  `CardImagePng` or `CardImageKey`; without them the card picture is rendered from the model.
+- **Models:** `BuildModel(ModelContext)` returns a replacement root under `ctx.Parent`; it runs once per world and the
+  game copies the result for every one built. `DecorateModel(GameObject, ModelContext)` runs on every copy (tint,
+  extra parts). `ModelContext` carries the `Definition`, the `Parent` and the donor's vanilla build definition
+  (`Donor`). Without either, the donor's model is used.
+- **Cargo** (`MoonStructures.RegisterCargo(CargoDefinition, ownerGuid)`): `Id`, `Value` (a byte 3..255 claimed in
+  [`docs/cargo-registry.md`](../../docs/cargo-registry.md)), `Name`, `ShortName`, `UnitKilograms`, `Price` (dollars
+  per unit). `CanisterTint` is not applied yet. It returns the `Cargo` handle for slots, or `Cargo.None` when
+  refused. Vanilla cargo handles are `Cargo.Dust`, `Cargo.Sand`, `Cargo.Stone`.
+- **Processors** (`StructureDefinition.Processor`): `RunningKw`, `CycleSeconds`, up to 8 `Slots`: at least one
+  `Slot.Input`, at least one `Slot.Batch`, and one `Slot.Output` unless `ProducesPower`. Capacities are kilograms. A
+  cycle starts when every Batch slot can be filled to capacity from an Input slot of the same cargo and the Output
+  slot has room; it moves the batch into the Output slot at the same mass (4 kg in, 4 kg out).
+- **Power** (`StructureDefinition.Power`, with a `ProducesPower` processor): `PeakKw`, `BatteryKwh`, `Range`,
+  `SupplyMode.Fuel`. Each burned batch adds half the battery. See [Power](#power) for the rules and limits.
+- **Events** (main thread): `MoonStructures.Built` (`StructureBuilt`: definition, depot id, depot record, the decorated
+  view) when a modded structure is built and again for each one restored at load; `Removed` (depot id) after one is
+  removed; `CycleFinished` (`CycleFinished`: definition, depot id, live production state) when a modded machine
+  finishes a cycle. A handler that throws is logged and does not stop the game.
+- **Lookups:** `Definition(kind)`, `Definition(id)`, `IsModded(kind)`, `IsModded(MoonCargo)`, `CargoDefinition(...)`,
+  `All`, `AllCargo`, `Frozen`, `Disabled`.
+
+## How it works
+
+- **Hashed kinds.** A structure's kind number is FNV-1a of its id, mapped above vanilla's range
+  (`1_000_000 + hash % (int.MaxValue - 1_000_000)`), so every install agrees on it without identical mod lists. A
+  collision between two ids disables the library for the session (no modded structures or cargo) rather than
+  renumbering. Cargo values are declared, not hashed: a byte has too little room.
+- **Freeze.** The registry freezes when the first world loads: kinds are assigned, donors are checked, duplicate or
+  out-of-range cargo is dropped, and so is any structure whose slots use dropped cargo. Every error names the id.
+- **Cloned definitions.** Each world gets one copy of the donor's `MoonDepotBuildDefinition` per modded structure, with
+  its name, price and (with `BuildModel`) its prefab. A `BuildDefinition` prefix answers the modded kind with it; other
+  per-kind lookups (shape, grid, robots) answer as the donor. Placement, charging and refunds are the game's own.
+- **Catalog.** Each structure is appended to the build menu's static catalog (a new tab if its category is new) with
+  the image key `structurelib:<id>`; the card picture is rendered from the model once and swapped into open menus.
+- **Sidecar.** The game re-reads every save it writes and refuses a kind it does not know, so modded depots, their
+  machines' production states and canisters of modded cargo are cut out of the save while it is written, put back
+  after, and written to `structurelib.json` beside the save. On load they go back into the load snapshot and restore
+  like vanilla ones. Ownership rule: only a record the library confirmed in the world is replaced by its live state on
+  the next save; every other record (a missing mod's, or one that failed to restore) is written back verbatim, so
+  nothing is dropped or duplicated. A mod that is removed leaves its records waiting until it is installed again.
+- **Machines.** A modded processor gets its own `ProcessorSpec`, and prefixes on the cycle methods run the generic
+  cycle above, so the game's `StepProduction` drives it like a vanilla machine.
+- **Power.** The game's power solve never sees a modded kind; a `SolvePower` postfix attaches modded machines and fuel
+  generators to grids afterwards. Rules in [Power](#power).
+- **Co-op handshake.** Each player publishes a manifest of its registered structures and cargo; a client refuses to
+  join a host whose StructureLib mods differ. Rules in [Co-op handshake](#co-op-handshake).
+- **Safety.** If game members the library relies on are missing (a game update), it logs them and disables itself. A
+  sidecar failure is logged and never stops the vanilla save or load.
+
+The recon behind all this, with the evidence, is in
+[`research/STRUCTURES_RECON.md`](../../research/STRUCTURES_RECON.md).
+
+## Status
+
+| Area | Works (checked in game, single player) | Unsupported | Untested |
+|---|---|---|---|
+| Registration | Hashed kinds, freeze, donor and cargo checks, refusal messages | Foundations, decks, building parts and catwalk supports as donors | |
+| Build menu | Catalog entry, note, rendered card art | | Placing a structure by hand from the menu (the self-test uses the game's own build call) |
+| Build and remove | Build, refund, removal, `Built` and `Removed` | | |
+| Save | Sidecar for depots, production states and modded-cargo canisters; orphans kept; reload restores | | |
+| Cargo | Names, unit mass, price, canister round trip (see [Cargo audit](#cargo-audit)) | Depositing modded cargo at the collector; co-op cargo events; `CanisterTint` (not applied) | Whether `EmitCargo` keeps the modded value on a belt |
+| Processors | Cycle, batch moved at the same mass, `CycleFinished`, loading through `CrewProcessorLoad` | Walker loading (`LoadProcessor` refuses: "Not a production machine") | Belt input (`FeedProcessor`, `EnterMachine`, `PortCargo`) and belt output |
+| Power | Machines on a vanilla grid's surplus and batteries; fuel generators charge, supply modded machines and keep their charge across saves; a modded-only group gets a negative grid id | Fuel generators feeding vanilla machines; power links drawn to modded structures; `SupplyMode.Solar`; `Power` without a `Processor`; a generator's `RunningKw` (ignored) | |
+| Co-op | Manifest built and compared with itself | Graceful degradation for a client missing a mod | Both two-player cases (identical mods; client missing a mod) |
+
 ## Power
 
 A modded machine (a `ProcessorDefinition`) and a modded fuel generator (a `ProcessorDefinition` with `ProducesPower`

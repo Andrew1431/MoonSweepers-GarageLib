@@ -393,6 +393,7 @@ namespace StructureLib
             CanisterRoundTrip();
             ProcessorChecks(lamp);
             PowerChecks();
+            SandPowerChecks();
             int expected = KindAllocator.KindOf("ryanhartwig.example-lamp");
             Assert("example-kind-hashed", lamp != null && lamp.Kind == expected,
                 lamp == null ? "'ryanhartwig.example-lamp' is not registered (is ExampleStructure installed?)" : $"kind {lamp.Kind}, expected {expected}");
@@ -444,9 +445,10 @@ namespace StructureLib
         {
             if (cycleUntil >= 0f) TickCycle();
             if (PowerPending) TickPower();
+            if (sandOpen.Count > 0) TickSandPower();
             if (artUntil >= 0f) { TickCardArt(); return; }
             if (renderUntil >= 0f) { TickRendered(); return; }
-            if (saveUntil >= 0f && cycleUntil < 0f && !PowerPending) TickSaveWait();
+            if (saveUntil >= 0f && cycleUntil < 0f && !PowerPending && sandOpen.Count == 0) TickSaveWait();
         }
 
         // cardart-modded: CardArt answers something once nothing is pending, or after 5 s.
@@ -1072,17 +1074,69 @@ namespace StructureLib
                 Assert("power-no-burn-when-full", ok, $"cycles {fullCycles} -> {b?.Cycles}, grit {fullGrit} -> {Stored(b, 0)} kg; {text}");
             }
 
-            void Poll(string name, Func<(bool ok, string detail)> probe)
+            void Poll(string name, Func<(bool ok, string detail)> probe) => PollOpen(powerOpen, name, text, probe);
+        }
+
+        // An open assertion (name -> deadline in `open`): asserted as soon as the probe holds, or with its detail at the deadline.
+        static void PollOpen(Dictionary<string, float> open, string name, string text, Func<(bool ok, string detail)> probe)
+        {
+            if (!open.TryGetValue(name, out float until)) return;
+            bool ok; string detail;
+            try { (ok, detail) = probe(); }
+            catch (Exception e) { ok = false; detail = "threw " + e.GetType().Name + ": " + e.Message; }
+            if (!ok && Time.unscaledTime < until) return;
+            open.Remove(name);
+            CoreLog.Info($"[selftest] {name}: {text}");
+            Assert(name, ok, detail);
+        }
+
+        // SandPower, when AutoBuild names its compactor: both ids are registered at their hashed kinds and the briquette is
+        // cargo 3; within 30 s of AutoFeed's sand the compactor finishes a cycle and holds briquettes in its output slot (or
+        // EmitCargo saw a modded cargo); within 40 s of AutoFeed's briquettes the generator holds charge. List the generator
+        // and the compactor first in AutoBuild: the third entry (24 m away) is refused as out of reach.
+        const string CompactorId = "ryanhartwig.sand-compactor", GeneratorId = "ryanhartwig.briquette-generator", BriquetteId = "ryanhartwig.sand-briquette";
+        static readonly Dictionary<string, float> sandOpen = new();
+        static int compactorDepot = -1, generatorDepot = -1;
+
+        static void SandPowerChecks()
+        {
+            if (!DevTools.AutoBuildNames(CompactorId)) { CoreLog.Info($"[selftest] '{CompactorId}' was not built by AutoBuild this run: SandPower checks not applicable"); return; }
+            var world = CoreState.World ?? CoreState.FindWorld();
+            StructureDefinition c = MoonStructures.Definition(CompactorId), g = MoonStructures.Definition(GeneratorId);
+            var b = MoonStructures.CargoDefinition(BriquetteId);
+            Assert("sandpower-registered", c != null && c.Kind == KindAllocator.KindOf(CompactorId) && g != null && g.Kind == KindAllocator.KindOf(GeneratorId) && b?.Value == 3,
+                $"compactor kind {c?.Kind}, generator kind {g?.Kind}, briquette value {b?.Value} (is SandPower installed?)");
+            compactorDepot = c != null && world != null ? DepotOfKind(world, c.Kind) : -1;
+            generatorDepot = g != null && world != null ? DepotOfKind(world, g.Kind) : -1;
+            Open("sandpower-compactor-cycles", c, compactorDepot, CompactorId, 30f);
+            Open("sandpower-briquette-out", c, compactorDepot, CompactorId, 30f);
+            Open("sandpower-generator-charges", g, generatorDepot, GeneratorId, 40f);
+
+            static void Open(string name, StructureDefinition d, int depot, string id, float seconds)
             {
-                if (!powerOpen.TryGetValue(name, out float until)) return;
-                bool ok; string detail;
-                try { (ok, detail) = probe(); }
-                catch (Exception e) { ok = false; detail = "threw " + e.GetType().Name + ": " + e.Message; }
-                if (!ok && Time.unscaledTime < until) return;
-                powerOpen.Remove(name);
-                CoreLog.Info($"[selftest] {name}: {text}");
-                Assert(name, ok, detail);
+                var feed = AutoFeeder.For(id);
+                string skip = d == null ? $"'{id}' is not registered" : depot < 0 ? $"no '{id}' depot in world.depots"
+                    : feed == null ? $"no AutoFeed entry for '{id}'" : feed.Error;
+                if (skip != null) Assert(name, false, skip);
+                else sandOpen[name] = feed.At + seconds;
             }
+        }
+
+        static void TickSandPower()
+        {
+            var world = CoreState.World ?? CoreState.FindWorld();
+            MoonProductionState c = null, g = null;
+            try { c = world?.ProductionOf(compactorDepot); g = world?.ProductionOf(generatorDepot); } catch (Exception) { }
+            string text = $"compactor {StateText(c)}; generator {PowerText(g)}; modded EmitCargo calls {Patches.ProductionPatches.ModdedCargoEmits}";
+            PollOpen(sandOpen, "sandpower-compactor-cycles", text, () => (c != null && c.Cycles >= 1, text));
+            PollOpen(sandOpen, "sandpower-briquette-out", text, () =>
+            {
+                var spec = MoonWorld.Processor(MoonStructures.Definition(CompactorId).Kind);
+                int o = spec.output;
+                int cargo = o >= 0 ? (byte)spec.slotCargo[o] : -1;
+                return ((cargo == 3 && Stored(c, o) > 0) || Patches.ProductionPatches.ModdedCargoEmits > 0, $"output slot {o} (cargo {cargo}) holds {Stored(c, o)} kg; {text}");
+            });
+            PollOpen(sandOpen, "sandpower-generator-charges", text, () => (g != null && g.ChargeKwh > 0, text));
         }
 
         static string PowerText(MoonProductionState s) => s == null ? "no state" :

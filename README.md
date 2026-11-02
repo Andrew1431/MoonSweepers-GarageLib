@@ -12,6 +12,8 @@ Maintainers: Andrew (Andrew1431) and Ryan (ryanhartwig), with equal say on what 
 |---|---|---|
 | GarageLib | The library. Required by every vehicle. | [`src/GarageLib`](src/GarageLib) |
 | Ms Choppa | Flying utility helicopter, $12,000. | [`vehicles/MsChoppa`](vehicles/MsChoppa) |
+| StructureLib | The structure library: modded buildings, machines, cargo and fuel power. Required by structure mods. | [`src/StructureLib`](src/StructureLib) |
+| SandPower | Sand compactor and briquette generator: press moon sand into briquettes, burn them for power. | [`mods/SandPower`](mods/SandPower) |
 | Modpack | GarageLib + every vehicle in one zip. | [`modpack.json`](modpack.json) |
 
 ## Installing (players)
@@ -27,10 +29,14 @@ mod and its vehicles wait in that file until you reinstall it.
 
 ```
 src/GarageLib/          the library
+src/StructureLib/       the structure library (buildings, machines, cargo, power)
 vehicles/<Name>/        one folder per vehicle mod (own Plugin.cs, version, README, blend files)
 mods/<Name>/            any other mod: buildings, mechanics, tweaks (same shape: Plugin.cs with Version, README)
+mods/SandPower/         sand compactor and briquette generator (StructureLib)
 shared/Rotorcraft/      helicopter flight model, compiled into vehicles that fly
 examples/ExampleVehicle two test vehicles showing the API (not released)
+examples/ExampleStructure test structures showing the StructureLib API (not released)
+tests/StructureLib.Tests unit tests for StructureLib's game-free logic
 templates/Vehicle/      what new-vehicle.ps1 copies
 research/               interop dumps and design notes from reverse engineering the game
 ```
