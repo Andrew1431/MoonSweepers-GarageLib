@@ -4,6 +4,7 @@ using System.IO;
 using System.Linq;
 using System.Runtime.CompilerServices;
 using MoonCleaners;
+using UnityEngine;
 
 namespace StructureLib
 {
@@ -45,6 +46,13 @@ namespace StructureLib
         /// entrance is clear): one 1 kg canister per emit.
         /// </summary>
         public static event Action<CargoEmitted> CargoEmitted;
+        /// <summary>
+        /// Fired on the main thread when a router (<see cref="StructureDefinition.Router"/>) moves a canister from the end
+        /// of a belt at one of its input ports onto the start of a belt at one of its output ports. The canister on the
+        /// output belt is a new one with the same cargo, kilograms, capacity and owner; <c>CargoEntered</c> and
+        /// <c>CargoEmitted</c> are not raised for routers.
+        /// </summary>
+        public static event Action<CargoRouted> CargoRouted;
 
         /// <summary>Register a structure. Call from your plugin's Load().</summary>
         [MethodImpl(MethodImplOptions.NoInlining)] // GetCallingAssembly must see the mod, not an inlined caller
@@ -223,6 +231,18 @@ namespace StructureLib
                     }
                 }
 
+                // Routers have no processor and no power; a Footprint must be positive.
+                foreach (var def in structures.Values.OrderBy(d => d.Id, StringComparer.Ordinal).ToList())
+                {
+                    var fp = def.Footprint.HasValue ? (def.Footprint.Value.x, def.Footprint.Value.y) : ((float, float)?)null;
+                    var defErrors = RouterRules.CheckDefinition(def.Id, def.Router != null, def.Processor != null, def.Power != null, fp);
+                    if (defErrors.Count == 0) continue;
+                    foreach (var e in defErrors) CoreLog.Error(e);
+                    CoreLog.Error($"Structure '{def.Id}' dropped.");
+                    structures.Remove(def.Id);
+                    dropped++;
+                }
+
                 var cargoPairs = cargo.Values.Select(c => (c.Id, c.Value)).ToList();
                 foreach (var e in Rules.CheckCargo(cargoPairs)) CoreLog.Error(e);
                 var offenders = Rules.CargoOffenders(cargoPairs);
@@ -259,8 +279,12 @@ namespace StructureLib
                     var shape = shapeLookup?.Invoke(def.BaseStructure);
                     var r = PortResolver.Resolve(def, shape, ModelPortsProvider);
                     var slots = (def.Processor?.Slots ?? new List<Slot>()).Select(s => (s.Role, s.Cargo.Id)).ToList();
-                    // A plain structure keeps its donor's ports and vanilla cargo; null ports leave the clone's untouched.
-                    var portErrors = r.Ports == null || (def.Processor == null && def.Ports == null && r.Rule.StartsWith("donor", StringComparison.Ordinal))
+                    // A router's ports (cargo already the dust byte, PortResolver) are checked by the router rules, whatever
+                    // their source; unresolved ports count as none. A plain structure keeps its donor's ports and vanilla
+                    // cargo; null ports leave the clone's untouched.
+                    var portErrors = def.Router != null
+                        ? RouterRules.CheckPorts(def.Id, def.Router.Mode, (r.Ports ?? new List<PortDefinition>()).Select(p => (p.Name, p.Output)).ToList())
+                        : r.Ports == null || (def.Processor == null && def.Ports == null && r.Rule.StartsWith("donor", StringComparison.Ordinal))
                         ? new List<string>()
                         : PortRules.CheckPorts(def.Id, r.Ports.Select(p => (p.Name, p.Output, p.Cargo.Id)).ToList(), slots);
                     if (portErrors.Count > 0)
@@ -271,10 +295,12 @@ namespace StructureLib
                         dropped++;
                         continue;
                     }
-                    if (shape != null && r.Ports != null)
+                    // The footprint the clone will have: the definition's override when set, else the donor's.
+                    Vector2? half = def.Footprint.HasValue ? def.Footprint.Value / 2f : shape?.HalfFootprint;
+                    if (half.HasValue && r.Ports != null)
                         foreach (var p in r.Ports)
                         {
-                            string warn = PortRules.WarnOutsideFootprint(def.Id, p.Name, (p.Position.x, p.Position.y, p.Position.z), (shape.HalfFootprint.x, shape.HalfFootprint.y), PortReach);
+                            string warn = PortRules.WarnOutsideFootprint(def.Id, p.Name, (p.Position.x, p.Position.y, p.Position.z), (half.Value.x, half.Value.y), PortReach);
                             if (warn != null) CoreLog.Warn(warn);
                         }
                     resolved[def.Id] = r;
@@ -321,6 +347,11 @@ namespace StructureLib
         internal static void RaiseCargoEntered(CargoEntered c)
         {
             try { CargoEntered?.Invoke(c); } catch (Exception e) { CoreLog.Error($"CargoEntered handler threw for {c.Definition} depot {c.DepotId}: {e}"); }
+        }
+
+        internal static void RaiseCargoRouted(CargoRouted c)
+        {
+            try { CargoRouted?.Invoke(c); } catch (Exception e) { CoreLog.Error($"CargoRouted handler threw for {c.Definition} depot {c.DepotId}: {e}"); }
         }
 
         internal static void RaiseCargoEmitted(CargoEmitted c)

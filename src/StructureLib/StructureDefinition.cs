@@ -57,6 +57,19 @@ namespace StructureLib
         /// </summary>
         public List<PortDefinition> Ports;
 
+        /// <summary>
+        /// Makes the structure a router: a compact belt splitter or merger. A router has no processor and no power; its
+        /// ports (one input and one to three outputs for a splitter, the reverse for a merger) are checked when the
+        /// registry freezes. Null for any other structure.
+        /// </summary>
+        public RouterDefinition Router;
+
+        /// <summary>
+        /// Optional footprint in metres, full width along X (<c>x</c>) and depth along Z (<c>y</c>); both must be positive.
+        /// Null keeps the base structure's footprint.
+        /// </summary>
+        public Vector2? Footprint;
+
         /// <summary>Kind number assigned at freeze. -1 until then.</summary>
         public int Kind { get; internal set; } = -1;
         /// <summary>Plugin GUID that registered the structure.</summary>
@@ -97,6 +110,13 @@ namespace StructureLib
         public static Slot Input(string name, Cargo cargo, double capacity) => new Slot { Role = SlotRole.Input, Name = name, Cargo = cargo, Capacity = capacity };
         public static Slot Batch(string name, Cargo cargo, double capacity) => new Slot { Role = SlotRole.Batch, Name = name, Cargo = cargo, Capacity = capacity };
         public static Slot Output(string name, Cargo cargo, double capacity) => new Slot { Role = SlotRole.Output, Name = name, Cargo = cargo, Capacity = capacity };
+    }
+
+    /// <summary>Makes a structure a router: it passes cargo from its input ports to its output ports without processing it.</summary>
+    public sealed class RouterDefinition
+    {
+        /// <summary>Whether the router splits one belt into up to three, or merges up to three into one.</summary>
+        public RouterMode Mode;
     }
 
     public enum SupplyMode { Solar, Fuel }
@@ -198,6 +218,18 @@ namespace StructureLib
         public double Kilograms;
         /// <summary>The canister's owner (player id), under whose share the kilograms were stored.</summary>
         public string Owner;
+    }
+
+    /// <summary>Payload of <see cref="MoonStructures.CargoRouted"/>.</summary>
+    public sealed class CargoRouted
+    {
+        public StructureDefinition Definition;
+        /// <summary>The game's depot id of the router.</summary>
+        public int DepotId;
+        public Cargo Cargo;
+        public double Kilograms;
+        /// <summary>The belt the cargo came from and the belt it went onto (keys of <c>MoonWorld.conveyors</c>).</summary>
+        public int FromBeltId, ToBeltId;
     }
 
     /// <summary>Payload of <see cref="MoonStructures.CargoEmitted"/>.</summary>

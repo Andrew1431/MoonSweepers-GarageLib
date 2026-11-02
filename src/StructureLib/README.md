@@ -80,6 +80,11 @@ MoonStructures.Register(new StructureDefinition
   `conveyorPorts` are rebuilt from them, named `sl:<cargo byte>:<Name>` so `MoonWorld.PortCargo` (prefixed) answers the
   port's cargo; the game shows "input" / "output" and "<structure name> input", never that name.
   `MoonStructures.PortsOf(def)` returns the resolved list.
+- **Routers** (`StructureDefinition.Router`, a `RouterDefinition { Mode = RouterMode.Splitter | Merger }`): a belt
+  splitter or merger with no processor. See [Routers](#routers).
+- **Footprint** (`StructureDefinition.Footprint`, optional `Vector2`: full width along X, depth along Z, metres, both
+  positive): written into the clone's `halfFootprint` (halved) instead of the donor's. With a `Model` it also replaces
+  every donor collider by one `BoxCollider` over the footprint and the model's height. Null keeps the donor's.
 - **Power** (`StructureDefinition.Power`, with a `ProducesPower` processor): `PeakKw`, `BatteryKwh`, `Range`,
   `SupplyMode.Fuel`. Each burned batch adds half the battery. See [Power](#power) for the rules and limits.
 - **Events** (main thread): `MoonStructures.Built` (`StructureBuilt`: definition, depot id, depot record, the decorated
@@ -87,8 +92,10 @@ MoonStructures.Register(new StructureDefinition
   removed; `CycleFinished` (`CycleFinished`: definition, depot id, live production state) when a modded machine
   finishes a cycle; `CargoEntered` (`CargoEntered`: definition, depot id, slot, cargo, kilograms, owner) when a canister
   at the end of a belt joined to one of its input ports is taken into an Input slot; `CargoEmitted` (`CargoEmitted`:
-  definition, depot id, cargo, kilograms, belt id) when a modded machine puts a canister of its output on the belt
-  joined to its output port. A handler that throws is logged and does not stop the game.
+  definition, depot id, cargo, kilograms, belt id) when a modded machine (not a router) puts a canister of its output on the belt
+  joined to its output port; `CargoRouted` (`CargoRouted`: definition, depot id, cargo, kilograms, from belt id, to
+  belt id) when a router moves a canister from an input belt onto an output belt. A handler that throws is logged and
+  does not stop the game.
 - **Lookups:** `Definition(kind)`, `Definition(id)`, `PortsOf(def)`, `IsModded(kind)`, `IsModded(MoonCargo)`, `CargoDefinition(...)`,
   `All`, `AllCargo`, `Frozen`, `Disabled`.
 
@@ -147,11 +154,69 @@ The recon behind all this, with the evidence, is in
 - **In:** a belt ending at an input port hands its canisters to the first Input slot of the port's cargo
   (`CargoEntered`). **Out:** vanilla puts the Output slot's cargo on the belt joined to the output port, 1 kg per
   canister (`CargoEmitted`). Both survive a save and reload, canisters on the belt included.
-- **Models:** `Model = "<file>.bin"` beside the DLL replaces the donor's look on the donor's template (colliders,
+- **Models:** `Model = "<file>.bin"` beside the DLL replaces the donor's look on the donor's template (colliders (unless `Footprint` is set),
   views and scripts kept). Its lowest vertex sits on the structure's floor, its materials start as tinted stand-ins
   and become the game's own within seconds of a world load, and the donor's animated effects are not carried over.
   SandPower's compactor and generator are the worked example: a vanilla pressure chamber's sand rides a belt into the
   compactor, whose briquettes ride a belt into the generator (self-test `sandpower-chain`).
+
+## Routers
+
+A router is a structure that passes canisters between belts without processing them: a compact splitter or merger.
+
+```csharp
+MoonStructures.Register(new StructureDefinition
+{
+    Id = "you.box-splitter", Name = "Box splitter", Category = "Logistics", Price = 5m,
+    BaseStructure = 4,                                   // the floodlight: no game script, one collider
+    Router = new RouterDefinition { Mode = RouterMode.Splitter },
+    Footprint = new Vector2(1.4f, 1.4f),
+    Ports = new()
+    {
+        PortDefinition.In("In", Cargo.Dust, new Vector3(-0.70f, 0.85f, 0f), Vector3.right),
+        PortDefinition.Out("Forward", Cargo.Dust, new Vector3(0.70f, 0.85f, 0f), Vector3.right),
+        PortDefinition.Out("Left", Cargo.Dust, new Vector3(0f, 0.85f, 0.70f), Vector3.forward),
+        PortDefinition.Out("Right", Cargo.Dust, new Vector3(0f, 0.85f, -0.70f), Vector3.back),
+    },
+}, Guid);
+```
+
+- **Definition.** `Router` with no `Processor` and no `Power` (either drops the structure at freeze). The floodlight (4)
+  is the tested donor: no game script and one collider. Do not use the vanilla splitter or merger (11, 12): their
+  prefabs carry `MoonMachineBelt` and ten colliders.
+- **Vanilla still sees a router.** `MoonWorld.Routes(def, kind)` keys on the definition's ports, so any clone with three
+  or four ports answers true whatever the donor (the floodlight answers false, its 4-port router clone true). The hop is
+  still StructureLib's: the `HandOff` prefix answers for a router's input belt before vanilla's routing runs, and never
+  hands it on: with the input port unresolved (no view yet during a load, none within tolerance) or a resolve that
+  throws, the canister waits. Other
+  `Routes`-gated vanilla paths on a placed box, cut-in offers from the belt tool among them, are untested (by-hand list);
+  `Routes` itself must not be prefixed (a static leaf like `IsProcessor`).
+- **Ports.** A splitter has exactly one input and one to three outputs; a merger one to three inputs and exactly one
+  output; names unique (else the structure is dropped, logged). Router ports carry no cargo: a declared port's `Cargo`
+  is ignored and a model's `Port_*` node needs no `cargo` property; each is written into the clone as `sl:0:<Name>` (dust,
+  which is what vanilla's own splitter ports answer). Any cargo passes, vanilla or modded, with its kilograms, capacity
+  and owner. Directions are the belt's flow: inward at inputs, outward at outputs.
+- **Round-robin.** In the resolved port order (`PortsOf(def)`: the declared list, or a model's nodes in file order,
+  which the exporter writes alphabetically). A splitter gives each canister to the next output in turn whose belt
+  exists and whose entrance is clear, skipping the others; when none can take it, it waits at the input belt's end and
+  the belt queues behind it. A merger serves its inputs in turn among those with a canister waiting; when the output
+  belt is missing or blocked, everything waits. The turn is in memory only: it resets on load (and any world change) and
+  goes with its router when that is removed; building or removing belts and structures elsewhere keeps it. One hop per input belt per frame; the output belt's entrance spacing bounds the rate.
+- **Two differences from vanilla.** No cut-in: a router is placed free-standing and belts are joined to its ports.
+  Canisters do not ride across the box: one vanishes at the input belt's end and a new canister (a new id) appears at
+  the output belt's start in the same frame.
+- **Events.** `CargoRouted` per hop (from and to belt ids). `CargoEntered` and `CargoEmitted` are not raised for
+  routers.
+- **Save.** Nothing new: the router's depot is in the sidecar, its belts are vanilla, canisters ride the belts.
+- **Co-op.** As belt input: the host decides; clients untested.
+- **Side outputs need room.** The belt tool needs a few metres for a belt that turns 90° or more out of a side port.
+  Between two 1.4 m boxes in line, a side-to-side U-belt is refused at 1.3 m apart ("Turn too tight: give it more
+  room.") and builds at 5 m apart (a 9.81 m belt each side).
+- **Removing things.** Removing a router keeps its belts: they end (or start) at nothing, their canisters wait at the
+  open end, and they save and reload that way. Removing a belt drops its canisters on the ground in its path, and the
+  game then refuses a new belt along that path ("Blocked by an object.") until they are picked up. The game saves a few
+  seconds after a removal.
+- **Heavier canisters.** A canister of more than 1 kg hops whole (a 3 kg grit canister came out as 3 kg, capacity 3).
 
 ## Dev builds
 
@@ -163,7 +228,8 @@ lines and `[selftest] done: N passed, M failed`. Leave the switches at their def
 |---|---|
 | `AutoLoadSlot`, `AllowSlot1`, `SelfTest` | Load a save slot from the main menu (slot 1, the real save, only with `AllowSlot1`) and run the self-test 20 s after the world loads. |
 | `AutoBuild` | Comma-separated structure ids or vanilla kind numbers, built 10 s after load through the game's `TryBuildDepot` (`AutoBuildViaPlan`: through the build menu's own path instead). |
-| `AutoBuildLayout` | `ring` (default): 10 m from the walker at 0°, 90°, 180°, 270°, 45°, … from its facing. `line`: in entry order along the structures' +X, 1.3 m between neighbouring footprints (centres from each definition's half footprint), centred on the walker and 6 m to its side (10 m spacing and 10 m to the side put the end entries 18 m away, which the game refuses: "Move closer to the build site."), so each entry's output faces the next entry's input; use it for chains of three or more machines (the SandPower chain). |
+| `AutoBuildLayout` | `ring` (default): 10 m from the walker at 0°, 90°, 180°, 270°, 45°, … from its facing. `line`: in entry order along the structures' +X, `AutoBuildGap` (1.3 m) between neighbouring footprints (centres from each definition's half footprint), centred on the walker and 6 m to its side (10 m spacing and 10 m to the side put the end entries 18 m away, which the game refuses: "Move closer to the build site."), so each entry's output faces the next entry's input; use it for chains of three or more machines. |
+| `AutoBuildGap` | With `line`: the metres between neighbouring footprints. One number is every gap; a comma-separated list gives the gaps in entry order, its last number repeating (`1.3,1.3,5,1.3` puts 5 m between the belt boxes of the chain below and keeps the ends within reach). |
 | `AutoBelt` | `';'`-separated `<from>:<port>-><to>:<port>` belts between AutoBuild's depots, built 3 s after it through `TryBuildConveyor`. A port is a definition name (`IN_SAND`), a modded port's declared name (`Sand in`), a unique `input`/`output` label, or an index. |
 | `AutoFeed` | `';'`-separated `<id or kind>:<cargo>:<kg>`, loaded through `CrewProcessorLoad` 5 s after AutoBuild. |
 | `AutoSave`, `AutoRemove` | Request a save 10 s after AutoBuild and check the sidecar; remove the example lamp after its checks (false keeps it for a reload run). |
@@ -171,7 +237,42 @@ lines and `[selftest] done: N passed, M failed`. Leave the switches at their def
 | `DumpCards` | Write every build-menu card picture to `BepInEx/cache/structurelib/cards/` 30 s after load (`model-card` compares them). |
 | `BreakModelPath` | Point every `Model` at a missing file (self-test `model-missing-falls-back`). |
 | `RegisterBadPorts` | The example registers a structure whose port cargo no slot holds; the registry must drop it (`ports-rules-logged`). |
+| `RegisterBoxProbe` | The example registers `ryanhartwig.example-box-probe`, a box splitter router (floodlight donor, 1.4 m footprint, In / Forward / Left / Right); 15 s after load its definition, view and colliders are logged and three dust canisters are put on the AutoBelt belt into it and followed for 10 s (CargoRouted count, riders). |
 | `ForcePower`, `ScreenshotMenu` | Run modded processors at full power whatever the grid gives (isolating power problems only); screenshot the build menu after the self-test. |
+
+Checks whose setup a run lacks log `[selftest] ... not applicable` (an Info line, not a failure), and only then:
+- `power-burner-supplies`, `power-grinder-runs-on-burner` and `power-no-burn-when-full` when the burner has no
+  `AutoFeed` entry and is fed through a router (`power-node-registered` and `power-grid-joined` still run; a burner
+  fed straight by a machine's belt with no `AutoFeed` still fails all five);
+- `belt-chain-feeds` and `belt-save-clean` when the grinder's belt ends at a router;
+- `belt-in-refuses-cargo` when no sand canister rode the belt into the grinder in its 90 s window (the chamber made
+  none);
+- every `beltboxes-*` check when BeltBoxes is not installed.
+
+The belt checks need their own configs: belt input with `AutoBuild = 96,ryanhartwig.example-grinder,94`, `AutoFeed =
+96:Dust:10`, `AutoBelt = 96:output->ryanhartwig.example-grinder:Dust in` (`ring`, `SunOverhead`; `belt-canister-modded`
+needs the long ring belt, 15 m); belt output and power with `AutoBuild = ryanhartwig.example-grinder,ryanhartwig.example-burner,ryanhartwig.example-lamp`,
+`AutoFeed = ryanhartwig.example-grinder:Dust:6;ryanhartwig.example-burner:ryanhartwig.example-grit:4`, `AutoBelt =
+ryanhartwig.example-grinder:Grit out->ryanhartwig.example-burner:Grit in`. In one combined run the chamber's sand
+queues on the grinder's belt and the belt-input checks fail.
+
+**Belt boxes** (`DevBoxes.cs`, with [BeltBoxes](../../mods/BeltBoxes) installed). Chain run: `AutoBuildLayout = line`,
+`AutoBuildGap = 1.3,1.3,5,1.3`, `AutoBuild = 96,ryanhartwig.example-grinder,ryanhartwig.box-splitter,ryanhartwig.box-merger,ryanhartwig.example-burner`,
+`AutoFeed = 96:Dust:12`, `AutoBelt` from the chamber to the grinder, the grinder to the splitter's `In`, the
+splitter's `Forward`/`Left`/`Right` to the merger's `Back`/`Left`/`Right`, the merger's `Out` to the burner, with
+`AutoSave`, `DumpCards` and `SunOverhead`. A feeder adds 1 kg grit canisters to the splitter's input belt while there
+is room, and the burner's grit slot is emptied at 5 kg. In order: `beltboxes-registered`, `beltboxes-model` (both
+boxes: holder, renderers, one box collider, ports at the model's nodes), `beltboxes-split-even` (12 hops, a third ± 1
+each), `beltboxes-merge-fair` (the merger held by a sand canister until two canisters queue at the end of every input,
+then six hops in turn order), `beltboxes-conserve` (grit in == grit out to 0.01 kg after the merge window),
+`beltboxes-heavy` (a 3 kg canister hops and rides on at 3 kg, capacity 3), `beltboxes-split-skips` (Forward belt
+removed: six hops to Left/Right only, none lost; the canisters it dropped are removed and counted, and the belt is
+rebuilt), `beltboxes-save-clean` (a save with canisters stopped at the end of the splitter's input and of all three
+middle belts, plus the grit balance over the whole run to 0.01 kg). Reload run (`AutoBuild`, `AutoFeed`, `AutoBelt`
+empty, the chain run's slot): `beltboxes-reload` (both boxes, all five belts at their ports, every saved grit canister
+restored and accounted for, the sand holder removed, then a merger hop or burner intake within 20 s), `beltboxes-model`
+(both boxes), and last `beltboxes-remove-clean` (the merger removed with a canister stopped at the end of its Back
+belt). Removal runs last because the game saves a few seconds after it.
 
 ## Status
 
@@ -184,7 +285,8 @@ lines and `[selftest] done: N passed, M failed`. Leave the switches at their def
 | Cargo | Names, unit mass, price, canister round trip, modded canisters riding belts (see [Cargo audit](#cargo-audit)) | Depositing modded cargo at the collector; co-op cargo events; `CanisterTint` (not applied) | |
 | Processors | Cycle, batch moved at the same mass, `CycleFinished`, loading through `CrewProcessorLoad`; belt input through a declared port (`HandOff` prefix, `CargoEntered`; a canister of another cargo, or one arriving while its slot is full, waits at the belt end); belt output (vanilla `EmitProduct`/`EmitCargo`, 1 kg canisters, `CargoEmitted`); machine-to-machine chains by belt (grinder to burner; SandPower's vanilla pressure chamber to compactor to generator, self-test `sandpower-chain`), saved and reloaded with canisters on the belts | Walker loading (`LoadProcessor` refuses: "Not a production machine"); a structure without a processor taking belt input | Belt input in co-op (the host decides; clients untested) |
 | Ports | Declared ports (and a port on a port-less donor) written into the cloned definition as `sl:<cargo>:<Name>`; `PortCargo` answers the declared cargo; the game shows "input"/"output" and "<name> input/output"; refusal at freeze for a port cargo no slot holds | | Belts placed by hand onto modded ports (dev `AutoBelt` builds through the game's `TryBuildConveyor`); ports inherited from a donor (no example uses them) |
-| Models | `Model` file on the donor template (donor renderers hidden, colliders kept), ports from its `Port_*` nodes, card picture rendered from it (the example burner and both SandPower models, stone press and solar post donors); a missing file falls back to the donor model and declared ports | The donor's animated effects on a custom model | Donors with a non-unit `scale` or a skinned mesh (none of the three checked has either) |
+| Models | `Model` file on the donor template (donor renderers hidden, colliders kept unless `Footprint` is set), ports from its `Port_*` nodes, card picture rendered from it (the example burner); a missing file falls back to the donor model and declared ports | The donor's animated effects on a custom model | Donors with a non-unit `scale` or a skinned mesh (none of the donors checked so far has either) |
+| Routers | Splitter and merger hops on the `HandOff` prefix with `CargoRouted` per hop: round-robin over three outputs (12 hops, 4 each), skipping a removed output belt with nothing lost, mergers serving three inputs in turn, a 3 kg canister hopping whole, grit balanced to 0.01 kg through both boxes (BeltBoxes self-test, `beltboxes-*`); both boxes, five belts and every canister saved and reloaded; `Footprint` written into the clone (`halfFootprint` 0.70 × 0.70) with the collider swap under a `Model`; side-port U-belts (5 m between boxes); routers, belts and waiting canisters saved and reloaded, a router removed mid-traffic with its belts kept | Cut-in onto an existing belt; canisters visibly crossing the box | Belts placed by hand onto router ports (0.7 m port spacing); vanilla paths gated by `Routes` (true for a router clone), cut-in offers among them; routers in co-op (the host decides; clients untested) |
 | Power | Machines on a vanilla grid's surplus and batteries; fuel generators charge, supply modded machines and keep their charge across saves; a modded-only group gets a negative grid id | Fuel generators feeding vanilla machines; power links drawn to modded structures; `SupplyMode.Solar`; `Power` without a `Processor`; a generator's `RunningKw` (ignored) | |
 | Co-op | Manifest built and compared with itself | Graceful degradation for a client missing a mod | Both two-player cases (identical mods; client missing a mod) |
 
