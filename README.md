@@ -16,9 +16,13 @@ Maintainers: Andrew (Andrew1431) and Ryan (ryanhartwig), with equal say on what 
 
 ## Installing (players)
 
-1. Install BepInEx 6 IL2CPP (be.791) and the MoonSweepers.ModEngine patcher (Nexus), then launch the game once.
-2. From [Releases](../../releases), download either the **modpack** zip, or **GarageLib** plus the vehicles you want.
-3. Unzip into the game folder (it contains `BepInEx/plugins/...`).
+Easiest: from the newest **Modpack** release in [Releases](../../releases), download `MoonSweepersMods-Installer.zip`,
+unzip it, close the game and run **Install or update.bat**. It installs BepInEx, walks you through the one manual step
+(the ModEngine patcher is only on Nexus), installs the modpack and makes a **Moon Sweepers (modded)** desktop shortcut
+that updates the mods every time you start the game that way. Details: [installer/README.md](installer/README.md).
+
+Manual: install BepInEx 6 IL2CPP (be.791) and the MoonSweepers.ModEngine patcher (Nexus), launch the game once, then
+unzip the **modpack** zip (or single packages such as GarageLib + LateGameVehicles) into the game folder.
 
 Saves: modded vehicles are stored in `garagelib.json` next to the save, not in the save itself. Remove a vehicle
 mod and its vehicles wait in that file until you reinstall it.

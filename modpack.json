@@ -1,6 +1,10 @@
 {
   "name": "MoonSweepers-GarageModpack",
   "version": "0.1.0",
-  "description": "GarageLib plus every vehicle in this repo, ready to drop into BepInEx/plugins.",
-  "packages": ["GarageLib", "SharedUpgrades"]
+  "description": "GarageLib, Late Game Vehicles and the other mods in this repo, ready to drop into the game folder.",
+  "packages": [
+    "GarageLib",
+    "SharedUpgrades",
+    "LateGameVehicles"
+  ]
 }

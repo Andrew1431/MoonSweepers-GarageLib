@@ -93,7 +93,7 @@ function Zip($from, $zip) {
     Write-Host "  -> $zip"
 }
 
-function Publish($tag, $title, $notes, $zip) {
+function Publish($tag, $title, $notes, [string[]]$zip) {
     # Not `gh release view`: its "not found" goes to stderr, which Windows PowerShell turns into a terminating error.
     $existing = gh release list --limit 1000 --json tagName --jq '.[].tagName'
     if ($existing -contains $tag) { Write-Host "  $tag already released, skipped"; return }
@@ -126,8 +126,19 @@ if (-not $Only) {
         Stage $built[$n].P $built[$n].Dll $s
         $lines += "- $n $($built[$n].P.Version)"
     }
+    # The installer rides along in the modpack (MoonSweepersMods/ in the game folder), so updating the pack updates it,
+    # and is also its own small zip for first installs.
+    $inst = Join-Path $root 'installer'
+    New-Item -ItemType Directory -Force (Join-Path $s 'MoonSweepersMods') | Out-Null
+    Get-ChildItem $inst -File | Copy-Item -Destination (Join-Path $s 'MoonSweepersMods')
+    $si = Join-Path $stage 'installer'
+    New-Item -ItemType Directory -Force $si | Out-Null
+    Get-ChildItem $inst -File | Copy-Item -Destination $si
+    $instZip = Join-Path $dist 'MoonSweepersMods-Installer.zip'
+    Zip $si $instZip
     $zip = Join-Path $dist "$($pack.name)-$($pack.version).zip"
     Zip $s $zip
-    if ($Release) { Publish "modpack-v$($pack.version)" "Modpack $($pack.version)" ("Unzip into the Moon Sweepers game folder (needs BepInEx + ModEngine).`n`n" + ($lines -join "`n")) $zip }
+    $notes = "Easiest: download MoonSweepersMods-Installer.zip, unzip, run 'Install or update.bat'. It installs BepInEx, walks you through ModEngine and keeps the mods updated.`n`nManual: unzip $(Split-Path $zip -Leaf) into the Moon Sweepers game folder (needs BepInEx + ModEngine).`n`n" + ($lines -join "`n")
+    if ($Release) { Publish "modpack-v$($pack.version)" "Modpack $($pack.version)" $notes @($zip, $instZip) }
 }
 Remove-Item $stage -Recurse -Force
