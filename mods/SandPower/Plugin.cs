@@ -35,6 +35,9 @@ namespace SandPower
                 Note = "Presses 4 kg of moon sand into sand briquettes every 8 s. Needs 12 kW.",
                 Price = 800m,
                 BaseStructure = MoonWorld.StonePressKind,
+                // blender/sand_compactor.py. Its Port_Sand in and Port_Briquettes out nodes are the belt ports (Ports stays
+                // null: model ports win): sand in at the -X end, briquettes out at the +X end, both flowing +X.
+                Model = "sand_compactor.bin",
                 Processor = new ProcessorDefinition
                 {
                     RunningKw = 12,
@@ -57,6 +60,9 @@ namespace SandPower
                 Note = "Burns one sand briquette every 20 s for 10 kW. A 6 kWh battery for the gaps. Powers StructureLib machines within 24 m, wirelessly.",
                 Price = 1500m,
                 BaseStructure = MoonWorld.SolarPostKind,
+                // blender/briquette_generator.py. Its Port_Briquettes in node, at the -X footprint edge flowing +X, is the
+                // belt port (the solar post has none).
+                Model = "briquette_generator.bin",
                 Power = new PowerDefinition { PeakKw = 10, BatteryKwh = 6, Range = 24, SupplyMode = SupplyMode.Fuel },
                 Processor = new ProcessorDefinition
                 {

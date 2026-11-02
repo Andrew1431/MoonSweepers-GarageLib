@@ -38,6 +38,40 @@ cycles on vanilla solar power or on a modded generator, keeps its slots across s
 the vanilla grid or on its own negative-id grid, never burns into a full battery, keeps its charge across reload. The
 handshake manifest builds, encodes and round-trips in single player.
 
+## Belt ports and custom models (second plan, 2026-11-02)
+
+Spec `docs/superpowers/specs/2026-11-02-structurelib-belts-and-models-design.md`; plans
+`docs/superpowers/plans/2026-11-02-structurelib-belts-and-models.md` and `docs/superpowers/plans/2026-11-02-sandpower-models.md`;
+ledger (git-ignored) `.superpowers/sdd/2026-11-02-structurelib-belts-and-models/progress.md`. Same branch, same rules:
+nothing pushed. Design and plan commits 0a5b32d, 529374d, 8f490dc.
+
+| Plan | Task | What | Status | Commits |
+|---|---|---|---|---|
+| Belts and models | 1 | Belt spike: `AutoBelt`, `DumpCards`, ring `AutoBuild`, belt and donor facts in the recon | complete, reviewed (1 fix round) | eb89d42, db2e3ca |
+| Belts and models | 2 | Ports as definition data (`StructureDefinition.Ports`), written into the clone as `sl:<cargo>:<Name>`, `PortCargo` answers | complete, reviewed | 1d70ce5 |
+| Belts and models | 3 | Belt input (`HandOff` prefix, `CargoEntered`) | complete, reviewed (1 fix round) | e64d016, 0bdd5ff |
+| Belts and models | 4 | Belt output (vanilla emits; `CargoEmitted`), belts and modded canisters survive save/reload | complete, reviewed | 4a96222 |
+| Belts and models | 5 | `Model = "<file>.bin"` on the donor template, ports from `Port_*` nodes, stand-in materials | complete, reviewed (1 fix round) | 7d04434, a17c066 |
+| Belts and models | 6 | SandPower wired to its models and model ports; the chamber → compactor → generator belt chain in the self-test; `AutoBuildLayout = line`; `package.ps1` ships `.bin` files; docs | this commit (see `git log`) | |
+| SandPower models | 1 | Blender kit structure helpers (`kit.port`, hopper, chute, footprint guide), `STRUCTURES.md`, `check_bin.py` | complete | c931dff |
+| SandPower models | 2 | Sand compactor model with `Sand in` / `Briquettes out` ports | complete | cb99d7b |
+| SandPower models | 3 | Briquette generator model with a `Briquettes in` port | complete | c5f7b4b |
+
+Unit tests: 130 green. In game (slot-2, Task 6): the chain run 34/0 (`sandpower-chain`, `sandpower-save-clean`,
+`sandpower-model-swapped`, `sandpower-model-ports` and every earlier SandPower check PASS; first generator charge 47.7 s
+after the chamber's dust load) and the reload run 28/0 (`sandpower-reload`: both belts, the briquette canister on the
+sand belt and both production states back). `Moon save failed` 0 in both.
+
+**By hand for this plan** (not covered by any self-test):
+- The belt tool onto modded ports: lay belts by hand from a pressure chamber's output to the compactor's sand hopper
+  and from its chute to the generator's hopper. The self-test builds belts through `TryBuildConveyor`, never the tool.
+- Both models at player scale, and their glow and steel look in the real lighting.
+- The stand-in → game material switch a few seconds after a world loads (watch the models and the cards change).
+- Co-op: belts into and out of modded machines with two players (the host runs the machines; clients untested).
+
+Deferred minor findings of this plan: the `Minor deferred:` lines in the ledger
+(`grep "Minor deferred" .superpowers/sdd/2026-11-02-structurelib-belts-and-models/progress.md`), one per reviewed task.
+
 ## Before merging (Ryan or Andrew)
 
 1. **Merge `origin/main` into `structurelib` by hand** (a dry run showed conflicts in `GarageLib.slnx`, `README.md`,
@@ -65,8 +99,8 @@ handshake manifest builds, encodes and round-trips in single player.
   threw" / "Structure pose ID" line, `Sidecar written: N structures` and `(N placed with a free pose)` in the "moved"
   line, and no `vanilla depots on a modded one` warning. Reload: same rotation in the world view. Remove with the
   remove tool, save: the sidecar drops it and the save is still clean.
-- **Belts**: sand into the compactor, briquettes out, briquettes into the generator (unsupported and untested; the
-  vanilla port path refuses modded machines, so expect refusal, and confirm the save stays clean).
+- **Belts**: superseded by the second plan (belt input and output work and are self-tested); what is left by hand is
+  in its by-hand list above.
 - **Carried cargo**: pick up / vehicle-carry a briquette canister, save, inspect the save for cargo value 3.
 - **Power UI**: the generator's interaction panel with a negative grid id; the re-added panel node during a placement
   preview; `MoonSolarPanelView.Animate` on the burner (the post donor has 0 kWh serialized).
@@ -82,7 +116,7 @@ handshake manifest builds, encodes and round-trips in single player.
 
 ## Known limitations shipped as documented (both READMEs say so)
 
-Belt and canister input into modded machines; belt output and collector selling untested; vanilla machines are never
+Canister input into modded machines by hand (belts work since the second plan); collector selling untested; vanilla machines are never
 fed by a modded generator and vanilla grid totals never see modded demand (`MoonPowerGrid` is a struct that cannot be
 written back); no power link is drawn to modded structures; a generator's `RunningKw` is ignored; `SupplyMode.Solar`
 supplies nothing; `CanisterTint` is declared but never applied; the walker's `LoadProcessor` refuses modded machines;

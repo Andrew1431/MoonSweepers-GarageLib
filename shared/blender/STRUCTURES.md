@@ -61,10 +61,14 @@ X and Y, and a Unity point `(x, y, z)` is Blender `(-x, -z, y)`.
 | Stone press (97) | 4.63, 3.22 | 6.14 | (-4.60, -0.49, -3.19) / (4.60, 6.16, 3.19) | `IN_DUST` (-4.10, 0.85, -1.25); `IN_SAND` (-4.10, 0.85, 1.25); `OUT` (3.90, 0.85, 0.00); all dir (1, 0, 0) |
 | Solar post (93) | 0.91, 0.64 | 1.44 | (-0.89, 0.00, -0.61) / (0.89, 1.46, 0.61) | none |
 
-- Floor at Z = 0. The loader lands the model's lowest vertex on the donor's lowest renderer bound, so nothing may hang
+- Floor at Z = 0. The loader puts the model's lowest vertex at structure-local y = 0 (where the chamber's and the
+  post's meshes start; not on the donor's lowest renderer bound, which for the press is its buried foundation at
+  -0.49), and the game adds the definition's `floorOffset` (0.02) to the placed root, so nothing may hang
   below the skid; build scripts assert `kit.bounds(root)[0].z >= -0.01`.
 - Belt ports sit at the belt deck height, **0.85 m** (every vanilla port has y = 0.85), on the footprint edge. A belt
-  snaps within 0.05 m of the port (`PortTolerance`) and reaches 1.2 m (`PortReach`).
+  snaps within 0.05 m of the port (`PortTolerance`) and reaches 1.2 m (`PortReach`). When the port lies within 1 cm of
+  the footprint edge, the hopper (or chute) may sit inboard of it, so the geometry stays inside the footprint; the port
+  empty itself stays on the edge, where the belt ends.
 - Draw the donor box with `kit.footprint_guide(half_x, half_y, height, root)`; it renders as a yellow wireframe and
   never reaches the `.bin`.
 - **Under 10,000 triangles** per structure. `kit.preview(..., structure=True)` prints `TRIANGLES <n>` and raises above

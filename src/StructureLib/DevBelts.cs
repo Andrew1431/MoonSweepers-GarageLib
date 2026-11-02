@@ -14,7 +14,7 @@ namespace StructureLib
     // writes every build-menu card picture to a PNG.
     internal static partial class DevTools
     {
-        internal static ConfigEntry<string> AutoBelt;
+        internal static ConfigEntry<string> AutoBelt, AutoBuildLayout;
         internal static ConfigEntry<bool> DumpCards, RegisterBadPorts, SunOverhead;
         static bool cardsDumped, sunSet;
 
@@ -24,11 +24,14 @@ namespace StructureLib
             DumpCards = cfg.Bind("Dev", "DumpCards", false, "Dev build: once in game (30 s after load, so modded pictures are rendered), write every build-menu card picture (vanilla and modded) to BepInEx/cache/structurelib/cards/<kind>-<name>.png.");
             RegisterBadPorts = cfg.Bind("Dev", "RegisterBadPorts", false, "Dev build: the example plugin also registers ryanhartwig.example-bad-ports, whose input port takes a cargo no slot holds; the registry must drop it at freeze (self-test ports-rules-logged).");
             SunOverhead = cfg.Bind("Dev", "SunOverhead", false, "Dev build: 5 s after a world loads, set the lunar clock (MoonSolarSystem.SetLunarTime) so the sun stands overhead at the walker, so vanilla solar panels supply power (the belt checks need the pressure chamber to make sand). The clock runs in real time, so a cloned save is often at night.");
+            AutoBuildLayout = cfg.Bind("Dev", "AutoBuildLayout", "ring", "Dev build: where AutoBuild puts its entries. 'ring': 10 m from the walker at 0, 90, 180, 270, 45, ... deg from its facing (a refused site tries the next free heading). 'line': in entry order along the structures' +X (their belt flow axis at yaw 0), 1.3 m between neighbouring footprints, centred 6 m to the walker's side, so each entry's output faces the next entry's input (a chain of three or more machines).");
+            CoreLog.Info($"[dev] AutoBuildLayout={AutoBuildLayout.Value}");
         }
 
         static void TickBelts(float gameT)
         {
             SelfTest.HookBeltEvents();
+            SelfTest.TrackChain();
             if (SunOverhead.Value && !sunSet && gameT > 5f) { sunSet = true; SetSunOverhead(); }
             if (DumpCards.Value && !cardsDumped && gameT > 30f)
             {
@@ -397,7 +400,9 @@ namespace StructureLib
             });
 
             int depot = grinder != null && world != null ? DepotOfKind(world, grinder.Kind) : -1;
-            Check("ports-cargo-answer", noGrinder ?? (depot < 0 ? "no example grinder depot (AutoBuild it)" : null), () => CargoAnswer(world, depot));
+            if (depot < 0 && grinder != null && !DevTools.AutoBuildNames(GrinderId))
+                CoreLog.Info($"[selftest] '{GrinderId}' was neither built (AutoBuild) nor restored this run: ports-cargo-answer not applicable");
+            else Check("ports-cargo-answer",noGrinder ?? (depot < 0 ? "no example grinder depot (AutoBuild it)" : null), () => CargoAnswer(world, depot));
 
             if (!DevTools.RegisterBadPorts.Value)
                 CoreLog.Info("[selftest] [Dev] RegisterBadPorts is false: ports-rules-logged not applicable");
@@ -759,7 +764,7 @@ namespace StructureLib
             if (!enteredHooked)
             {
                 enteredHooked = true;
-                MoonStructures.CargoEntered += e => { if (e != null) entered.Add(e); };
+                MoonStructures.CargoEntered += e => { if (e != null) { entered.Add(e); enteredTimes.Add(Time.unscaledTime); } };
             }
             if (!emittedHooked)
             {
@@ -955,6 +960,298 @@ namespace StructureLib
             int from = phase >= 3 ? 2 : Math.Max(1, phase) - 1;
             for (int i = from; i < OutNames.Length; i++) Assert(OutNames[i], false, why);
             outPhase = 0;
+        }
+    }
+
+    // [Dev] AutoBuildLayout = line: AutoBuild puts its entries on one line along the structures' local +X at yaw 0 (every
+    // donor's flow axis; the tangent-plane projection of world +X, which the recon found to be the structures' +X near
+    // slot-2's walker), in entry order, so each entry's +X output faces the next entry's input. Neighbours stand
+    // GapMetres apart between their footprints (half footprints along X from their build definitions; the chamber to the
+    // press is then 10 m centre to centre, a 2.95 m belt). The line is centred on the walker along +X and SideMetres to
+    // its side nearest 270 deg from its facing (slot-2 has vanilla structures ahead of the spawn point and at 90 deg),
+    // which keeps every site within the build reach (the game refuses 18 m: "Move closer to the build site."). One site
+    // per entry: a refused site is reported, not moved.
+    internal static class AutoLine
+    {
+        internal const float GapMetres = 1.3f, SideMetres = 6f, SideHeading = 270f;
+        static readonly List<float> along = new();
+
+        internal static bool On => string.Equals(DevTools.AutoBuildLayout?.Value?.Trim(), "line", StringComparison.OrdinalIgnoreCase);
+
+        /// <summary>Lays out the line for AutoBuild's entries (structure ids or vanilla kind numbers).</summary>
+        internal static void Prepare(MoonWorld world, List<string> entries)
+        {
+            along.Clear();
+            var half = entries.Select(e =>
+            {
+                int kind = int.TryParse(e, out int k) ? k : MoonStructures.Definition(e)?.Kind ?? -1;
+                var def = kind < 0 ? null : world.BuildDefinition(kind);
+                return def != null ? def.halfFootprint.x : 2f;
+            }).ToList();
+            float x = 0f;
+            for (int i = 0; i < half.Count; i++)
+            {
+                if (i > 0) x += half[i - 1] + GapMetres + half[i];
+                along.Add(x);
+            }
+            if (half.Count == 0) return;
+            float mid = ((along[0] - half[0]) + (along[half.Count - 1] + half[half.Count - 1])) / 2f;
+            for (int i = 0; i < along.Count; i++) along[i] -= mid;
+            CoreLog.Info($"[dev] AutoBuild line: half footprints [{string.Join(", ", half.Select(h => h.ToString("F2")))}], centres along +X [{string.Join(", ", along.Select(a => a.ToString("F2")))}] m, {SideMetres:F0} m to the side");
+        }
+
+        internal static (float h, Vector3 at, string where) Site(Transform walker, int index)
+        {
+            var up = walker.position.normalized;
+            var axis = Vector3.ProjectOnPlane(Vector3.right, up).normalized;
+            var side = Vector3.Cross(up, axis).normalized;
+            if (Vector3.Dot(side, Quaternion.AngleAxis(SideHeading, up) * walker.forward) < 0f) side = -side;
+            float a = index < along.Count ? along[index] : 0f;
+            var at = walker.position + side * SideMetres + axis * a;
+            return (-1000f - index, at, $"on the line (entry {index + 1} of {along.Count}, {a:F2} m along +X {AutoBelter.V(axis)}, {SideMetres:F0} m to the side {AutoBelter.V(side)}, {Vector3.Distance(at, walker.position):F1} m from the walker)");
+        }
+    }
+
+    // The SandPower chain (config: AutoBuildLayout line; AutoBuild 95,96,ryanhartwig.sand-compactor,
+    // ryanhartwig.briquette-generator; AutoFeed 96:Dust:12 only; AutoBelt 96:output->ryanhartwig.sand-compactor:Sand in;
+    // ryanhartwig.sand-compactor:Briquettes out->ryanhartwig.briquette-generator:Briquettes in; AutoSave; SunOverhead).
+    // The vanilla chamber's sand rides into the compactor, the compactor's briquettes ride into the generator:
+    //  1 sandpower-chain: within ChainSeconds of the self-test the generator holds charge with no AutoFeed entry for
+    //    either SandPower machine, with CargoEntered seen for both and CargoEmitted of briquettes (cargo 3) from the
+    //    compactor. The first sand canister, compactor cycle, briquette and charge are timed from the chamber's feed.
+    //  2 sandpower-save-clean: a briquette canister put on the sand belt (the compactor refuses it at its sand port, so it
+    //    waits at the end), then a save: the write after it records that canister, both production states and every
+    //    briquette canister in the world, with both belts still built and no refused save.
+    //  Reload run (AutoBuild, AutoFeed, AutoBelt empty, the chain run's slot): sandpower-reload, both belts between the
+    //    restored machines, every briquette canister the sidecar held back with cargo 3 (one riding the sand belt), and
+    //    both production states as saved. The model checks (DevModels.cs) run in both runs.
+    internal static partial class SelfTest
+    {
+        internal const float ChainSeconds = 180f;
+        static int chainPhase, sandBelt = -1, briqBelt = -1, pinId = -1, chainSaveSeq = -1;
+        static float chainUntil = -1f, chainGrace = -1f;
+        static List<int> loadedBriq;
+        static readonly List<float> enteredTimes = new();
+        static float tOrigin = -1f, tSand = -1f, tSandIn = -1f, tCycle = -1f, tBriq = -1f, tBriqIn = -1f, tCharge = -1f;
+        static int trackC = -1, trackG = -1, trackBelt = -1;
+
+        internal static bool SandChainPending => chainPhase != 0;
+
+        internal static bool BeltedInto(int depot) => AutoBelter.Results.Any(r => r.Ok && r.To == depot);
+
+        static byte BriquetteValue => (byte)(MoonStructures.CargoDefinition(BriquetteId)?.Value ?? 3);
+
+        // Every in-game frame (DevTools.TickBelts): once AutoBelt has built a belt into the compactor, note the first time
+        // each step of the chain is seen. Times are from the chamber's AutoFeed (else from when tracking started).
+        internal static void TrackChain()
+        {
+            if (tCharge >= 0f || AutoBelter.Results.Count == 0) return;
+            var world = CoreState.World ?? CoreState.FindWorld();
+            if (world == null) return;
+            float now = Time.unscaledTime;
+            try
+            {
+                if (trackBelt < 0)
+                {
+                    var c = MoonStructures.Definition(CompactorId);
+                    if (c == null) return;
+                    var r = AutoBelter.Results.FirstOrDefault(x => x.Ok && x.To >= 0 && world.depots.ContainsKey(x.To) && world.depots.get_Item(x.To).kind == c.Kind);
+                    if (r == null) return;
+                    trackBelt = r.Belt;
+                    trackC = r.To;
+                    var g = MoonStructures.Definition(GeneratorId);
+                    trackG = g != null ? DepotOfKind(world, g.Kind) : -1;
+                    tOrigin = now;
+                }
+                // AutoBelt runs 2 s before AutoFeed; once the chamber's feed exists, the times count from it.
+                var feed = AutoFeeder.For("96");
+                if (feed != null) tOrigin = feed.At;
+                if (tSand < 0f)
+                    foreach (var kv in world.riders)
+                        if (kv.Value.belt == trackBelt && world.canisters.ContainsKey(kv.Key) && world.canisters.get_Item(kv.Key).cargo == MoonCargo.Sand) { tSand = now; break; }
+                for (int i = 0; i < entered.Count && i < enteredTimes.Count && (tSandIn < 0f || tBriqIn < 0f); i++)
+                {
+                    if (tSandIn < 0f && entered[i].DepotId == trackC) tSandIn = enteredTimes[i];
+                    if (tBriqIn < 0f && entered[i].DepotId == trackG) tBriqIn = enteredTimes[i];
+                }
+                if (tBriq < 0f) foreach (var x in emitted) if (x.e.DepotId == trackC && x.e.Cargo.Value == BriquetteValue) { tBriq = x.t; break; }
+                var cs = world.ProductionOf(trackC);
+                if (tCycle < 0f && cs != null && cs.Cycles >= 1) tCycle = now;
+                var gs = trackG >= 0 ? world.ProductionOf(trackG) : null;
+                if (tCharge < 0f && gs != null && gs.ChargeKwh > 0) tCharge = now;
+            }
+            catch (Exception) { }
+        }
+
+        static string T(float t) => t < 0f ? "not seen" : $"{t - tOrigin:F1} s";
+
+        static string TimingText() =>
+            $"from the chamber's feed: first sand canister on belt {trackBelt} {T(tSand)}, first sand into the compactor {T(tSandIn)}, first compactor cycle {T(tCycle)}, first briquette emitted {T(tBriq)}, first briquette into the generator {T(tBriqIn)}, first generator charge {T(tCharge)}";
+
+        static void SandChainChecks(MoonWorld world)
+        {
+            SandModelChecks(world);
+            var sr = AutoBelter.Results.FirstOrDefault(r => compactorDepot >= 0 && r.To == compactorDepot);
+            var br = AutoBelter.Results.FirstOrDefault(r => compactorDepot >= 0 && r.From == compactorDepot);
+            if (sr == null && br == null) { CoreLog.Info("[selftest] AutoBelt built no belt into or out of the sand compactor: sandpower-chain not applicable"); return; }
+            string why = sr == null ? "no AutoBelt entry into the compactor" : !sr.Ok ? $"AutoBelt '{sr.Entry}' did not build: {sr.Reason}"
+                : br == null ? "no AutoBelt entry out of the compactor" : !br.Ok ? $"AutoBelt '{br.Entry}' did not build: {br.Reason}"
+                : br.To != generatorDepot ? $"the compactor's belt ends at depot {br.To}, not the generator ({generatorDepot})" : null;
+            if (why != null) { Assert("sandpower-chain", false, why); Assert("sandpower-save-clean", false, why); return; }
+            sandBelt = sr.Belt;
+            briqBelt = br.Belt;
+            chainPhase = 1;
+            chainUntil = Time.unscaledTime + ChainSeconds;
+            CoreLog.Info($"[selftest] sandpower-chain: sand belt {sandBelt} ({world.BeltPath(sandBelt)?.Length:F2} m) from depot {sr.From} into compactor {compactorDepot}, briquette belt {briqBelt} ({world.BeltPath(briqBelt)?.Length:F2} m) into generator {generatorDepot}; waiting up to {ChainSeconds:F0} s");
+        }
+
+        internal static void TickSandChain()
+        {
+            var world = CoreState.World ?? CoreState.FindWorld();
+            float now = Time.unscaledTime;
+            try
+            {
+                switch (chainPhase)
+                {
+                    case 1: TickChainRuns(world, now); break;
+                    case 2: TickPin(world, now); break;
+                    case 3: TickChainSave(world, now); break;
+                    case 4: TickSandReload(world, now); break;
+                }
+            }
+            catch (Exception e)
+            {
+                string name = chainPhase == 1 ? "sandpower-chain" : chainPhase == 4 ? "sandpower-reload" : "sandpower-save-clean";
+                Assert(name, false, "threw " + e.GetType().Name + ": " + e.Message);
+                if (chainPhase == 1) Assert("sandpower-save-clean", false, "the chain check threw");
+                chainPhase = 0;
+            }
+        }
+
+        static void TickChainRuns(MoonWorld world, float now)
+        {
+            var c = world.ProductionOf(compactorDepot);
+            var g = world.ProductionOf(generatorDepot);
+            bool noFeed = AutoFeeder.For(CompactorId) == null && AutoFeeder.For(GeneratorId) == null;
+            var inC = entered.Where(e => e.DepotId == compactorDepot).ToList();
+            var inG = entered.Where(e => e.DepotId == generatorDepot).ToList();
+            var outC = emitted.Where(x => x.e.DepotId == compactorDepot && x.e.Cargo.Value == BriquetteValue).ToList();
+            bool ok = g != null && g.ChargeKwh > 0 && noFeed && inC.Count > 0 && inG.Count > 0 && outC.Count > 0;
+            if (!ok && now < chainUntil) return;
+            CoreLog.Info($"[selftest] sandpower-chain: {TimingText()}");
+            CoreLog.Info($"[selftest] sandpower-chain: CargoEntered compactor {inC.Count}x ({inC.Sum(e => e.Kilograms)} kg {string.Join("/", inC.Select(e => e.Cargo.Id).Distinct())}), generator {inG.Count}x ({inG.Sum(e => e.Kilograms)} kg {string.Join("/", inG.Select(e => e.Cargo.Id).Distinct())}); CargoEmitted from the compactor {outC.Count}x ({outC.Sum(x => x.e.Kilograms)} kg, belts [{string.Join(",", outC.Select(x => x.e.BeltId).Distinct())}]); riders on belt {sandBelt}: {RidersText(world, sandBelt)}; on belt {briqBelt}: {RidersText(world, briqBelt)}");
+            CoreLog.Info($"[selftest] sandpower-chain: compactor {StateText(c)} power {c?.Power:F2} grid {c?.Grid}; generator {PowerText(g)}");
+            Assert("sandpower-chain", ok, $"generator charge {g?.ChargeKwh:F4} kWh, AutoFeed of a SandPower machine {!noFeed}, CargoEntered compactor {inC.Count} generator {inG.Count}, CargoEmitted cargo {BriquetteValue} from the compactor {outC.Count} (within {ChainSeconds:F0} s)");
+            StartPin(world);
+        }
+
+        // A briquette canister put near the start of the sand belt: it rides to the end (or the queue there), and the
+        // compactor refuses it at its sand port, so it is still on the belt when the save is written.
+        static void StartPin(MoonWorld world)
+        {
+            chainPhase = 2;
+            var path = world.BeltPath(sandBelt);
+            if (path == null) { Assert("sandpower-save-clean", false, $"BeltPath({sandBelt}) is null"); chainPhase = 0; return; }
+            pinId = Spawn(world, path, Math.Min(0.5f, path.Length / 4f), (MoonCargo)BriquetteValue, out string why);
+            if (pinId < 0) { Assert("sandpower-save-clean", false, "spawning a briquette canister: " + why); chainPhase = 0; return; }
+            CoreLog.Info($"[selftest] sandpower-save-clean: briquette canister {pinId} put on the sand belt {sandBelt} ({path.Length:F2} m)");
+            chainUntil = Time.unscaledTime + 30f;
+        }
+
+        static void TickPin(MoonWorld world, float now)
+        {
+            bool waiting = Rider(world, pinId, out int b, out float d, out bool moving) && b == sandBelt && !moving;
+            if (!waiting && now < chainUntil) return;
+            CoreLog.Info($"[selftest] sandpower-save-clean: riders on belt {sandBelt} before the save: {RidersText(world, sandBelt)}; on belt {briqBelt}: {RidersText(world, briqBelt)}; compactor status '{SafeStatus(world.ProductionOf(compactorDepot))}'");
+            if (!waiting) { Assert("sandpower-save-clean", false, $"briquette canister {pinId} did not settle on belt {sandBelt} within 30 s (rider belt {b} d {d:F2} moving {moving})"); chainPhase = 0; return; }
+            DevTools.RequestSave();
+            chainSaveSeq = DevTools.SaveSeqAtRequest;
+            chainPhase = 3;
+            chainGrace = -1f;
+            chainUntil = now + 120f;
+        }
+
+        static void TickChainSave(MoonWorld world, float now)
+        {
+            if (chainGrace < 0f)
+            {
+                bool written = Sidecar.WriteSeq > chainSaveSeq;
+                Il2CppSystem.Threading.Tasks.Task pending = null;
+                try { pending = world?.PendingSave; } catch (Exception) { }
+                if (written && (pending == null || pending.IsCompleted)) chainGrace = now + 3f;
+                else if (now < chainUntil) return;
+            }
+            if (chainGrace >= 0f && now < chainGrace) return;
+            chainPhase = 0;
+            var w = Sidecar.LastWrite;
+            bool belts = world.conveyors != null && world.conveyors.ContainsKey(sandBelt) && world.conveyors.ContainsKey(briqBelt);
+            bool riding = Rider(world, pinId, out int pb, out float pd, out _) && pb == sandBelt;
+            int pinCargo = world.canisters.ContainsKey(pinId) ? (byte)world.canisters.get_Item(pinId).cargo : -1;
+            var live = new List<int>();
+            foreach (var kv in world.canisters) if ((byte)kv.Value.cargo == BriquetteValue) live.Add(kv.Key);
+            string path = SidecarPath();
+            bool pinSaved = false, prodC = false, prodG = false;
+            var missing = new List<int>();
+            string recorded = "no sidecar";
+            if (path != null && File.Exists(path))
+            {
+                var file = SidecarCodec.Deserialize(File.ReadAllText(path));
+                var briq = file.Canisters.Where(x => x.CargoId == BriquetteId).Select(x => x.Id).ToHashSet();
+                pinSaved = briq.Contains(pinId);
+                missing = live.Where(id => !briq.Contains(id)).ToList();
+                var pc = file.Production.FirstOrDefault(p => p.DepotId == compactorDepot);
+                var pg = file.Production.FirstOrDefault(p => p.DepotId == generatorDepot);
+                prodC = pc != null && pc.Id == CompactorId;
+                prodG = pg != null && pg.Id == GeneratorId;
+                recorded = $"{file.Canisters.Count} canister record(s), {briq.Count} briquette [{string.Join(", ", briq)}]; production compactor {(pc == null ? "none" : $"stores [{string.Join(" ", pc.Stores.Select(s => s.Sum(x => x.Pending)))}] kg cargo [{string.Join(", ", pc.SlotCargoIds)}]")}, generator {(pg == null ? "none" : $"stores [{string.Join(" ", pg.Stores.Select(s => s.Sum(x => x.Pending)))}] kg charge {pg.Charge:F3}")}";
+            }
+            int refused = Sidecar.VanillaFailures - vanillaFailuresAtWatch;
+            CoreLog.Info($"[selftest] sandpower-save-clean: write #{w?.Seq} after the request (#{chainSaveSeq}); belts {sandBelt},{briqBelt} built {belts}; briquette canister {pinId} riding {riding} d {pd:F2} cargo {pinCargo}; briquette canisters in the world [{string.Join(", ", live)}]; sidecar {recorded}; 'Moon save failed' {saveFailures}x, vanilla writes that threw {refused}");
+            bool ok = w != null && w.Seq > chainSaveSeq && belts && riding && pinCargo == BriquetteValue && pinSaved && missing.Count == 0 && prodC && prodG && saveFailures == 0 && refused == 0;
+            Assert("sandpower-save-clean", ok, $"write after the request {(w != null && w.Seq > chainSaveSeq)}, belts built {belts}, canister {pinId} riding {riding} cargo {pinCargo} in the sidecar {pinSaved}, briquette canisters missing from the sidecar [{string.Join(", ", missing)}], production records compactor {prodC} generator {prodG}, 'Moon save failed' {saveFailures}x, refused writes {refused}");
+        }
+
+        // Reload run: the chain run's machines, belts, briquette canisters and production states, restored.
+        static void SandReloadChecks()
+        {
+            var world = CoreState.World ?? CoreState.FindWorld();
+            StructureDefinition c = MoonStructures.Definition(CompactorId), g = MoonStructures.Definition(GeneratorId);
+            if (world == null || c == null || g == null || !Sidecar.LoadedIds().Contains(CompactorId))
+            {
+                CoreLog.Info($"[selftest] '{CompactorId}' was neither built by AutoBuild nor restored from the sidecar this run: SandPower checks not applicable");
+                return;
+            }
+            compactorDepot = DepotOfKind(world, c.Kind);
+            generatorDepot = DepotOfKind(world, g.Kind);
+            SandModelChecks(world);
+            loadedBriq = Sidecar.LoadedCanisters().Where(x => x.CargoId == BriquetteId).Select(x => x.Id).ToList();
+            sandBelt = briqBelt = -1;
+            foreach (var kv in world.conveyors)
+            {
+                if (kv.Value == null || compactorDepot < 0) continue;
+                int from = world.MachineWithPort(kv.Value.start, true), to = world.MachineWithPort(kv.Value.end, false);
+                if (to == compactorDepot) sandBelt = kv.Key;
+                if (from == compactorDepot && to == generatorDepot) briqBelt = kv.Key;
+            }
+            CoreLog.Info($"[selftest] sandpower-reload: restored compactor depot {compactorDepot}, generator depot {generatorDepot}; belt into the compactor {sandBelt}, compactor to generator {briqBelt} ({world.conveyors.Count} belts); sidecar briquette canisters [{string.Join(", ", loadedBriq)}]");
+            chainPhase = 4;
+            chainUntil = Time.unscaledTime + 20f;
+        }
+
+        static void TickSandReload(MoonWorld world, float now)
+        {
+            var back = loadedBriq.Where(id => world.canisters.ContainsKey(id) && (byte)world.canisters.get_Item(id).cargo == BriquetteValue).ToList();
+            bool onSand = back.Any(id => Rider(world, id, out int b, out _, out _) && b == sandBelt);
+            var rc = Sidecar.RestoredProduction.FirstOrDefault(x => x.StructureId == CompactorId);
+            var rg = Sidecar.RestoredProduction.FirstOrDefault(x => x.StructureId == GeneratorId);
+            bool ok = compactorDepot >= 0 && generatorDepot >= 0 && sandBelt >= 0 && briqBelt >= 0 && loadedBriq.Count > 0 && back.Count == loadedBriq.Count && onSand && Same(rc) && Same(rg);
+            if (!ok && now < chainUntil) return;
+            chainPhase = 0;
+            CoreLog.Info($"[selftest] sandpower-reload: riders on belt {sandBelt}: {(sandBelt >= 0 ? RidersText(world, sandBelt) : "no belt")}; on belt {briqBelt}: {(briqBelt >= 0 ? RidersText(world, briqBelt) : "no belt")}; compactor {Prod(rc)}, now {StateText(world.ProductionOf(compactorDepot))}; generator {Prod(rg)}, now {PowerText(world.ProductionOf(generatorDepot))}");
+            Assert("sandpower-reload", ok, $"depots compactor {compactorDepot} generator {generatorDepot}; belts {sandBelt},{briqBelt}; briquette canisters back with cargo {BriquetteValue} {back.Count} of {loadedBriq.Count}, one on the sand belt {onSand}; compactor {Prod(rc)}; generator {Prod(rg)}");
+
+            static bool Same(Sidecar.ProductionRestore r) => r != null && r.Saved.Length == r.Loaded.Length && r.Saved.Zip(r.Loaded, (a, b) => Math.Abs(a - b) <= 0.01).All(x => x);
+            static string Prod(Sidecar.ProductionRestore r) => r == null ? "not restored" : $"depot {r.Depot} saved kg [{string.Join(" ", r.Saved)}], at load [{string.Join(" ", r.Loaded)}]";
         }
     }
 }

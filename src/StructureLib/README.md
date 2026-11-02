@@ -133,6 +133,41 @@ MoonStructures.Register(new StructureDefinition
 The recon behind all this, with the evidence, is in
 [`research/STRUCTURES_RECON.md`](../../research/STRUCTURES_RECON.md).
 
+## Belts, ports and models in short
+
+- **Ports are definition data.** Declare them in `Ports`, or author them in the model as `Port_<name>` empties
+  (`kit.port(name, position, direction, output, cargo)`); a model's ports win. Every port flows along the structure's
+  local +X like the vanilla donors' (inputs at the −X end, the output at the +X end), so a machine whose output feeds
+  another stands on that machine's −X side.
+- **In:** a belt ending at an input port hands its canisters to the first Input slot of the port's cargo
+  (`CargoEntered`). **Out:** vanilla puts the Output slot's cargo on the belt joined to the output port, 1 kg per
+  canister (`CargoEmitted`). Both survive a save and reload, canisters on the belt included.
+- **Models:** `Model = "<file>.bin"` beside the DLL replaces the donor's look on the donor's template (colliders,
+  views and scripts kept). Its lowest vertex sits on the structure's floor, its materials start as tinted stand-ins
+  and become the game's own within seconds of a world load, and the donor's animated effects are not carried over.
+  SandPower's compactor and generator are the worked example: a vanilla pressure chamber's sand rides a belt into the
+  compactor, whose briquettes ride a belt into the generator (self-test `sandpower-chain`).
+
+## Dev builds
+
+A dev build (the default; `package.ps1` builds release DLLs with `-p:DevBuild=false`) adds a `[Dev]` section to
+`BepInEx/config/com.ryanhartwig.structurelib.cfg` and an in-game self-test that logs `[selftest] PASS|FAIL <name>`
+lines and `[selftest] done: N passed, M failed`. Leave the switches at their defaults outside a test run.
+
+| Switch | What it does |
+|---|---|
+| `AutoLoadSlot`, `AllowSlot1`, `SelfTest` | Load a save slot from the main menu (slot 1, the real save, only with `AllowSlot1`) and run the self-test 20 s after the world loads. |
+| `AutoBuild` | Comma-separated structure ids or vanilla kind numbers, built 10 s after load through the game's `TryBuildDepot` (`AutoBuildViaPlan`: through the build menu's own path instead). |
+| `AutoBuildLayout` | `ring` (default): 10 m from the walker at 0°, 90°, 180°, 270°, 45°, … from its facing. `line`: 10 m apart in entry order along the structures' +X, centred 10 m to the walker's side, so each entry's output faces the next entry's input; use it for chains of three or more machines (the SandPower chain). |
+| `AutoBelt` | `';'`-separated `<from>:<port>-><to>:<port>` belts between AutoBuild's depots, built 3 s after it through `TryBuildConveyor`. A port is a definition name (`IN_SAND`), a modded port's declared name (`Sand in`), a unique `input`/`output` label, or an index. |
+| `AutoFeed` | `';'`-separated `<id or kind>:<cargo>:<kg>`, loaded through `CrewProcessorLoad` 5 s after AutoBuild. |
+| `AutoSave`, `AutoRemove` | Request a save 10 s after AutoBuild and check the sidecar; remove the example lamp after its checks (false keeps it for a reload run). |
+| `SunOverhead` | Set the lunar clock so the sun stands over the walker 5 s after load (the clock runs in real time, so a copied save is often at night and solar panels give nothing). Belt chains fed by a vanilla machine need it. |
+| `DumpCards` | Write every build-menu card picture to `BepInEx/cache/structurelib/cards/` 30 s after load (`model-card` compares them). |
+| `BreakModelPath` | Point every `Model` at a missing file (self-test `model-missing-falls-back`). |
+| `RegisterBadPorts` | The example registers a structure whose port cargo no slot holds; the registry must drop it (`ports-rules-logged`). |
+| `ForcePower`, `ScreenshotMenu` | Run modded processors at full power whatever the grid gives (isolating power problems only); screenshot the build menu after the self-test. |
+
 ## Status
 
 | Area | Works (checked in game, single player) | Unsupported | Untested |
@@ -142,9 +177,9 @@ The recon behind all this, with the evidence, is in
 | Build and remove | Build, refund, removal, `Built` and `Removed` | | |
 | Save | Sidecar for depots (pose included), production states and modded-cargo canisters; orphans kept; reload restores (see [Save audit](#save-audit)) | A modded robot dock's robots-off setting (resets on load); a modded garage holding vehicles | |
 | Cargo | Names, unit mass, price, canister round trip, modded canisters riding belts (see [Cargo audit](#cargo-audit)) | Depositing modded cargo at the collector; co-op cargo events; `CanisterTint` (not applied) | |
-| Processors | Cycle, batch moved at the same mass, `CycleFinished`, loading through `CrewProcessorLoad`; belt input through a declared port (`HandOff` prefix, `CargoEntered`; a canister of another cargo, or one arriving while its slot is full, waits at the belt end); belt output (vanilla `EmitProduct`/`EmitCargo`, 1 kg canisters, `CargoEmitted`); a machine-to-machine chain (grinder to burner) by belt, saved and reloaded with canisters on the belt | Walker loading (`LoadProcessor` refuses: "Not a production machine"); a structure without a processor taking belt input | Belt input in co-op (the host decides; clients untested) |
+| Processors | Cycle, batch moved at the same mass, `CycleFinished`, loading through `CrewProcessorLoad`; belt input through a declared port (`HandOff` prefix, `CargoEntered`; a canister of another cargo, or one arriving while its slot is full, waits at the belt end); belt output (vanilla `EmitProduct`/`EmitCargo`, 1 kg canisters, `CargoEmitted`); machine-to-machine chains by belt (grinder to burner; SandPower's vanilla pressure chamber to compactor to generator, self-test `sandpower-chain`), saved and reloaded with canisters on the belts | Walker loading (`LoadProcessor` refuses: "Not a production machine"); a structure without a processor taking belt input | Belt input in co-op (the host decides; clients untested) |
 | Ports | Declared ports (and a port on a port-less donor) written into the cloned definition as `sl:<cargo>:<Name>`; `PortCargo` answers the declared cargo; the game shows "input"/"output" and "<name> input/output"; refusal at freeze for a port cargo no slot holds | | Belts placed by hand onto modded ports (dev `AutoBelt` builds through the game's `TryBuildConveyor`); ports inherited from a donor (no example uses them) |
-| Models | `Model` file on the donor template (donor meshes hidden, colliders kept), ports from its `Port_*` nodes, card picture rendered from it; a missing file falls back to the donor model and declared ports | The donor's animated effects on a custom model | Donors with a non-unit `scale` or a skinned mesh (none of the three checked has either) |
+| Models | `Model` file on the donor template (donor meshes hidden, colliders kept), ports from its `Port_*` nodes, card picture rendered from it (the example burner and both SandPower models, stone press and solar post donors); a missing file falls back to the donor model and declared ports | The donor's animated effects on a custom model | Donors with a non-unit `scale` or a skinned mesh (none of the three checked has either) |
 | Power | Machines on a vanilla grid's surplus and batteries; fuel generators charge, supply modded machines and keep their charge across saves; a modded-only group gets a negative grid id | Fuel generators feeding vanilla machines; power links drawn to modded structures; `SupplyMode.Solar`; `Power` without a `Processor`; a generator's `RunningKw` (ignored) | |
 | Co-op | Manifest built and compared with itself | Graceful degradation for a client missing a mod | Both two-player cases (identical mods; client missing a mod) |
 
@@ -271,7 +306,7 @@ Status:
 | `MoonWorld.InputSlot(int kind, MoonCargo)` (static) | patched | For a modded kind: the first Input slot holding the cargo, else -1 (a modded structure without a processor: -1). Vanilla kinds still answer as vanilla. Self-tests `inputslot-accepts-dust`, `inputslot-refuses-dust`. |
 | `MoonWorld.PortCargo(ConveyorPort)` (static, returns `MoonCargo`) | patched | Takes the definition's port; a prefix answers the cargo encoded in an `sl:<cargo>:<Name>` port name. Belt input does not consult it (recon fact (a)). |
 | `MoonWorld.HandOff(belt, path, id)` (instance, returns bool) | patched | Belt input. Vanilla refuses every modded machine by kind; a prefix takes a canister of the port's cargo into the first Input slot with room (`BeltIntake`), removes or reduces it, raises `CargoEntered`; a refused one waits at the belt end. Self-tests `belt-in-accepts`, `belt-in-waits-when-full`, `belt-in-refuses-cargo`. |
-| `MoonWorld.CrewProcessorLoad(player, machine, MoonCargo, kg)` | patched | Vanilla does nothing for a modded machine (no `InputSlot` call; checked in game). A prefix loads the first Input slot that takes the cargo, up to its capacity, under the player's share (`MoonWorld.Put`). Self-test `feed-lands-in-slot0`. Like vanilla it caps at capacity and never touches the walker's cargo (the walker path, `LoadProcessor`, deducts itself and does not call it). `LoadProcessor` refuses a modded machine ('Not a production machine'); belts (`FeedProcessor`, `EnterMachine`) are not checked. |
+| `MoonWorld.CrewProcessorLoad(player, machine, MoonCargo, kg)` | patched | Vanilla does nothing for a modded machine (no `InputSlot` call; checked in game). A prefix loads the first Input slot that takes the cargo, up to its capacity, under the player's share (`MoonWorld.Put`). Self-test `feed-lands-in-slot0`. Like vanilla it caps at capacity and never touches the walker's cargo (the walker path, `LoadProcessor`, deducts itself and does not call it). `LoadProcessor` refuses a modded machine ('Not a production machine'). Belts do not come through here: belt input is `HandOff` (see How it works; vanilla never called `FeedProcessor` or `EnterMachine` in the recon). |
 | `MoonWorld.EmitCargo(outfeed, owner, MoonCargo, kg, out reason)` (instance) | vanilla-safe | Reached for modded machines: vanilla `EmitProduct` calls it with a connected outfeed belt, 1 kg per call, and the grinder's grit canisters ride the belt with cargo 250 (recon "Belts and ports", facts (b), (c), (f)). A postfix (log and event only) raises `CargoEmitted` for a canister a modded machine put on its belt. Self-tests `belt-out-emits`, `belt-chain-feeds`, `belt-canister-modded`. |
 | `MoonWorld.CrewCargoDeposit(player, MoonCargo, kg)` | unsupported | Deposit at the collector; pays through `CargoValue` (patched) but the rest of the path is not checked. Do not rely on depositing modded cargo yet. |
 | `MoonWorld.AddPremium(player, MoonCargo, kg)` / `premiums` / `MoonPremiumSnapshot` | unknown | `MoonPremiumSnapshot` has no cargo member (station, player, kilograms); how `AddPremium` weighs a modded value is not checked. |

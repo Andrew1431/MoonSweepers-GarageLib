@@ -73,6 +73,8 @@ function Stage($p, $dll, $into) {
     } elseif ($dll) {
         Copy-Item $dll $dir
         Get-ChildItem (Split-Path $dll) -Filter '*.vehicles.json' | Copy-Item -Destination $dir
+        # Model files beside the csproj ship next to the DLL, as the build installs them (StructureLib's Model).
+        Get-ChildItem $p.Dir -File -Filter '*.bin' | Copy-Item -Destination $dir
     } else {
         Get-ChildItem $p.Dir -File | Where-Object { $_.Name -like '*.vehicles.json' -or $_.Extension -eq '.bin' } | Copy-Item -Destination $dir
     }

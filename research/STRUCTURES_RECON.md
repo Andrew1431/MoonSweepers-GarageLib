@@ -786,6 +786,35 @@ Belt output and save with belts (Task 4, 2026-11-02; logs `task-4-logs/`, run1 =
   post's meshes start, and not on the donor's lowest bound. The press's bound is at −0.49 with its foundation under
   ground. `floorOffset` (0.02) is not added, because the game applies it to the placed root. `Port_*` nodes are
   composed through their parent chain and moved by the holder's scale and offset, so the ports stay on the geometry.
+- **The SandPower chain (Task 6, slot-2, 2026-11-02; logs `task-6-logs/`, run1 = 34 passed, 0 failed; run2 (reload)
+  = 28 passed, 0 failed).**
+  - **Layout.** The ring cannot hold a three-machine chain: only 0° and 180° lie on the +X axis through the walker, so
+    a third machine downstream of the second has no site. Dev `[Dev] AutoBuildLayout = line` puts the entries on one
+    line along the structures' +X (world +X projected on the tangent plane; the built depots' rotation is identity
+    there), 1.3 m between neighbouring footprints (centres from each definition's `halfFootprint.x`), centred on the
+    walker and 6 m to its side. A first try at 10 m spacing and 10 m to the side put the end entries 18 m away and the
+    game refused them: `'Move closer to the build site.'` (the tracker 95, `reach` not read, and the generator on the post, `reach`
+    16). With `AutoBuild = 95,96,ryanhartwig.sand-compactor,ryanhartwig.briquette-generator` the centres were
+    −11.60, −4.24, 5.80, 12.64 m (half footprints 1.96, 4.11, 4.63, 0.91), 7.3–14.0 m from the walker, all built.
+  - **Belts.** `96:output -> compactor:Sand in` 2.98 m and `compactor:Briquettes out -> generator:Briquettes in`
+    2.04 m, both valid on the first route (`+start,+end`); each belt end lands on its port to 0.000 m.
+  - **Power.** The vanilla solar tracker (95) with `[Dev] SunOverhead`: the chamber, the compactor and the generator
+    all on its grid (26); the compactor ran at power 1.00. The twin (94) was not tried: its 7.5 kW peak cannot cover the
+    compactor's 12 kW on top of the chamber.
+  - **Timings** from the chamber's `AutoFeed` of 12 kg dust: first sand canister on the belt 12.0 s, first sand into the
+    compactor 14.7 s, first compactor cycle 24.8 s, first briquette emitted 25.1 s, first briquette into the generator
+    27.0 s, first generator charge (3 kWh) 47.7 s. The whole 12 kg became 12 sand canisters of 1 kg (`CargoEntered`
+    12x, 12 kg) and, by the check, 8 briquette canisters of 1 kg (`CargoEmitted` 8x, all into the generator,
+    `CargoEntered` 8x); briquettes leave as 1 kg canisters although their `UnitKilograms` is 2.
+  - **Save and reload.** A briquette canister put on the sand belt waits at its end (`'A sand briquette capsule is
+    waiting at the sand input'`); the save after it recorded it in the sidecar with both production records (generator
+    stores [8 2] kg, charge 3.000), no `Moon save failed`. The reload restored it on the sand belt at `d 2.98` with
+    cargo 3, both belts between the restored machines, and both production states as saved (the generator's batch then
+    finished: charge 6.0).
+  - **Native crash once at load.** One launch of the same build died natively about 12 s after the world loaded,
+    while rendering the compactor's card picture (the last log line `Card art for 'ryanhartwig.sand-compactor': bounds
+    (8.50, 5.95, 4.70), ortho 5.03`; `task-6-logs/run1a-crash-at-load-LogOutput.log`). The launches before and after
+    rendered the same card. Not reproduced; cause unknown.
 
 ## Still open
 

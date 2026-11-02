@@ -174,6 +174,7 @@ namespace StructureLib
             }
             SelfTest.ResetEvents(world);
             taken.Clear();
+            if (AutoLine.On) AutoLine.Prepare(world, entries);
             for (int i = 0; i < entries.Count; i++)
             {
                 try { Build(world, walker, entries[i], i); }
@@ -214,13 +215,16 @@ namespace StructureLib
             var headings = new List<float>();
             if (!taken.Contains(own)) headings.Add(own);
             headings.AddRange(Ring.Where(h => h != own && !taken.Contains(h)));
-            foreach (float h in headings)
+            // [Dev] AutoBuildLayout = line (DevBelts.cs): one site per entry on a line, no fallback heading.
+            var sites = AutoLine.On
+                ? new List<(float h, Vector3 at, string where)> { AutoLine.Site(wt, index) }
+                : headings.Select(h => (h, wt.position + Quaternion.AngleAxis(h, up) * wt.forward * dist, $"at {dist:F0} m, heading {h:F0} deg from facing")).ToList();
+            foreach (var (h, at, where) in sites)
             {
-                var at = wt.position + Quaternion.AngleAxis(h, up) * wt.forward * dist;
                 var before = DepotIds(world);
                 ok = viaPlan ? BuildViaPlan(world, walker, kind, at, wt.position.magnitude, out reason) : world.TryBuildDepot(walker, at.normalized, 0f, out reason, null, kind);
                 if (ok) foreach (var kv in world.depots) if (!before.Contains(kv.Key)) { id = kv.Key; break; }
-                CoreLog.Info($"[dev] AutoBuild: '{entry}' (kind {kind}) {(viaPlan ? "via the build-menu plan path " : "")}at {dist:F0} m, heading {h:F0} deg from facing: ok={ok} reason='{reason}'");
+                CoreLog.Info($"[dev] AutoBuild: '{entry}' (kind {kind}) {(viaPlan ? "via the build-menu plan path " : "")}{where}: ok={ok} reason='{reason}'");
                 if (ok) { taken.Add(h); break; }
             }
             if (ok && id >= 0)
@@ -503,9 +507,10 @@ namespace StructureLib
             if (BeltPending) TickBeltChecks();
             if (OutPending) TickOutChecks();
             if (ModelPending) TickModels();
+            if (SandChainPending) TickSandChain();
             if (artUntil >= 0f) { TickCardArt(); return; }
             if (renderUntil >= 0f) { TickRendered(); return; }
-            if (saveUntil >= 0f && cycleUntil < 0f && !PowerPending && sandOpen.Count == 0 && !BeltPending && !OutPending && !ModelPending) TickSaveWait();
+            if (saveUntil >= 0f && cycleUntil < 0f && !PowerPending && sandOpen.Count == 0 && !BeltPending && !OutPending && !ModelPending && !SandChainPending) TickSaveWait();
         }
 
         // cardart-modded: CardArt answers something once nothing is pending, or after 5 s.
@@ -1172,16 +1177,17 @@ namespace StructureLib
         }
 
         // SandPower, when AutoBuild names its compactor: both ids are registered at their hashed kinds and the briquette is
-        // cargo 3; within 30 s of AutoFeed's sand the compactor finishes a cycle and holds briquettes in its output slot (or
-        // EmitCargo saw a modded cargo); within 40 s of AutoFeed's briquettes the generator holds charge. List the generator
-        // and the compactor first in AutoBuild: the third entry (24 m away) is refused as out of reach.
+        // cargo 3. Each machine is fed by AutoFeed (the deadline runs from the feed: 30 s for the compactor, 40 s for the
+        // generator) or by a belt AutoBelt built into it (the chain in DevBelts.cs: ChainSeconds from the self-test). By
+        // then the compactor has finished a cycle and holds briquettes in its output slot (or EmitCargo saw a modded
+        // cargo), and the generator holds charge. A run that restored both from the save runs the reload checks instead.
         const string CompactorId = "ryanhartwig.sand-compactor", GeneratorId = "ryanhartwig.briquette-generator", BriquetteId = "ryanhartwig.sand-briquette";
         static readonly Dictionary<string, float> sandOpen = new();
         static int compactorDepot = -1, generatorDepot = -1;
 
         static void SandPowerChecks()
         {
-            if (!DevTools.AutoBuildNames(CompactorId)) { CoreLog.Info($"[selftest] '{CompactorId}' was not built by AutoBuild this run: SandPower checks not applicable"); return; }
+            if (!DevTools.AutoBuildNames(CompactorId)) { SandReloadChecks(); return; }
             var world = CoreState.World ?? CoreState.FindWorld();
             StructureDefinition c = MoonStructures.Definition(CompactorId), g = MoonStructures.Definition(GeneratorId);
             var b = MoonStructures.CargoDefinition(BriquetteId);
@@ -1192,14 +1198,16 @@ namespace StructureLib
             Open("sandpower-compactor-cycles", c, compactorDepot, CompactorId, 30f);
             Open("sandpower-briquette-out", c, compactorDepot, CompactorId, 30f);
             Open("sandpower-generator-charges", g, generatorDepot, GeneratorId, 40f);
+            SandChainChecks(world);
 
             static void Open(string name, StructureDefinition d, int depot, string id, float seconds)
             {
                 var feed = AutoFeeder.For(id);
+                bool belted = depot >= 0 && BeltedInto(depot);
                 string skip = d == null ? $"'{id}' is not registered" : depot < 0 ? $"no '{id}' depot in world.depots"
-                    : feed == null ? $"no AutoFeed entry for '{id}'" : feed.Error;
+                    : feed == null && !belted ? $"no AutoFeed entry for '{id}' and no AutoBelt belt into it" : feed?.Error;
                 if (skip != null) Assert(name, false, skip);
-                else sandOpen[name] = feed.At + seconds;
+                else sandOpen[name] = feed != null ? feed.At + seconds : Time.unscaledTime + ChainSeconds;
             }
         }
 

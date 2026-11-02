@@ -75,12 +75,12 @@ namespace StructureLib
                 return;
             }
             CoreLog.Info("[selftest] [Dev] BreakModelPath is false: model-missing-falls-back not applicable");
-            Check("model-swapped", noView, () => Swapped(world, view));
+            Check("model-swapped", noView, () => Swapped(world, view, MoonWorld.SolarPostKind, "burner"));
             Check("model-ports", world == null ? "no MoonWorld found" : null, () => ModelPortsOk(world, burner));
             Check("model-card", DevTools.CardsDumped ? null : "DumpCards did not run within 60 s (set [Dev] DumpCards = true)", () => CardDiffers(burner));
         }
 
-        static (bool, string) Swapped(MoonWorld world, GameObject view)
+        static (bool, string) Swapped(MoonWorld world, GameObject view, int donorKind, string what)
         {
             var root = view.transform;
             Transform holder = null;
@@ -101,10 +101,10 @@ namespace StructureLib
             }
             int colliders = view.GetComponentsInChildren<Collider>(true).Count(c => !c.transform.IsChildOf(holder));
             int modelColliders = holder.GetComponentsInChildren<Collider>(true).Length;
-            var donorPrefab = world.BuildDefinition(MoonWorld.SolarPostKind)?.prefab;
+            var donorPrefab = world.BuildDefinition(donorKind)?.prefab;
             int donorColliders = donorPrefab == null ? -1 : donorPrefab.GetComponentsInChildren<Collider>(true).Length;
             bool rootParent = holder.parent != null && holder.parent.Pointer == root.Pointer;
-            CoreLog.Info($"[selftest] burner view '{view.name}': {ModelSwap.HolderName} at local {AutoBelter.V(holder.localPosition)} scale {holder.localScale.x:F2}, parent is the view root {rootParent}; model renderers {modelOn}/{modelAll} enabled (materials {string.Join(", ", mats)}); donor renderers {donorOn}/{donorAll} enabled{(donorOnNames.Count > 0 ? " [" + string.Join(", ", donorOnNames) + "]" : "")}; colliders {colliders} outside the model (+{modelColliders} in it), solar post prefab {donorColliders}");
+            CoreLog.Info($"[selftest] {what} view '{view.name}': {ModelSwap.HolderName} at local {AutoBelter.V(holder.localPosition)} scale {holder.localScale.x:F2}, parent is the view root {rootParent}; model renderers {modelOn}/{modelAll} enabled (materials {string.Join(", ", mats)}); donor renderers {donorOn}/{donorAll} enabled{(donorOnNames.Count > 0 ? " [" + string.Join(", ", donorOnNames) + "]" : "")}; colliders {colliders} outside the model (+{modelColliders} in it), donor {donorKind} prefab {donorColliders}");
             bool ok = rootParent && modelOn >= 1 && donorAll >= 1 && donorOn == 0 && colliders == donorColliders && modelColliders == 0;
             return (ok, $"parent is root {rootParent}, model renderers enabled {modelOn}, donor renderers enabled {donorOn}/{donorAll}, colliders {colliders} (+{modelColliders} in the model) vs prefab {donorColliders}");
         }
@@ -149,6 +149,51 @@ namespace StructureLib
             bool ok = !holder && donorOn >= 1 && burner.PortRule == "declared Ports" && ports != null && ports.Length == 1 && ports[0].name == "sl:250:Grit in" &&
                       Vector3.Distance(ports[0].position, new Vector3(-0.90f, 0.85f, 0f)) < 0.01f && errors.Count == 1 && allErrors == 1;
             return (ok, $"holder {holder}, donor renderers enabled {donorOn}, rule '{burner.PortRule}', ports {Describe(ports)}, model error lines {errors.Count}, all error lines {allErrors}");
+        }
+
+        // SandPower's models (run from the chain and reload checks in DevBelts.cs, once the depots exist):
+        //  sandpower-model-swapped: both views carry the StructureLibModel holder with enabled renderers, every donor
+        //    renderer disabled and the donor prefab's colliders (stone press 97 for the compactor, solar post 93 for the
+        //    generator).
+        //  sandpower-model-ports: the clones' ports are the models' Port_* nodes: the compactor 'sl:<sand>:Sand in' in at
+        //    (-4.10, 0.85, 0.00) and 'sl:3:Briquettes out' out at (3.90, 0.85, 0.00); the generator 'sl:3:Briquettes in' in
+        //    at (-0.90, 0.85, 0.00); all flowing (1, 0, 0).
+        static void SandModelChecks(MoonWorld world)
+        {
+            StructureDefinition c = MoonStructures.Definition(CompactorId), g = MoonStructures.Definition(GeneratorId);
+            var construction = UnityEngine.Object.FindFirstObjectByType<MoonDepotConstruction>();
+            var viewC = compactorDepot < 0 ? null : construction?.ViewOf(compactorDepot);
+            var viewG = generatorDepot < 0 ? null : construction?.ViewOf(generatorDepot);
+            string skip = world == null ? "no MoonWorld found" : c == null || g == null ? "SandPower is not registered"
+                : viewC == null ? $"no view for compactor depot {compactorDepot}" : viewG == null ? $"no view for generator depot {generatorDepot}" : null;
+            Check("sandpower-model-swapped", skip, () =>
+            {
+                var (okC, whyC) = Swapped(world, viewC, MoonWorld.StonePressKind, "compactor");
+                var (okG, whyG) = Swapped(world, viewG, MoonWorld.SolarPostKind, "generator");
+                return (okC && okG, $"compactor: {whyC}; generator: {whyG}");
+            });
+            Check("sandpower-model-ports", world == null || c == null || g == null ? "SandPower is not registered" : null, () =>
+            {
+                var pc = world.BuildDefinition(c.Kind)?.conveyorPorts;
+                var pg = world.BuildDefinition(g.Kind)?.conveyorPorts;
+                CoreLog.Info($"[selftest] compactor clone ports (rule '{c.PortRule}'): {Describe(pc)}; generator clone ports (rule '{g.PortRule}'): {Describe(pg)}");
+                int b = MoonStructures.CargoDefinition(BriquetteId)?.Value ?? -1;
+                string sandIn = $"sl:{(byte)MoonCargo.Sand}:Sand in", briqOut = $"sl:{b}:Briquettes out", briqIn = $"sl:{b}:Briquettes in";
+                bool okC = c.PortRule == "model Port_* nodes" && (pc?.Length ?? 0) == 2 &&
+                           Has(pc, sandIn, false, new Vector3(-4.10f, 0.85f, 0f)) && Has(pc, briqOut, true, new Vector3(3.90f, 0.85f, 0f));
+                bool okG = g.PortRule == "model Port_* nodes" && (pg?.Length ?? 0) == 1 && Has(pg, briqIn, false, new Vector3(-0.90f, 0.85f, 0f));
+                return (okC && okG, $"compactor rule '{c.PortRule}' ports {Describe(pc)}, expected '{sandIn}' in at (-4.10,0.85,0.00) and '{briqOut}' out at (3.90,0.85,0.00); generator rule '{g.PortRule}' ports {Describe(pg)}, expected '{briqIn}' in at (-0.90,0.85,0.00); all dir (1,0,0)");
+            });
+
+            static bool Has(Il2CppInterop.Runtime.InteropTypes.Arrays.Il2CppReferenceArray<MoonDepotBuildDefinition.ConveyorPort> ports, string name, bool output, Vector3 at)
+            {
+                for (int i = 0; i < (ports?.Length ?? 0); i++)
+                {
+                    var p = ports[i];
+                    if (p != null && p.name == name && p.output == output && Vector3.Distance(p.position, at) < 0.01f && Vector3.Distance(p.direction, Vector3.right) < 0.01f) return true;
+                }
+                return false;
+            }
         }
     }
 }
