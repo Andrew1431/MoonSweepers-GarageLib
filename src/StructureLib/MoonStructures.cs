@@ -107,73 +107,96 @@ namespace StructureLib
         public static CargoDefinition CargoDefinition(MoonCargo cargo) => byCargoValue.TryGetValue((byte)cargo, out var d) ? d : null;
 
         // Assigns kinds and validates everything. donorLookup reads the vanilla build definition for a base kind.
+        // Validation works on copies; the live tables change only once everything is decided, and Frozen is set last.
+        // If anything throws, the library disables itself for the session (Frozen stays false) instead of half-working.
         internal static void Freeze(Func<int, DonorTraits> donorLookup)
         {
-            if (Frozen) return;
-            Frozen = true;
-
-            IReadOnlyDictionary<string, int> kinds;
+            if (Frozen || Disabled) return;
             try
             {
-                kinds = KindAllocator.Assign(byId.Keys);
-            }
-            catch (KindCollisionException e)
-            {
-                CoreLog.Error($"{e.Message} StructureLib is disabled: no modded structures or cargo will be added.");
-                Disabled = true;
-                byId.Clear();
-                cargoById.Clear();
-                return;
-            }
-
-            int dropped = 0;
-            foreach (var def in byId.Values.OrderBy(d => d.Id, StringComparer.Ordinal).ToList())
-            {
-                var error = Rules.CheckDonor(def.Id, def.BaseStructure, donorLookup(def.BaseStructure));
-                if (error != null)
+                IReadOnlyDictionary<string, int> kinds;
+                try
                 {
-                    CoreLog.Error(error + " Structure dropped.");
-                    byId.Remove(def.Id);
+                    kinds = KindAllocator.Assign(byId.Keys);
+                }
+                catch (KindCollisionException e)
+                {
+                    CoreLog.Error($"{e.Message} StructureLib is disabled: no modded structures or cargo will be added.");
+                    Disabled = true;
+                    byId.Clear();
+                    cargoById.Clear();
+                    Frozen = true;
+                    return;
+                }
+
+                var structures = new Dictionary<string, StructureDefinition>(byId, StringComparer.Ordinal);
+                var cargo = new Dictionary<string, CargoDefinition>(cargoById, StringComparer.Ordinal);
+
+                int dropped = 0;
+                foreach (var def in structures.Values.OrderBy(d => d.Id, StringComparer.Ordinal).ToList())
+                {
+                    var error = Rules.CheckDonor(def.Id, def.BaseStructure, donorLookup(def.BaseStructure));
+                    if (error != null)
+                    {
+                        CoreLog.Error(error + " Structure dropped.");
+                        structures.Remove(def.Id);
+                        dropped++;
+                    }
+                }
+
+                var cargoPairs = cargo.Values.Select(c => (c.Id, c.Value)).ToList();
+                foreach (var e in Rules.CheckCargo(cargoPairs)) CoreLog.Error(e);
+                var offenders = Rules.CargoOffenders(cargoPairs);
+                var cargoByValue = new Dictionary<byte, CargoDefinition>();
+                foreach (var c in cargo.Values.ToList())
+                {
+                    if (offenders.Contains(c.Id))
+                    {
+                        CoreLog.Error($"Cargo '{c.Id}' dropped.");
+                        cargo.Remove(c.Id);
+                    }
+                    else cargoByValue[c.Value] = c;
+                }
+
+                // Slots must point at cargo that survived (or is vanilla); otherwise the structure would run on the wrong cargo.
+                foreach (var def in structures.Values.OrderBy(d => d.Id, StringComparer.Ordinal).ToList())
+                {
+                    if (def.Processor == null) continue;
+                    var slotErrors = Rules.CheckSlotCargo(def.Id,
+                        def.Processor.Slots.Select(s => (s.Name, s.Cargo.Id, s.Cargo.IsValid)),
+                        cargo.ContainsKey);
+                    if (slotErrors.Count == 0) continue;
+                    foreach (var e in slotErrors) CoreLog.Error(e);
+                    CoreLog.Error($"Structure '{def.Id}' dropped.");
+                    structures.Remove(def.Id);
                     dropped++;
                 }
-            }
 
-            var cargoPairs = cargoById.Values.Select(c => (c.Id, c.Value)).ToList();
-            foreach (var e in Rules.CheckCargo(cargoPairs)) CoreLog.Error(e);
-            var offenders = Rules.CargoOffenders(cargoPairs);
-            foreach (var c in cargoById.Values.ToList())
-            {
-                if (offenders.Contains(c.Id))
+                // Commit.
+                byId.Clear();
+                foreach (var kv in structures) byId[kv.Key] = kv.Value;
+                cargoById.Clear();
+                foreach (var kv in cargo) cargoById[kv.Key] = kv.Value;
+                foreach (var kv in cargoByValue) byCargoValue[kv.Key] = kv.Value;
+                foreach (var def in byId.Values)
                 {
-                    CoreLog.Error($"Cargo '{c.Id}' dropped.");
-                    cargoById.Remove(c.Id);
+                    def.Kind = kinds[def.Id];
+                    byIndex[def.Kind] = def;
                 }
-                else byCargoValue[c.Value] = c;
-            }
 
-            // Slots must point at cargo that survived (or is vanilla); otherwise the structure would run on the wrong cargo.
-            foreach (var def in byId.Values.OrderBy(d => d.Id, StringComparer.Ordinal).ToList())
+                CoreLog.Info($"Registry frozen: structures={byIndex.Count}" + (dropped > 0 ? $" ({dropped} dropped)" : "") +
+                             $", cargo={byCargoValue.Count}" +
+                             $" [{string.Join(", ", byIndex.Values.Select(d => d.ToString()))}]");
+                Frozen = true;
+            }
+            catch (Exception e)
             {
-                if (def.Processor == null) continue;
-                var slotErrors = Rules.CheckSlotCargo(def.Id,
-                    def.Processor.Slots.Select(s => (s.Name, s.Cargo.Id, s.Cargo.IsValid)),
-                    cargoById.ContainsKey);
-                if (slotErrors.Count == 0) continue;
-                foreach (var e in slotErrors) CoreLog.Error(e);
-                CoreLog.Error($"Structure '{def.Id}' dropped.");
-                byId.Remove(def.Id);
-                dropped++;
+                Disabled = true;
+                byIndex.Clear();
+                byCargoValue.Clear();
+                foreach (var def in byId.Values) def.Kind = -1;
+                CoreLog.Error($"Freezing the structure registry failed; StructureLib is disabled for this session (no modded structures or cargo): {e}");
             }
-
-            foreach (var def in byId.Values)
-            {
-                def.Kind = kinds[def.Id];
-                byIndex[def.Kind] = def;
-            }
-
-            CoreLog.Info($"Registry frozen: structures={byIndex.Count}" + (dropped > 0 ? $" ({dropped} dropped)" : "") +
-                         $", cargo={byCargoValue.Count}" +
-                         $" [{string.Join(", ", byIndex.Values.Select(d => d.ToString()))}]");
         }
 
         internal static void RaiseBuilt(StructureBuilt b)

@@ -21,14 +21,23 @@ namespace StructureLib.Patches
             catch (Exception e) { CoreLog.Error("Freezing the structure registry failed: " + e); }
         }
 
-        // The traits Rules.CheckDonor needs, read from the vanilla build definition of a donor kind.
+        // The traits Rules.CheckDonor needs, read from the vanilla build definition of a donor kind. A read that throws
+        // counts as "no such donor", which drops only the structures built on that kind.
         internal static DonorTraits Donor(MoonWorld world, int kind)
         {
-            var def = world.BuildDefinition(kind);
-            if (def == null) return new DonorTraits(false, false, false, false, false);
-            var m = def.module;
-            if (m == null) return new DonorTraits(true, false, false, false, false);
-            return new DonorTraits(true, m.Deck, m.BuildingPart, m.CatwalkSupport, m.WorldGrid);
+            try
+            {
+                var def = world.BuildDefinition(kind);
+                if (def == null) return new DonorTraits(false, false, false, false, false);
+                var m = def.module;
+                if (m == null) return new DonorTraits(true, false, false, false, false);
+                return new DonorTraits(true, m.Deck, m.BuildingPart, m.CatwalkSupport, m.WorldGrid);
+            }
+            catch (Exception e)
+            {
+                CoreLog.Error($"Reading the build definition of donor kind {kind} threw; treating it as missing: {e.Message}");
+                return new DonorTraits(false, false, false, false, false);
+            }
         }
     }
 }
