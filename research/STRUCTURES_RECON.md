@@ -337,6 +337,8 @@ with `ProducesPower`, `RunningKw 0`, 5 s cycle, Input grit 10 kg → Batch "Burn
   - Only `SupplyMode.Fuel` generators with a `ProducesPower` processor supply. A `SupplyMode.Solar` definition answers
     `IsSolarPanel` true but supplies nothing yet; a `Power` definition without a processor has no production state to
     carry charge.
+  - A generator's `RunningKw` is unsupported: `SetSupply` gives a fuel generator `Power` 1 and `DemandKw` 0, so it never
+    draws from the grid whatever its `RunningKw` says (a mod author setting it gets nothing, silently).
   - "Daylight" plays no part for a fuel generator: `SolvePower` recomputes `SunFactor` for its own panels only, and the
     postfix never reads it.
 

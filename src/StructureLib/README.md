@@ -18,7 +18,12 @@ solve never sees modded kinds. Details and evidence: `research/STRUCTURES_RECON.
   always 1, `SuppliedKw` is what it gave in the last solve, and it is listed in `world.powerNodes` as a panel node
   between solves. Its charge is saved with the production record.
 - **Not supported:** a fuel generator feeding vanilla machines (the vanilla grid's totals cannot be written from
-  managed code), power links drawn to modded structures, and supply from `SupplyMode.Solar` definitions.
+  managed code), power links drawn to modded structures, supply from `SupplyMode.Solar` definitions, and supply from a
+  `Power` definition without a `Processor` (it has no production state to hold charge).
+- **A generator's `RunningKw` is ignored:** a fuel generator always reads `Power` 1 and `DemandKw` 0 and never draws
+  from the grid, so setting `RunningKw` on a `ProducesPower` processor has no effect. Leave it 0.
+- **Do not patch `MoonWorld.TryPanel`:** a Harmony prefix on it killed the game natively after world load. See
+  `research/STRUCTURES_RECON.md`, "Interop hazards found".
 - The battery bank (kind 6) prefab has no production view; use `MoonWorld.SolarPostKind` (93) as a generator's
   `BaseStructure`, as the example burner does.
 
