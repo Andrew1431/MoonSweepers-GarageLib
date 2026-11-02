@@ -1,0 +1,21 @@
+== MoonCleaners.MoonCrew : Il2CppSystem.Object
+  P static System.String _WorldRoot_k__BackingField
+  P static System.UInt64 _HostId_k__BackingField
+  P static Il2CppSystem.Collections.Generic.Dictionary`2<System.UInt64,System.String> steamPlayers
+  P static System.Int32 IdBlockSize
+  P static System.Int32 IdBlocks
+  P static System.Int32 _AssignedIdBlock_k__BackingField
+  P static System.String WorldRoot
+  P static System.UInt64 HostId
+  P static System.Boolean Joined
+  P static System.String LocalPlayerId
+  P static System.UInt64 ShiftHost
+  P static System.Int32 AssignedIdBlock
+  M static String PlayerId(UInt64 steamId)
+  M static String SteamPlayer(UInt64 id)
+  M static Int32 IdBlock(UInt64 steamId)
+  M static Void ResetState()
+  M static Void Join(String root, UInt64 host)
+  M static Void Leave()
+  M Void .ctor()
+  M Void .ctor(IntPtr pointer)

@@ -4,4 +4,9 @@
     <RootNamespace>StructureLib</RootNamespace>
     <GenerateDocumentationFile>true</GenerateDocumentationFile>
   </PropertyGroup>
+
+  <ItemGroup>
+    <!-- The type of BepInPlugin.Version: the registry records each owning plugin's version for the co-op handshake. -->
+    <Reference Include="$(BepInExCoreDir)\SemanticVersioning.dll" Private="false" />
+  </ItemGroup>
 </Project>

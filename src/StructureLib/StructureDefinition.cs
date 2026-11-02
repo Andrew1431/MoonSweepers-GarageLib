@@ -45,6 +45,8 @@ namespace StructureLib
         public int Kind { get; internal set; } = -1;
         /// <summary>Plugin GUID that registered the structure.</summary>
         public string Owner { get; internal set; }
+        /// <summary>That plugin's version, read from its BepInEx metadata at registration ("unknown" if not found).</summary>
+        public string OwnerVersion { get; internal set; }
 
         public override string ToString() => $"{Id} (kind {Kind})";
     }

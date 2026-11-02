@@ -11,7 +11,7 @@ namespace StructureLib
         static readonly Dictionary<string, StructureDefinition> byId = new(StringComparer.Ordinal);
         static readonly Dictionary<int, StructureDefinition> byIndex = new();
         static readonly Dictionary<string, CargoDefinition> cargoById = new(StringComparer.Ordinal);
-        static readonly Dictionary<string, string> cargoOwner = new(StringComparer.Ordinal);
+        static readonly Dictionary<string, (string Guid, string Version)> cargoOwner = new(StringComparer.Ordinal);
         static readonly Dictionary<byte, CargoDefinition> byCargoValue = new();
 
         /// <summary>True once kinds are assigned and the registry is validated. Registering after this fails.</summary>
@@ -66,11 +66,12 @@ namespace StructureLib
                 def.CardImageKey = null;
             }
             def.Owner = ownerGuid ?? "unknown";
+            def.OwnerVersion = PluginVersion(ownerGuid);
             def.Name ??= def.Id;
             def.Category ??= "";
             def.Note ??= "";
             byId[def.Id] = def;
-            CoreLog.Info($"Registered structure '{def.Id}' ('{def.Name}', base {def.BaseStructure}, ${def.Price}) from {def.Owner}" +
+            CoreLog.Info($"Registered structure '{def.Id}' ('{def.Name}', base {def.BaseStructure}, ${def.Price}) from {def.Owner} {def.OwnerVersion}" +
                          (def.Processor != null ? $", processor with {def.Processor.Slots.Count} slots" : "") +
                          (def.Power != null ? ", power source" : ""));
             return def;
@@ -91,7 +92,7 @@ namespace StructureLib
             }
             if (cargoById.TryGetValue(def.Id, out var first))
             {
-                CoreLog.Error($"RegisterCargo: duplicate id '{def.Id}' (first from {cargoOwner[def.Id]}, now {ownerGuid}). Ignored.");
+                CoreLog.Error($"RegisterCargo: duplicate id '{def.Id}' (first from {cargoOwner[def.Id].Guid}, now {ownerGuid}). Ignored.");
                 return new Cargo(first.Value, first.Id);
             }
             if (def.Value < Rules.FirstModdedCargoValue)
@@ -102,9 +103,24 @@ namespace StructureLib
             def.Name ??= def.Id;
             def.ShortName ??= def.Name;
             cargoById[def.Id] = def;
-            cargoOwner[def.Id] = ownerGuid ?? "unknown";
-            CoreLog.Info($"Registered cargo '{def.Id}' ('{def.Name}', value {def.Value}) from {cargoOwner[def.Id]}");
+            cargoOwner[def.Id] = (ownerGuid ?? "unknown", PluginVersion(ownerGuid));
+            CoreLog.Info($"Registered cargo '{def.Id}' ('{def.Name}', value {def.Value}) from {cargoOwner[def.Id].Guid} {cargoOwner[def.Id].Version}");
             return new Cargo(def.Value, def.Id);
+        }
+
+        /// <summary>Plugin GUID and version that registered a cargo id; null if the id is not registered.</summary>
+        internal static (string Guid, string Version)? CargoOwner(string id) => id != null && cargoOwner.TryGetValue(id, out var o) ? o : null;
+
+        // The registering plugin's version from its BepInEx metadata. Plugins are listed before their Load() runs.
+        static string PluginVersion(string guid)
+        {
+            try
+            {
+                var plugins = BepInEx.Unity.IL2CPP.IL2CPPChainloader.Instance?.Plugins;
+                if (guid != null && plugins != null && plugins.TryGetValue(guid, out var info)) return info.Metadata.Version.ToString();
+            }
+            catch (Exception e) { CoreLog.Warn($"Reading the version of plugin {guid} failed: {e.Message}"); }
+            return "unknown";
         }
 
         public static bool IsModded(int kind) => byIndex.ContainsKey(kind);

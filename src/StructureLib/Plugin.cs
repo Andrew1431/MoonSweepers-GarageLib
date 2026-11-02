@@ -57,7 +57,7 @@ namespace StructureLib
             ClassInjector.RegisterTypeInIl2Cpp<CoreDriver>();
             var h = new Harmony(Guid);
             int ok = 0, failed = 0;
-            foreach (var t in new[] { typeof(FreezePatches), typeof(DefinitionPatches), typeof(PowerPatches), typeof(CatalogPatches), typeof(ModelPatches), typeof(BuildPatches), typeof(SavePatches), typeof(CargoPatches), typeof(ProductionPatches) })
+            foreach (var t in new[] { typeof(FreezePatches), typeof(DefinitionPatches), typeof(PowerPatches), typeof(CatalogPatches), typeof(ModelPatches), typeof(BuildPatches), typeof(SavePatches), typeof(CargoPatches), typeof(ProductionPatches), typeof(HandshakePatches) })
             {
                 try { h.CreateClassProcessor(t).Patch(); ok++; CoreLog.Debug($"Patched {t.Name}"); }
                 catch (Exception e) { failed++; CoreLog.Error($"Patching {t.Name} failed: {e}"); }
@@ -115,6 +115,7 @@ namespace StructureLib
                     }
                 }
                 IconRenderer.Tick();
+                Handshake.Tick();
 #if DEVBUILD
                 DevTools.Tick();
 #endif

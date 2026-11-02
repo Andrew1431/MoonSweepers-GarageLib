@@ -1,0 +1,137 @@
+== MoonCleaners.MoonSteamLobby : Il2CppSystem.Object
+  P static System.Int32 MaxCrew
+  P static System.String GameKey
+  P static System.Boolean _IsHost_k__BackingField
+  P static System.UInt64 _HostId_k__BackingField
+  P static System.String _CrewName_k__BackingField
+  P static System.Boolean _ShiftStarted_k__BackingField
+  P static MoonCleaners.MoonSteamLobby/Privacy _CurrentPrivacy_k__BackingField
+  P static System.Boolean _Busy_k__BackingField
+  P static System.String _Status_k__BackingField
+  P static System.Boolean _StatusIsError_k__BackingField
+  P static Il2CppSystem.Action Changed
+  P static MoonCleaners.MoonSteamLobby/Removal _LastRemoval_k__BackingField
+  P static Il2CppSystem.Collections.Generic.HashSet`1<System.UInt64> kicked
+  P static Il2CppSystem.Collections.Generic.HashSet`1<System.UInt64> banned
+  P static System.String publishedKicked
+  P static System.String publishedBanned
+  P static System.UInt64 lobby
+  P static Il2CppSystem.Collections.Generic.List`1<MoonCleaners.MoonSteamLobby/Member> members
+  P static Il2CppSystem.Collections.Generic.List`1<MoonCleaners.MoonSteamLobby/Listing> listings
+  P static Il2CppSystem.Collections.Generic.Dictionary`2<System.UInt64,UnityEngine.Texture2D> avatars
+  P static System.Boolean inviteAfterCreate
+  P static Steamworks.CallResult`1<Steamworks.LobbyCreated_t> created
+  P static Steamworks.CallResult`1<Steamworks.LobbyEnter_t> entered
+  P static Steamworks.CallResult`1<Steamworks.LobbyMatchList_t> matched
+  P static Steamworks.Callback`1<Steamworks.LobbyChatUpdate_t> memberChanged
+  P static Steamworks.Callback`1<Steamworks.LobbyDataUpdate_t> dataChanged
+  P static Steamworks.Callback`1<Steamworks.GameLobbyJoinRequested_t> joinRequested
+  P static Steamworks.Callback`1<Steamworks.GameRichPresenceJoinRequested_t> presenceJoinRequested
+  P static Steamworks.Callback`1<Steamworks.AvatarImageLoaded_t> avatarLoaded
+  P static System.Boolean InLobby
+  P static System.UInt64 LobbyId
+  P static System.Boolean IsHost
+  P static System.UInt64 HostId
+  P static System.String CrewName
+  P static System.Boolean ShiftStarted
+  P static MoonCleaners.MoonSteamLobby/Privacy CurrentPrivacy
+  P static Il2CppSystem.Collections.Generic.IReadOnlyList`1<MoonCleaners.MoonSteamLobby/Member> Members
+  P static Il2CppSystem.Collections.Generic.IReadOnlyList`1<MoonCleaners.MoonSteamLobby/Listing> Listings
+  P static System.Int32 LocalMemberIndex
+  P static System.Boolean AllReady
+  P static System.Boolean Busy
+  P static System.String Status
+  P static System.Boolean StatusIsError
+  P static MoonCleaners.MoonSteamLobby/Removal LastRemoval
+  P static System.String RemovalMessage
+  P static System.Boolean LocalReady
+  M static Void add_Changed(Action value)
+  M static Void remove_Changed(Action value)
+  M static Boolean IsRemoved(UInt64 id)
+  M static Void ResetState()
+  M static Void Start()
+  M static Void SetNetworkingConfig(ESteamNetworkingConfigValue value, Int32 number)
+  M static Void Create(Privacy privacy, Int32 capacity)
+  M static Void Join(UInt64 id)
+  M static Void Leave()
+  M static Void Kick(UInt64 id)
+  M static Void Ban(UInt64 id)
+  M static Void Unban(UInt64 id)
+  M static Boolean CanRemove(UInt64 id)
+  M static Void PutOut(UInt64 id)
+  M static Void RefreshMembersNow()
+  M static Void PublishRemovals()
+  M static Void SetReady(Boolean ready)
+  M static Void ShareLook()
+  M static MoonAstronautLook LookOf(UInt64 id)
+  M static Void StartShift()
+  M static Void SetPrivacy(Privacy privacy)
+  M static Void InviteFriends()
+  M static Void Search()
+  M static Void CloseSession(UInt64 id)
+  M static Texture2D Avatar(UInt64 id)
+  M static Boolean IsMember(UInt64 id)
+  M static Boolean InSteamLobby(UInt64 id)
+  M static String PlayerName(UInt64 id)
+  M static Void OnCreated(LobbyCreated_t result, Boolean failure)
+  M static Void OnEntered(LobbyEnter_t result, Boolean failure)
+  M static Void EnterShift()
+  M static Void OnDataChanged(LobbyDataUpdate_t update)
+  M static Void OnMatched(LobbyMatchList_t result, Boolean failure)
+  M static Listing Describe(UInt64 id, Boolean friend, String fallbackName)
+  M static Void RefreshLobby()
+  M static Void ReadRemovals(CSteamID id)
+  M static Void RefreshMembers()
+  M static Boolean TryParseConnect(String connect, UInt64& id)
+  M static Void UpdatePresence()
+  M static Void SetStatus(String message, Boolean error)
+  M static Void ReportError(String message)
+  M Void .ctor()
+  M Void .ctor(IntPtr pointer)
+== MoonCleaners.MoonSteamLobby/__c : Il2CppSystem.Object
+  P static MoonCleaners.MoonSteamLobby/__c __9
+  P static Steamworks.Callback`1+DispatchDelegate<Steamworks.LobbyChatUpdate_t> __9__78_0
+  P static Steamworks.Callback`1+DispatchDelegate<Steamworks.GameLobbyJoinRequested_t> __9__78_1
+  P static Steamworks.Callback`1+DispatchDelegate<Steamworks.GameRichPresenceJoinRequested_t> __9__78_2
+  P static Steamworks.Callback`1+DispatchDelegate<Steamworks.AvatarImageLoaded_t> __9__78_3
+  P static UnityEngine.Events.UnityAction`2<UnityEngine.SceneManagement.Scene,UnityEngine.SceneManagement.Scene> __9__78_4
+  P static Il2CppSystem.Comparison`1<MoonCleaners.MoonSteamLobby/Member> __9__112_0
+  M Void _Start_b__78_0(LobbyChatUpdate_t _)
+  M Void _Start_b__78_1(GameLobbyJoinRequested_t r)
+  M Void _Start_b__78_2(GameRichPresenceJoinRequested_t r)
+  M Void _Start_b__78_3(AvatarImageLoaded_t r)
+  M Void _Start_b__78_4(Scene _, Scene _)
+  M Int32 _RefreshMembers_b__112_0(Member a, Member b)
+  M Void .ctor()
+  M Void .ctor()
+  M Void .ctor(IntPtr pointer)
+== MoonCleaners.MoonSteamLobby/Listing : Il2CppSystem.Object
+  P System.UInt64 id
+  P System.String name
+  P System.String version
+  P System.Int32 members
+  P System.Int32 capacity
+  P System.Boolean friend
+  P System.Boolean compatible
+  P System.Boolean onShift
+  M Void .ctor()
+  M Void .ctor()
+  M Void .ctor(IntPtr pointer)
+== MoonCleaners.MoonSteamLobby/Member : Il2CppSystem.Object
+  P System.UInt64 id
+  P System.String name
+  P System.String look
+  P System.Boolean ready
+  P System.Boolean host
+  P System.Boolean local
+  M Void .ctor()
+  M Void .ctor()
+  M Void .ctor(IntPtr pointer)
+== MoonCleaners.MoonSteamLobby/Privacy : System.Enum
+  E FriendsOnly = 0
+  E Public = 1
+  E InviteOnly = 2
+== MoonCleaners.MoonSteamLobby/Removal : System.Enum
+  E None = 0
+  E Kicked = 1
+  E Banned = 2

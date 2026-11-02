@@ -1,0 +1,36 @@
+== MoonCleaners.MoonSteam : UnityEngine.MonoBehaviour
+  P static System.UInt32 AppId
+  P static System.Boolean _Initialized_k__BackingField
+  P static System.String _PersonaName_k__BackingField
+  P static System.UInt64 _SteamId_k__BackingField
+  P static System.String _BetaBranch_k__BackingField
+  P static System.Boolean _StatsReady_k__BackingField
+  P static System.Single statsAskedAt
+  P static MoonCleaners.MoonSteam instance
+  P static System.String EditorSteamKey
+  P static System.String EditorStartedKey
+  P System.Int32 apiStarts
+  P Steamworks.Callback`1<Steamworks.GameOverlayActivated_t> overlayChanged
+  P Steamworks.Callback`1<Steamworks.PersonaStateChange_t> personaChanged
+  P Steamworks.Callback`1<Steamworks.UserStatsReceived_t> statsReceived
+  P static System.Boolean Initialized
+  P static System.String PersonaName
+  P static System.UInt64 SteamId
+  P static System.String BetaBranch
+  P static System.Boolean StatsReady
+  P static System.Boolean StartsInEditor
+  P static System.Boolean Required
+  M static Void ResetState()
+  M static Void Boot()
+  M Void OnEnable()
+  M Void StartSteam()
+  M static Void Refuse()
+  M static Int32 MessageBoxW(IntPtr owner, String text, String caption, UInt32 type)
+  M Void Update()
+  M static Void OnOverlayChanged(GameOverlayActivated_t overlay)
+  M static Void OnPersonaChanged(PersonaStateChange_t change)
+  M static Void OnStatsReceived(UserStatsReceived_t stats)
+  M Void OnDestroy()
+  M Void .ctor()
+  M Void .ctor()
+  M Void .ctor(IntPtr pointer)

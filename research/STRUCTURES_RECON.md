@@ -453,6 +453,62 @@ Also answered:
   was dust, so it was not observed, but a non-dust canister presumably comes back as dust after a save. (Task 9: the
   cargo is in `MoonLooseDustSnapshot.cargo`, see "Built records and save".)
 
+## Co-op session (Task 12, from the interop surface, 2026-11-02)
+
+Source: `research/dump_MoonCrewSession.txt`, `dump_MoonSteamLobby.txt`, `dump_MoonCrew.txt`, `dump_MoonSteam.txt`
+(`research/tools/dump-types.ps1`), plus `Steamworks.SteamMatchmaking` from `com.rlabrecque.steamworks.net.dll`. The
+interop assemblies carry signatures only, no method bodies, so the flow below is read from names, parameter lists and
+the `Kind` enum. Nothing here was traced in a two-player session (no second machine).
+
+The join flow, client side first:
+- Entry points: `MoonCrewSession.JoinShift()` (a gathered lobby member joins the shift the host started) and
+  `JoinListedShift(ulong lobby, string crewName)` (joining a running shift from the lobby browser). Both lead to
+  `BeginJoin(CrewJoin j)` and the coroutine `Join(CrewJoin j)` (`_Join_d__265`), ticked by `UpdateJoining()`.
+  `CrewJoin` holds `lobby`, `host`, `crewName`, `idBlock`, `offered`, `ready`, `failed` and a `Caption` the join UI
+  shows.
+- The client asks for the world (`Kind.WorldRequest`); the host answers `WorldOffer` (assigning an id block with
+  `AssignIdBlock(world, crewmate)`) or `WorldUnavailable`. On the client the offer lands in
+  `Offered(CrewJoin j, bool signed, int idBlock)`. The host then streams the save (`SendWorld(to)` ->
+  `StreamWorld(...)`, `Kind.WorldPiece` / `ChunkPiece`, files tracked as `IncomingFile`, re-asks via `WantedFiles`)
+  on `TransferChannel`; the client unpacks it (`ReceivePiece`, `TickDownload`, `UnpackWorld(blob, host)`), and
+  `ShowContract` / `DeclineCrew` follow.
+- `EndJoin(CrewJoin j, string why, bool leave)` is the session's own way to end a join with a reason, leaving the
+  lobby when `leave` is true. This is the refusal path StructureLib uses.
+- Wire: `Message(Kind)` starts a `MemoryStream` (protocol byte, then the kind); `SendTo(to, message, channel)`,
+  `SendToCrew`, `SendBytes(to, data, length, channel, reliable)`; `Receive()` dispatches to `Handle(sender, size)`,
+  `ReceiveTransfer` and `HandleWorld`. `Kind` is one byte-sized enum, dense from 10 (`Stroke`) to 85 (`DustPageUp`),
+  all under the single `Protocol` byte. Channel numbers are statics (`WorldChannel`, `TransferChannel`) whose values
+  the dump does not show.
+- `MoonSteamLobby` wraps `SteamMatchmaking`: `InLobby`, `LobbyId`, `IsHost`, `HostId`, the static `members`
+  (`List<Member>`: `id`, `name`, `host`, `local`), `Kick` / `Ban` / `PutOut` / `CloseSession`, `RemovalMessage`.
+  Vanilla already publishes a version in lobby metadata (`Listing.version`, `Listing.compatible`), so lobby
+  metadata is a channel the game itself reads for compatibility.
+- Host-side display: `MoonCrewSession.Notify(string)` (an on-screen notice, `notice` / `noticeUntil`, drawn in
+  `OnGUI`).
+
+Hook chosen (Task 12): **Steam lobby member data** under the key `structurelib.manifest`, plus a prefix on
+`MoonCrewSession.Offered`.
+- Every StructureLib player in a lobby publishes its manifest (`HandshakePayload.Encode`, base64) with
+  `SteamMatchmaking.SetLobbyMemberData`. Steam relays member data to every member and delivers it with the lobby on
+  entry, before any P2P traffic, so the host's manifest is on the client when the host's `WorldOffer` arrives.
+- The client compares in a prefix on `Offered`, the first point where the join is known to be talking to this host
+  and before any world byte is downloaded. On any problem it calls `EndJoin(j, why, true)` with a line built from
+  `Compare`'s messages and skips `Offered`. A host with no member data under the key is treated as a host without
+  StructureLib (empty manifest).
+- The host reads each crewmate's member data and logs (and `Notify`s) problems; it does not kick. The comparison is
+  symmetric, so the client already refuses on the same messages.
+- Why not the alternatives:
+  - A StructureLib `Kind` on the session's own messages: nothing in the interop surface shows that `Handle` ignores an
+    unknown kind (no bodies), the enum is dense and owned by the game (a future update could take the value), and it
+    would ride under the vanilla `Protocol` byte, which spec S4 rules out.
+  - A private Steam networking channel: sending is easy (`SendBytes` takes primitives and an array), but receiving
+    needs `SteamNetworkingMessages.ReceiveMessagesOnChannel`, the native `SteamNetworkingMessage_t` layout and its
+    release, and the session-management calls take `SteamNetworkingIdentity` by `ref`: the struct-by-reference
+    interop class that crashed `TryPanel`.
+  - The world-file stream (`IncomingFile`, `wantedFiles`): host to client only, runs after the join is accepted, and
+    every file in it is written into the client's world folder.
+- Calls used take and return strings, primitives and `CSteamID` by value (a one-`ulong` struct; no `out`/`ref`).
+
 ## Still open
 
 - How belt input reaches a processor (catcher / garage outfeed belt into a port, `EnterMachine`, `FeedProcessor`).

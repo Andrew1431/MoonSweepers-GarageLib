@@ -27,6 +27,39 @@ solve never sees modded kinds. Details and evidence: `research/STRUCTURES_RECON.
 - The battery bank (kind 6) prefab has no production view; use `MoonWorld.SolarPostKind` (93) as a generator's
   `BaseStructure`, as the example burner does.
 
+## Co-op handshake
+
+On a join, the client refuses to enter a crew whose host has different StructureLib mods. Code: `Handshake.cs` (game
+side) and `Pure/HandshakePayload.cs` (the registry-agnostic payload). Why this hook: `research/STRUCTURES_RECON.md`,
+"Co-op session (Task 12)".
+
+- **Channel:** Steam lobby member data, key `structurelib.manifest`, value the base64 of `HandshakePayload.Encode`
+  (magic `SLH`, then a deflated body: protocol, structures, cargo). Every StructureLib player in a lobby publishes its
+  own (`SteamMatchmaking.SetLobbyMemberData`, checked every 2 s while `MoonSteamLobby.InLobby`). The game's own session
+  messages and its `MoonCrewSession.Protocol` byte are untouched. Outside a lobby nothing runs.
+- **Manifest:** one entry per registered structure (id, kind from the id hash, owning plugin GUID, that plugin's
+  version from its BepInEx metadata) and per registered cargo (id, byte value, owner, version).
+- **Client check:** a prefix on `MoonCrewSession.Offered` (the host's world offer, before any world byte is
+  downloaded) compares the host's manifest with its own. On any problem it calls the session's own
+  `EndJoin(join, line, leave: true)` and skips the offer. A host with no manifest counts as an empty one (no
+  StructureLib), so a client with mods is refused there too. Any exception is logged and the join goes ahead unchecked.
+- **Host check:** the host compares each crewmate's manifest once per change, logs the problems and shows them with
+  `MoonCrewSession.Notify`. It does not kick: the crewmate's game refuses itself on the same messages. A crewmate
+  without StructureLib publishes nothing; the host logs that once and lets them in.
+- **Messages** (`HandshakePayload.Compare(host, client)`, one per problem, all logged):
+  - `missing mod <Owner> <Version> (structure <Id>)`, or `(cargo <Id>)`: the host has it, the client does not.
+  - `version mismatch <Owner>: host <v> client <v>`
+  - `cargo value conflict <Id>: host <n> client <n>`
+  - `extra mod on client <Owner>`: the host would not render the client's structures.
+  - `handshake protocol mismatch: host <n> client <n>` (alone; nothing else is compared).
+- **Refusal line** shown by `EndJoin`: `Mods differ from the host's: ` and the first three messages joined by `; `,
+  then `(+N more in BepInEx/LogOutput.log)` when there are more.
+- **Untested:** both two-player cases (identical mods: the join succeeds and a host-built modded structure appears on
+  the client; client without ExampleStructure: the join is refused with the `missing mod` message) need a second
+  machine and have not been run. Whether `Offered` is reached on every join path (gathered lobby and listed shift) is
+  read from the interop signatures, not traced. Only the single-player self-test `handshake-manifest` (live manifest,
+  encode/decode, self-compare) has run.
+
 ## Cargo audit
 
 The game's `MoonCargo` is a byte enum (Dust 0, Sand 1, Stone 2), and vanilla code answers every value it does not

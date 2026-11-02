@@ -396,6 +396,7 @@ namespace StructureLib
             int expected = KindAllocator.KindOf("ryanhartwig.example-lamp");
             Assert("example-kind-hashed", lamp != null && lamp.Kind == expected,
                 lamp == null ? "'ryanhartwig.example-lamp' is not registered (is ExampleStructure installed?)" : $"kind {lamp.Kind}, expected {expected}");
+            HandshakeCheck(expected);
             DefinitionChecks(lamp);
             // Finishes the run (Done) itself, possibly a few frames later.
             CatalogChecks(lamp);
@@ -808,6 +809,23 @@ namespace StructureLib
         // gets vanilla's out-of-range answer (dust); a canister holding grit is not dust.
         const string GritId = "ryanhartwig.example-grit";
         const byte GritValue = 250;
+
+        // The live manifest names the lamp (hashed kind, owner version known) and grit (250), survives Encode/Decode
+        // unchanged, and compares clean against itself.
+        static void HandshakeCheck(int lampKind) => Check("handshake-manifest", null, () =>
+        {
+            var m = Handshake.Manifest();
+            var bytes = HandshakePayload.Encode(m);
+            var back = HandshakePayload.Decode(bytes);
+            static string Text(RegistryManifest x) => string.Join(", ", x.Structures.Concat(x.Cargo).Select(e => $"{e.Id}={e.Value} {e.Owner} {e.Version}"));
+            bool lamp = m.Structures.Any(e => e.Id == LampId && e.Value == lampKind && e.Version != "unknown");
+            bool grit = m.Cargo.Any(e => e.Id == GritId && e.Value == GritValue);
+            bool equal = Text(back) == Text(m) && back.Protocol == m.Protocol;
+            var problems = HandshakePayload.Compare(m, m);
+            CoreLog.Info($"[selftest] handshake manifest ({bytes.Length} bytes): {Text(m)}");
+            return (lamp && grit && equal && problems.Count == 0,
+                $"lamp {lamp}, grit {grit}, decoded equal {equal}, Compare(self) [{string.Join("; ", problems)}]");
+        });
 
         static void CargoChecks()
         {
