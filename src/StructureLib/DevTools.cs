@@ -46,7 +46,7 @@ namespace StructureLib
             BindBelts(cfg);
             SelfTest.Subscribe();
             ScreenshotMenu = cfg.Bind("Dev", "ScreenshotMenu", false, "Dev build: 5 s after the self-test, open the build menu on the example lamp and save a screenshot to BepInEx/cache/structurelib/menu.png.");
-            CoreLog.Info($"[dev] AutoLoadSlot={AutoLoadSlot.Value} AllowSlot1={AllowSlot1.Value} SelfTest={RunSelfTest.Value} ScreenshotMenu={ScreenshotMenu.Value} AutoRemove={AutoRemove.Value} AutoSave={AutoSave.Value} ForcePower={ForcePower.Value} AutoBuildViaPlan={AutoBuildViaPlan.Value} AutoBuild='{AutoBuild.Value}' AutoFeed='{AutoFeed.Value}' AutoBelt='{AutoBelt.Value}' DumpCards={DumpCards.Value} RegisterBadPorts={RegisterBadPorts.Value}");
+            CoreLog.Info($"[dev] AutoLoadSlot={AutoLoadSlot.Value} AllowSlot1={AllowSlot1.Value} SelfTest={RunSelfTest.Value} ScreenshotMenu={ScreenshotMenu.Value} AutoRemove={AutoRemove.Value} AutoSave={AutoSave.Value} ForcePower={ForcePower.Value} AutoBuildViaPlan={AutoBuildViaPlan.Value} AutoBuild='{AutoBuild.Value}' AutoFeed='{AutoFeed.Value}' AutoBelt='{AutoBelt.Value}' DumpCards={DumpCards.Value} RegisterBadPorts={RegisterBadPorts.Value} SunOverhead={SunOverhead.Value}");
             // MoonStructures.Register reads this static at plugin Load time; prove the interop read works that early.
             try { CoreLog.Info($"[dev] MoonProductionSave.MaxSlots at Load = {MoonProductionSave.MaxSlots}"); }
             catch (Exception e) { CoreLog.Error("[dev] reading MoonProductionSave.MaxSlots at Load threw: " + e); }
@@ -444,6 +444,7 @@ namespace StructureLib
             PowerChecks();
             SandPowerChecks();
             PortChecks();
+            BeltChecks();
             int expected = KindAllocator.KindOf("ryanhartwig.example-lamp");
             Assert("example-kind-hashed", lamp != null && lamp.Kind == expected,
                 lamp == null ? "'ryanhartwig.example-lamp' is not registered (is ExampleStructure installed?)" : $"kind {lamp.Kind}, expected {expected}");
@@ -496,9 +497,10 @@ namespace StructureLib
             if (cycleUntil >= 0f) TickCycle();
             if (PowerPending) TickPower();
             if (sandOpen.Count > 0) TickSandPower();
+            if (BeltPending) TickBeltChecks();
             if (artUntil >= 0f) { TickCardArt(); return; }
             if (renderUntil >= 0f) { TickRendered(); return; }
-            if (saveUntil >= 0f && cycleUntil < 0f && !PowerPending && sandOpen.Count == 0) TickSaveWait();
+            if (saveUntil >= 0f && cycleUntil < 0f && !PowerPending && sandOpen.Count == 0 && !BeltPending) TickSaveWait();
         }
 
         // cardart-modded: CardArt answers something once nothing is pending, or after 5 s.

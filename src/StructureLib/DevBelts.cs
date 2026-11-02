@@ -15,24 +15,49 @@ namespace StructureLib
     internal static partial class DevTools
     {
         internal static ConfigEntry<string> AutoBelt;
-        internal static ConfigEntry<bool> DumpCards, RegisterBadPorts;
-        static bool cardsDumped;
+        internal static ConfigEntry<bool> DumpCards, RegisterBadPorts, SunOverhead;
+        static bool cardsDumped, sunSet;
 
         static void BindBelts(ConfigFile cfg)
         {
             AutoBelt = cfg.Bind("Dev", "AutoBelt", "", "Dev build: ';'-separated '<from>:<port>-><to>:<port>' belts to build 3 s after the AutoBuild step (before AutoFeed). <from>/<to> is a structure id or vanilla kind number, resolved to the depot AutoBuild built for that entry; <port> is the definition's port name (IN_SAND), a PortName or PortLabel when only one port has it, or a 0-based index into the definition's conveyorPorts (the '[dev] ports of' lines print all three); the runtime port is the one at that definition port's position. Each belt goes through the game's TryBuildConveyor.");
             DumpCards = cfg.Bind("Dev", "DumpCards", false, "Dev build: once in game (30 s after load, so modded pictures are rendered), write every build-menu card picture (vanilla and modded) to BepInEx/cache/structurelib/cards/<kind>-<name>.png.");
             RegisterBadPorts = cfg.Bind("Dev", "RegisterBadPorts", false, "Dev build: the example plugin also registers ryanhartwig.example-bad-ports, whose input port takes a cargo no slot holds; the registry must drop it at freeze (self-test ports-rules-logged).");
+            SunOverhead = cfg.Bind("Dev", "SunOverhead", false, "Dev build: 5 s after a world loads, set the lunar clock (MoonSolarSystem.SetLunarTime) so the sun stands overhead at the walker, so vanilla solar panels supply power (the belt checks need the pressure chamber to make sand). The clock runs in real time, so a cloned save is often at night.");
         }
 
         static void TickBelts(float gameT)
         {
+            if (SunOverhead.Value && !sunSet && gameT > 5f) { sunSet = true; SetSunOverhead(); }
             if (DumpCards.Value && !cardsDumped && gameT > 30f)
             {
                 cardsDumped = true;
                 try { CardDump.Run(); }
                 catch (Exception e) { CoreLog.Error("[dev] DumpCards threw: " + e); }
             }
+        }
+
+        // [Dev] SunOverhead: the lunar time whose sun direction is closest to the walker's up (as the S0 probe did).
+        static void SetSunOverhead()
+        {
+            try
+            {
+                var world = CoreState.World ?? CoreState.FindWorld();
+                var sun = world?.solarSystem ?? UnityEngine.Object.FindFirstObjectByType<MoonSolarSystem>();
+                var walkers = UnityEngine.Object.FindObjectsByType<MoonWalker>(FindObjectsSortMode.None);
+                if (sun == null || walkers == null || walkers.Length == 0) { CoreLog.Warn($"[dev] SunOverhead: solar system {(sun != null)}, walker {(walkers?.Length ?? 0)}"); return; }
+                var up = walkers[0].transform.position.normalized;
+                float target = 0f, best = -2f;
+                for (int i = 0; i < 400; i++)
+                {
+                    float lt = i / 400f, d = Vector3.Dot(MoonSolarSystem.SunDirectionAt(lt), up);
+                    if (d > best) { best = d; target = lt; }
+                }
+                float was = sun.LunarTime;
+                sun.SetLunarTime(target);
+                CoreLog.Info($"[dev] SunOverhead: LunarTime {was:F3} -> {sun.LunarTime:F3} (sun dot up {best:F3}), Daylight {MoonSolarSystem.Daylight:F2}");
+            }
+            catch (Exception e) { CoreLog.Error("[dev] SunOverhead threw: " + e); }
         }
     }
 
@@ -166,8 +191,9 @@ namespace StructureLib
             {
                 // The definition's own name is unique per structure; PortName / PortLabel are not (the stone press's
                 // IN_DUST and IN_SAND are both "input" / "Stone press input"), so those only match when unambiguous.
+                // A modded clone's port is named "sl:<cargo>:<Name>"; its declared <Name> ("Dust in") matches too.
                 for (int k = 0; k < n && index < 0; k++)
-                    if (ports[k] != null && Eq(ports[k].name, which)) index = k;
+                    if (ports[k] != null && (Eq(ports[k].name, which) || Eq(DeclaredName(ports[k].name), which))) index = k;
                 if (index < 0)
                 {
                     var hits = Enumerable.Range(0, n).Where(k => ports[k] != null && (Eq(MoonWorld.PortName(def, ports[k]), which) || Eq(MoonWorld.PortLabel(def, ports[k]), which))).ToList();
@@ -182,6 +208,14 @@ namespace StructureLib
         }
 
         static bool Eq(string a, string b) => a != null && string.Equals(a.Trim(), b, StringComparison.OrdinalIgnoreCase);
+
+        // "sl:<cargo>:<Name>" -> "<Name>"; null for any other name.
+        static string DeclaredName(string name)
+        {
+            if (!PortRules.TryDecodeCargo(name, out _)) return null;
+            int colon = name.IndexOf(':', PortRules.NamePrefix.Length);
+            return name.Substring(colon + 1);
+        }
 
         // The definition port's runtime counterpart: the runtime port of the same direction (in/out) within PortTolerance of
         // the definition's local position placed by the depot's pose (its spawned view's position and rotation; definition
@@ -437,6 +471,256 @@ namespace StructureLib
                 return reader.ReadToEnd();
             }
             catch (Exception) { return null; }
+        }
+
+        // Belt input, on the belt AutoBelt built into the example grinder's 'Dust in' port (config: AutoBuild
+        // 96,ryanhartwig.example-grinder,94; AutoFeed 96:Dust:10; AutoBelt 96:output->ryanhartwig.example-grinder:Dust in).
+        // Four phases, one after the other on that one belt (the grinder has a single input port):
+        //  1 belt-in-accepts: three 1 kg dust canisters put on the belt just short of its end (fact (c)'s way) are taken:
+        //    CargoEntered for slot 0 adds up to their 3 kg within 30 s, they are gone, and the machine's mass grew by as
+        //    much (the mass across all slots: a powered grinder moves dust on into its batch slot at once).
+        //  2 belt-in-waits-when-full: with slot 0 filled to 10 kg (CrewProcessorLoad, as AutoFeed does) and the output slot
+        //    full (no cycle can drain slot 0), one more dust canister at the end is still there 10 s later, still at the
+        //    belt end, with no CargoEntered and no duplicate. Slot 0 is then emptied, which lets it in.
+        //  3 belt-in-refuses-cargo: the chamber's sand reaches the end and waits there for 5 s (same canister) with no
+        //    CargoEntered of sand and the grinder's status saying a capsule is waiting (within 90 s).
+        //  4 belt-canister-modded: a grit canister put at the belt's start rides to the far end (to the end or the queue
+        //    waiting there) and still holds cargo 250 (within 40 s).
+        static readonly string[] BeltNames = { "belt-in-accepts", "belt-in-waits-when-full", "belt-in-refuses-cargo", "belt-canister-modded" };
+        static readonly List<CargoEntered> entered = new();
+        static bool enteredHooked;
+        static int beltPhase, inBelt = -1, inDepot = -1, waitId = -1, releasedId = -1, enteredMark;
+        static float phaseUntil = -1f, waitSince = -1f;
+        static double massMark;
+        static MoonConveyorPath inPath;
+        static readonly List<int> spawned = new();
+
+        internal static bool BeltPending => beltPhase != 0;
+
+        static void BeltChecks()
+        {
+            if (!enteredHooked)
+            {
+                enteredHooked = true;
+                MoonStructures.CargoEntered += e => { if (e != null) entered.Add(e); };
+            }
+            var world = CoreState.World ?? CoreState.FindWorld();
+            var grinder = MoonStructures.Definition(GrinderId);
+            if (world == null || grinder == null) { CoreLog.Info("[selftest] no world or no example grinder: belt checks not applicable"); return; }
+            var r = AutoBelter.Results.FirstOrDefault(x => x.To >= 0 && world.depots != null && world.depots.ContainsKey(x.To) && world.depots.get_Item(x.To).kind == grinder.Kind);
+            if (r == null) { CoreLog.Info("[selftest] AutoBelt built no belt into the example grinder this run: belt checks not applicable"); return; }
+            if (!r.Ok) { foreach (var n in BeltNames) Assert(n, false, $"AutoBelt '{r.Entry}' did not build: {r.Reason}"); return; }
+            inBelt = r.Belt;
+            inDepot = r.To;
+            inPath = world.BeltPath(inBelt);
+            if (inPath == null) { foreach (var n in BeltNames) Assert(n, false, $"BeltPath({inBelt}) is null"); return; }
+            CoreLog.Info($"[selftest] belt checks on belt {inBelt} (length {inPath.Length:F2} m) into grinder depot {inDepot}; {StateText(world.ProductionOf(inDepot))}");
+            StartAccept(world);
+        }
+
+        static void StartAccept(MoonWorld world)
+        {
+            beltPhase = 1;
+            spawned.Clear();
+            enteredMark = entered.Count;
+            massMark = Mass(world.ProductionOf(inDepot));
+            float len = inPath.Length;
+            foreach (float d in new[] { len - 0.4f, len - 1.15f, len - 1.9f })
+            {
+                int id = Spawn(world, d, MoonCargo.Dust, out string why);
+                if (id < 0) { FailFrom(1, "spawning a dust canister: " + why); return; }
+                spawned.Add(id);
+            }
+            CoreLog.Info($"[selftest] belt-in-accepts: dust canisters [{string.Join(", ", spawned)}] put on belt {inBelt}; grinder mass {massMark} kg");
+            phaseUntil = Time.unscaledTime + 30f;
+        }
+
+        static void TickBeltChecks()
+        {
+            var world = CoreState.World ?? CoreState.FindWorld();
+            float now = Time.unscaledTime;
+            try
+            {
+                switch (beltPhase)
+                {
+                    case 1: TickAccept(world, now); break;
+                    case 2: TickFull(world, now); break;
+                    case 3: TickRefuse(world, now); break;
+                    case 4: TickGrit(world, now); break;
+                }
+            }
+            catch (Exception e) { FailFrom(beltPhase, "threw " + e.GetType().Name + ": " + e.Message); }
+        }
+
+        static void TickAccept(MoonWorld world, float now)
+        {
+            var s = world.ProductionOf(inDepot);
+            var mine = entered.Skip(enteredMark).Where(e => e.DepotId == inDepot).ToList();
+            double kg = mine.Where(e => e.Slot == 0 && e.Cargo.Id == "dust").Sum(e => e.Kilograms);
+            bool gone = spawned.All(id => !world.canisters.ContainsKey(id));
+            double grew = Mass(s) - massMark;
+            bool ok = gone && kg >= 3 - 1e-6 && grew >= kg - 1e-6;
+            if (!ok && now < phaseUntil) return;
+            CoreLog.Info($"[selftest] belt-in-accepts: CargoEntered {mine.Count}x [{string.Join(", ", mine.Select(e => $"slot {e.Slot} {e.Cargo} {e.Kilograms} kg owner {(e.Owner == MoonWorld.LocalPlayer ? "local" : "other")}"))}]; {StateText(s)}");
+            Assert("belt-in-accepts", ok, $"canisters gone {gone}, CargoEntered slot-0 dust {kg} kg (want 3), machine mass grew {grew:0.###} kg; {StateText(s)}");
+            StartFull(world);
+        }
+
+        static void StartFull(MoonWorld world)
+        {
+            beltPhase = 2;
+            var s = world.ProductionOf(inDepot);
+            string player = MoonWorld.LocalPlayer;
+            // Output first, so no cycle can start between the two fills.
+            double outRoom = 10 - s.Stored(2);
+            if (outRoom > 0) MoonWorld.Put(s.stores[2], player, outRoom);
+            double inRoom = 10 - s.Stored(0);
+            if (inRoom > 0) world.CrewProcessorLoad(player, inDepot, MoonCargo.Dust, inRoom);
+            waitId = Spawn(world, inPath.Length - 0.4f, MoonCargo.Dust, out string why);
+            if (waitId < 0) { FailFrom(2, "spawning a dust canister: " + why); return; }
+            enteredMark = entered.Count;
+            phaseUntil = Time.unscaledTime + 10f;
+            CoreLog.Info($"[selftest] belt-in-waits-when-full: slot 0 and the output filled, dust canister {waitId} put at the belt end; {StateText(s)}");
+        }
+
+        static void TickFull(MoonWorld world, float now)
+        {
+            if (now < phaseUntil) return;
+            var s = world.ProductionOf(inDepot);
+            bool present = world.canisters.ContainsKey(waitId);
+            bool rider = Rider(world, waitId, out int belt, out float d, out bool moving);
+            int newEvents = entered.Skip(enteredMark).Count(e => e.DepotId == inDepot);
+            int near = 0;
+            if (present)
+            {
+                var at = world.canisters.get_Item(waitId).position;
+                foreach (var kv in world.canisters)
+                    if (Vector3.Distance(kv.Value.position, at) < 0.3f) near++;
+            }
+            string status = SafeStatus(s);
+            bool ok = present && rider && belt == inBelt && d >= inPath.Length - 0.1f && !moving && newEvents == 0 && s.Stored(0) >= 10 - 1e-6 && near == 1;
+            Assert("belt-in-waits-when-full", ok, $"canister {waitId} present {present}, rider {rider} belt {belt} d {d:F2}/{inPath.Length:F2} moving {moving}, CargoEntered since {newEvents}, canisters within 0.3 m {near}, Stored(0) {s.Stored(0)}; status '{status}'");
+            CoreLog.Info($"[selftest] belt-in-waits-when-full: status '{status}'; WaitingAtEnd({inBelt}) {world.WaitingAtEnd(inBelt)}; emptying slot 0 to let it in");
+            s.stores[0].Clear();
+            releasedId = waitId;
+            beltPhase = 3;
+            waitId = -1;
+            waitSince = -1f;
+            enteredMark = entered.Count;
+            phaseUntil = Time.unscaledTime + 90f;
+        }
+
+        static void TickRefuse(MoonWorld world, float now)
+        {
+            int atEnd = -1;
+            float len = inPath.Length;
+            foreach (var kv in world.riders)
+            {
+                var r = kv.Value;
+                if (r.belt != inBelt || r.moving || r.distance < len - 0.1f || !world.canisters.ContainsKey(kv.Key)) continue;
+                if (world.canisters.get_Item(kv.Key).cargo == MoonCargo.Sand) atEnd = kv.Key;
+            }
+            if (atEnd >= 0 && atEnd != waitId) { waitId = atEnd; waitSince = now; }
+            if (atEnd < 0) { waitId = -1; waitSince = -1f; }
+            bool held = waitId >= 0 && now - waitSince >= 5f;
+            if (!held && now < phaseUntil) return;
+            var s = world.ProductionOf(inDepot);
+            string status = SafeStatus(s);
+            int sandIn = entered.Skip(enteredMark).Count(e => e.DepotId == inDepot && e.Cargo.Id == "sand");
+            bool releasedTaken = releasedId >= 0 && !world.canisters.ContainsKey(releasedId);
+            bool ok = held && world.canisters.ContainsKey(waitId) && sandIn == 0 && status != null && status.Contains("waiting");
+            CoreLog.Info($"[selftest] belt-in-refuses-cargo: riders on belt {inBelt}: {RidersText(world)}; released dust canister {releasedId} taken {releasedTaken}");
+            Assert("belt-in-refuses-cargo", ok, $"sand canister waiting at the end {(waitId >= 0 ? $"{waitId} for {now - waitSince:F1} s" : "none")}, CargoEntered of sand {sandIn}, status '{status}'");
+            StartGrit(world);
+        }
+
+        static void StartGrit(MoonWorld world)
+        {
+            beltPhase = 4;
+            var grit = MoonStructures.CargoDefinition(GritId);
+            if (grit == null) { FailFrom(4, $"'{GritId}' is not registered"); return; }
+            waitId = Spawn(world, 0.5f, (MoonCargo)grit.Value, out string why);
+            if (waitId < 0) { FailFrom(4, "spawning a grit canister: " + why); return; }
+            phaseUntil = Time.unscaledTime + 40f;
+            CoreLog.Info($"[selftest] belt-canister-modded: grit canister {waitId} put at the start of belt {inBelt}");
+        }
+
+        static void TickGrit(MoonWorld world, float now)
+        {
+            bool present = world.canisters.ContainsKey(waitId);
+            int cargo = present ? (byte)world.canisters.get_Item(waitId).cargo : -1;
+            bool rider = Rider(world, waitId, out int belt, out float d, out bool moving);
+            int ahead = 0;
+            if (rider)
+                foreach (var kv in world.riders)
+                    if (kv.Key != waitId && kv.Value.belt == inBelt && kv.Value.distance > d) ahead++;
+            bool ok = present && rider && belt == inBelt && !moving && d > 1.5f && d >= inPath.Length - MoonWorld.BeltSpacing * ahead - 0.2f && cargo == GritValue;
+            if (!ok && now < phaseUntil) return;
+            CoreLog.Info($"[selftest] belt-canister-modded: riders on belt {inBelt}: {RidersText(world)}");
+            Assert("belt-canister-modded", ok, $"canister {waitId} present {present} cargo {cargo}, rider {rider} belt {belt} d {d:F2}/{inPath.Length:F2} moving {moving}, {ahead} ahead");
+            beltPhase = 0;
+        }
+
+        static void FailFrom(int phase, string why)
+        {
+            for (int i = Math.Max(1, phase) - 1; i < BeltNames.Length; i++) Assert(BeltNames[i], false, why);
+            beltPhase = 0;
+        }
+
+        // A 1 kg canister at distance d along the belt: packed from the walker's carried dust (DevSetCarriedDust +
+        // PackDustCanister), then moved onto the belt at the ride height with the given cargo through MoveCanisterRecord
+        // (recon fact (c)); the game boards it.
+        static int Spawn(MoonWorld world, float d, MoonCargo cargo, out string why)
+        {
+            why = null;
+            var p = inPath.Point(d);
+            var up = inPath.Up(p);
+            if (up.sqrMagnitude < 0.5f) up = p.normalized;
+            string player = MoonWorld.LocalPlayer;
+            world.DevSetCarriedDust(player, 1.0);
+            if (!world.PackDustCanister(player, p + up * 0.5f, up, out int id)) { why = "PackDustCanister refused"; return -1; }
+            if (!world.canisters.ContainsKey(id)) { why = $"canister {id} is not in world.canisters"; return -1; }
+            var c = world.canisters.get_Item(id);
+            var at = p + up * MoonWorld.BeltRideHeight;
+            var rotation = new Il2CppSystem.Nullable<Quaternion>(c.rotation);
+            var moved = new MoonDroppedCanister(c.id, c.owner, c.kilograms, c.capacity, at, up, c.createdAt, rotation, cargo);
+            moved.physicalPose = c.physicalPose;
+            world.MoveCanisterRecord(moved, at, up, rotation);
+            return id;
+        }
+
+        static bool Rider(MoonWorld world, int id, out int belt, out float d, out bool moving)
+        {
+            belt = -1; d = -1f; moving = false;
+            var riders = world.riders;
+            if (riders == null || !riders.ContainsKey(id)) return false;
+            var r = riders.get_Item(id);
+            belt = r.belt; d = r.distance; moving = r.moving;
+            return true;
+        }
+
+        static string RidersText(MoonWorld world)
+        {
+            var parts = new List<(float d, string text)>();
+            foreach (var kv in world.riders)
+            {
+                if (kv.Value.belt != inBelt) continue;
+                int cargo = world.canisters.ContainsKey(kv.Key) ? (byte)world.canisters.get_Item(kv.Key).cargo : -1;
+                parts.Add((kv.Value.distance, $"[{kv.Key} cargo {cargo} d {kv.Value.distance:F2} moving {kv.Value.moving}]"));
+            }
+            return parts.Count == 0 ? "none" : string.Join(" ", parts.OrderByDescending(x => x.d).Select(x => x.text));
+        }
+
+        static double Mass(MoonProductionState s)
+        {
+            double m = 0;
+            for (int i = 0; s?.stores != null && i < s.stores.Length; i++) m += s.Stored(i);
+            return m;
+        }
+
+        static string SafeStatus(MoonProductionState s)
+        {
+            try { return s?.Status; } catch (Exception e) { return "threw " + e.Message; }
         }
     }
 }

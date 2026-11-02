@@ -173,4 +173,18 @@ namespace StructureLib
         /// <summary>The machine's live production state, after the cycle moved its batch into the output slot.</summary>
         public MoonProductionState State;
     }
+
+    /// <summary>Payload of <see cref="MoonStructures.CargoEntered"/>.</summary>
+    public sealed class CargoEntered
+    {
+        public StructureDefinition Definition;
+        /// <summary>The game's depot id of the machine.</summary>
+        public int DepotId;
+        /// <summary>The processor slot (index into <c>Processor.Slots</c>) the kilograms went into.</summary>
+        public int Slot;
+        public Cargo Cargo;
+        public double Kilograms;
+        /// <summary>The canister's owner (player id), under whose share the kilograms were stored.</summary>
+        public string Owner;
+    }
 }

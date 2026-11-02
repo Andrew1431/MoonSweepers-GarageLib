@@ -37,6 +37,7 @@ namespace StructureLib
             "MoonCleaners.MoonDepotBuilder:BuildCatalog", "MoonCleaners.MoonDepotBuilder:CardArt", "MoonCleaners.MoonDepotBuilder:ProductionNote",
             "MoonCleaners.MoonDepotConstruction:Spawn", "MoonCleaners.MoonDepotConstruction:ViewOf", "MoonCleaners.MoonWorld:RemoveStructureNow",
             "MoonCleaners.MoonWorld:PortCargo", "MoonCleaners.MoonDepotBuildDefinition:conveyorPorts",
+            "MoonCleaners.MoonWorld:HandOff", "MoonCleaners.MoonWorld:MachineWithPort", "MoonCleaners.MoonWorld:canisters", "MoonCleaners.MoonProductionState:Flow",
         };
 
         public override void Load()
@@ -58,7 +59,7 @@ namespace StructureLib
             ClassInjector.RegisterTypeInIl2Cpp<CoreDriver>();
             var h = new Harmony(Guid);
             int ok = 0, failed = 0;
-            foreach (var t in new[] { typeof(FreezePatches), typeof(DefinitionPatches), typeof(PowerPatches), typeof(CatalogPatches), typeof(ModelPatches), typeof(BuildPatches), typeof(SavePatches), typeof(CargoPatches), typeof(ProductionPatches), typeof(HandshakePatches), typeof(PortPatches) })
+            foreach (var t in new[] { typeof(FreezePatches), typeof(DefinitionPatches), typeof(PowerPatches), typeof(CatalogPatches), typeof(ModelPatches), typeof(BuildPatches), typeof(SavePatches), typeof(CargoPatches), typeof(ProductionPatches), typeof(HandshakePatches), typeof(PortPatches), typeof(BeltPatches) })
             {
                 try { h.CreateClassProcessor(t).Patch(); ok++; CoreLog.Debug($"Patched {t.Name}"); }
                 catch (Exception e) { failed++; CoreLog.Error($"Patching {t.Name} failed: {e}"); }

@@ -717,6 +717,35 @@ Side observations:
 - In a world whose chamber had sand in its output and no belt (slot-2's own depot 2), `EmitProduct` keeps setting
   `'Connect a belt to the sand output'` (S0 fact (d) again).
 
+Belt input into modded machines (Task 3, 2026-11-02; logs `task-3-logs/`, run2 = 31 passed, 0 failed):
+- **`HandOff(int belt, MoonConveyorPath path, int id)`**: `belt` is the belt id (key of `world.conveyors`), `path` is
+  that belt's path (its `end` is the belt's end, which is the joined input port's point to 0.000 m), and `id` is the
+  canister id (key of `world.canisters`, which still holds the canister while it rides; `world.riders[id]` gives its
+  `belt`, `distance`, `moving`). StructureLib's prefix resolves the machine with `MachineWithPort(path.end, false)`
+  (the depot id) and the port as the resolved `PortDefinition` whose local position, placed by the depot's view pose,
+  is within `PortTolerance` of `path.end` (`Belt 1 feeds 'ryanhartwig.example-grinder' depot 27 through its port 'Dust
+  in' (dust)`), and caches that per belt. Answering true after the game's own `RemoveCanister(id)` is clean: the rider
+  is dropped and the queue advances (three 1 kg dust canisters taken one after the other, no exception; the canister
+  after the released one moved up to `d 15.37`). Answering false leaves the canister riding at the end with
+  `WaitingAtEnd(belt)` True and later canisters queuing at `BeltSpacing` (five sand canisters at 15.37, 14.62, …,
+  12.37, then a grit canister behind them at 11.62), exactly as vanilla leaves a refused one. A partial take
+  (`MoveCanisterRecord` with fewer kilograms) is implemented but not exercised in game (canisters are 1 kg).
+- **Status text:** `MoonProductionState.Flow(string)` is vanilla's setter for the flow status, and `Status` reads it
+  back. The prefix sets vanilla's wording on a refusal: `'A moon dust capsule is waiting at the dust input'` (slot
+  full; `CargoName(Dust)` is "Moon dust", lowered) and the same form for sand at the dust port. Without a refusal the
+  grinder shows its other statuses (`'Connect a belt to the example grit output'` from `EmitProduct` when its output
+  holds grit and no belt is joined).
+- **`PortName` / `PortLabel` (Task 2):** both derive from the port's output flag only: `PortName` is "input" /
+  "output", `PortLabel` is "<display name> input" / "<display name> output" (`'Example grinder input'`). The raw
+  `sl:<cargo>:<Name>` port name never shows in the game's UI.
+- **A structure without a processor cannot declare input ports:** `PortRules.CheckPorts` needs an Input slot of each
+  input port's cargo, so declared input ports on a processor-less structure drop it at freeze (a plain structure that
+  leaves `Ports` null keeps its donor's ports unchecked, and belts into them are refused, as before).
+- **The lunar clock runs in real time,** so a restored slot-2 is often at night and the solar twin then supplies
+  nothing: the chamber made no sand in run1 (`grid 26 power 0.00`). Dev `[Dev] SunOverhead = true` sets the lunar time
+  whose sun is overhead at the walker 5 s after load (`LunarTime 0.612 -> 0.822 (sun dot up 0.689), Daylight 1.00`);
+  the belt checks need it.
+
 ## Still open
 
 - `PlaceCarriedOnBelt` with a carried canister (needs a walker in reach). What vanilla code calls `PortCargo`,

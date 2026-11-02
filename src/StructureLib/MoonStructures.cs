@@ -32,6 +32,11 @@ namespace StructureLib
         public static event Action<int> Removed;
         /// <summary>Fired on the main thread when a modded processor finishes a cycle (its batch is in the output slot).</summary>
         public static event Action<CycleFinished> CycleFinished;
+        /// <summary>
+        /// Fired on the main thread when a canister at the end of a belt joined to a modded machine's input port is taken
+        /// into one of its Input slots (the canister is removed, or reduced when only part of it fit).
+        /// </summary>
+        public static event Action<CargoEntered> CargoEntered;
 
         /// <summary>Register a structure. Call from your plugin's Load().</summary>
         public static StructureDefinition Register(StructureDefinition def, string ownerGuid = null)
@@ -280,6 +285,11 @@ namespace StructureLib
         internal static void RaiseRemoved(int depotId)
         {
             try { Removed?.Invoke(depotId); } catch (Exception e) { CoreLog.Error($"Removed handler threw for depot {depotId}: {e}"); }
+        }
+
+        internal static void RaiseCargoEntered(CargoEntered c)
+        {
+            try { CargoEntered?.Invoke(c); } catch (Exception e) { CoreLog.Error($"CargoEntered handler threw for {c.Definition} depot {c.DepotId}: {e}"); }
         }
 
         internal static void RaiseCycleFinished(CycleFinished c)
