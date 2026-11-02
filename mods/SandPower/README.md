@@ -13,7 +13,8 @@ Sand briquettes are regolith sand pressed into dense bricks that burn hot in the
 | **Sand compactor** (Production, $800) | Built on the stone press. Holds 16 kg of sand, presses 4 kg per 8 s cycle at 12 kW. Mass is kept: 4 kg of sand becomes 4 kg of briquettes (2 units). The output slot holds 10 kg. |
 | **Briquette generator** (Power, $1,500) | Built on the solar post. Holds 10 kg of briquettes (5 units) and burns one 2 kg briquette per 20 s cycle. Each burn adds 3 kWh to its 6 kWh battery (half of it), so two briquettes fill it; no burn starts while the battery is full. Supplies up to 10 kW to StructureLib machines within 24 m, wirelessly. |
 
-The generator alone runs a compactor at 10 of its 12 kW (83 %), so a cycle takes about 9.6 s instead of 8 s. On a
+The generator alone runs a compactor at 10 of its 12 kW (power 0.83, seen in game): a cycle takes 8 s at full power,
+so at 0.83 about 9.6 s (derived, not timed). On a
 vanilla solar grid the compactor draws from the grid's surplus first, then from generators in range, then from the
 grid's batteries.
 
@@ -37,11 +38,14 @@ Limits (StructureLib today):
   StructureLib-owned grid, reported as a negative grid id.
 - **Loading by hand does not work.** The walker's load action refuses both machines ("Not a production machine").
 - **Selling briquettes at the collector is unchecked.** The price is answered, but the deposit path is not verified.
+- **Belt input is unsupported and untested.** Belting sand into the compactor or briquettes into the generator: the
+  game's machine port path refuses modded machines.
+- **Canister input is unsupported and untested.** Emptying a sand or briquette canister into either machine.
 
 Untested (may work, nobody has tried it):
 
-- **Belts.** Belting sand into the compactor, briquettes out of it (an outfeed belt), and briquettes into the
-  generator. Whether a briquette canister on a belt keeps its cargo is unknown.
+- **Outfeed belt.** Briquettes leaving the compactor on an outfeed belt. Whether a briquette canister on a belt keeps
+  its cargo is unknown.
 - **Building both from the build menu by hand** (the self-test builds them through the game's own build call).
 - **Co-op.** Two players with SandPower; StructureLib refuses a join when the mods differ.
 

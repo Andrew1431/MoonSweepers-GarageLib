@@ -54,7 +54,7 @@ namespace SandPower
                 Id = "ryanhartwig.briquette-generator",
                 Name = "Briquette generator",
                 Category = "Power",
-                Note = "Burns one sand briquette every 20 s for 10 kW. A 6 kWh battery for the gaps. Powers machines within 24 m, wirelessly.",
+                Note = "Burns one sand briquette every 20 s for 10 kW. A 6 kWh battery for the gaps. Powers StructureLib machines within 24 m, wirelessly.",
                 Price = 1500m,
                 BaseStructure = MoonWorld.SolarPostKind,
                 Power = new PowerDefinition { PeakKw = 10, BatteryKwh = 6, Range = 24, SupplyMode = SupplyMode.Fuel },

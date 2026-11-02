@@ -97,7 +97,7 @@ The recon behind all this, with the evidence, is in
 | Build and remove | Build, refund, removal, `Built` and `Removed` | | |
 | Save | Sidecar for depots, production states and modded-cargo canisters; orphans kept; reload restores | | |
 | Cargo | Names, unit mass, price, canister round trip (see [Cargo audit](#cargo-audit)) | Depositing modded cargo at the collector; co-op cargo events; `CanisterTint` (not applied) | Whether `EmitCargo` keeps the modded value on a belt |
-| Processors | Cycle, batch moved at the same mass, `CycleFinished`, loading through `CrewProcessorLoad` | Walker loading (`LoadProcessor` refuses: "Not a production machine") | Belt input (`FeedProcessor`, `EnterMachine`, `PortCargo`) and belt output |
+| Processors | Cycle, batch moved at the same mass, `CycleFinished`, loading through `CrewProcessorLoad` | Walker loading (`LoadProcessor` refuses: "Not a production machine"); belt input (`FeedProcessor`, `EnterMachine`, `PortCargo`) and canister input into a machine: unsupported and untested, the vanilla port path refuses modded machines | Belt output (an outfeed belt, `EmitCargo`) |
 | Power | Machines on a vanilla grid's surplus and batteries; fuel generators charge, supply modded machines and keep their charge across saves; a modded-only group gets a negative grid id | Fuel generators feeding vanilla machines; power links drawn to modded structures; `SupplyMode.Solar`; `Power` without a `Processor`; a generator's `RunningKw` (ignored) | |
 | Co-op | Manifest built and compared with itself | Graceful degradation for a client missing a mod | Both two-player cases (identical mods; client missing a mod) |
 
