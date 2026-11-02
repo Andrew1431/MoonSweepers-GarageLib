@@ -7,8 +7,11 @@ It finds the game through Steam and installs BepInEx 6 (be.791). The MoonSweeper
 Mods, so the first run opens its page: download the zip into your Downloads folder, press Enter, and the installer
 takes it from there. Then it installs the newest modpack from GitHub.
 
-It also makes a desktop shortcut, **Moon Sweepers (modded)**. Start the game from that shortcut and the mods update
-first, every time. Starting from Steam works too, just without the update check.
+It also makes a desktop shortcut, **Moon Sweepers (modded)**. Like r2modman, that shortcut is the only way the mods
+run: it updates them, then starts the game through Steam with mods on. Starting the game from Steam as usual gives you
+the plain, unmodded game. Both use the same saves; GarageLib keeps modded vehicles out of the vanilla save, so playing
+plain in between is safe.
 
-To remove the mods: run `Install or update.bat -Uninstall` from a command prompt in the game's `MoonSweepersMods`
-folder. Your saves and settings stay.
+To remove the mods: close the game and double-click **Uninstall mods.bat** (in the unzipped installer, or in the game
+folder's `MoonSweepersMods`). It removes the mods, then asks whether to remove BepInEx too for a plain game. Saves stay:
+modded vehicles wait in `garagelib.json` next to the save and come back if you reinstall.
