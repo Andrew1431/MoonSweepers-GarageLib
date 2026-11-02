@@ -16,7 +16,7 @@ namespace StructureLib
     internal static class DevTools
     {
         internal static ConfigEntry<int> AutoLoadSlot;
-        internal static ConfigEntry<bool> AllowSlot1, RunSelfTest, ScreenshotMenu;
+        internal static ConfigEntry<bool> AllowSlot1, RunSelfTest, ScreenshotMenu, AutoRemove;
         internal static ConfigEntry<string> AutoBuild, AutoFeed;
         static float menuT, gameT;
         static bool loadRequested, selfTestRan, menuShot, autoBuilt;
@@ -31,9 +31,10 @@ namespace StructureLib
             RunSelfTest = cfg.Bind("Dev", "SelfTest", false, "Dev build: run the in-game self-test 20 s after a world loads and log [selftest] lines.");
             AutoBuild = cfg.Bind("Dev", "AutoBuild", "", "Dev build: comma-separated structure ids or vanilla kind numbers to build once, 10 s after a world loads, 8 m apart behind (or beside) the walker. An entry whose kind already has a depot reuses it.");
             AutoFeed = cfg.Bind("Dev", "AutoFeed", "", "Dev build: '<structureId>:<cargoId|Dust|Sand|Stone>:<kg>' to load into a built structure. (Not used yet.)");
+            AutoRemove = cfg.Bind("Dev", "AutoRemove", true, "Dev build: the self-test removes the example lamp it checked. false leaves it in place (it survives a reload only once the game can save modded structures).");
             SelfTest.Subscribe();
             ScreenshotMenu = cfg.Bind("Dev", "ScreenshotMenu", false, "Dev build: 5 s after the self-test, open the build menu on the example lamp and save a screenshot to BepInEx/cache/structurelib/menu.png.");
-            CoreLog.Info($"[dev] AutoLoadSlot={AutoLoadSlot.Value} AllowSlot1={AllowSlot1.Value} SelfTest={RunSelfTest.Value} ScreenshotMenu={ScreenshotMenu.Value} AutoBuild='{AutoBuild.Value}' AutoFeed='{AutoFeed.Value}'");
+            CoreLog.Info($"[dev] AutoLoadSlot={AutoLoadSlot.Value} AllowSlot1={AllowSlot1.Value} SelfTest={RunSelfTest.Value} ScreenshotMenu={ScreenshotMenu.Value} AutoRemove={AutoRemove.Value} AutoBuild='{AutoBuild.Value}' AutoFeed='{AutoFeed.Value}'");
             // MoonStructures.Register reads this static at plugin Load time; prove the interop read works that early.
             try { CoreLog.Info($"[dev] MoonProductionSave.MaxSlots at Load = {MoonProductionSave.MaxSlots}"); }
             catch (Exception e) { CoreLog.Error("[dev] reading MoonProductionSave.MaxSlots at Load threw: " + e); }
@@ -119,6 +120,7 @@ namespace StructureLib
                 foreach (var e in entries) Report(e, false, -1, world == null ? "no MoonWorld" : "no MoonWalker");
                 return;
             }
+            SelfTest.ResetEvents(world);
             for (int i = 0; i < entries.Count; i++)
             {
                 try { Build(world, walker, entries[i], i); }
@@ -135,10 +137,12 @@ namespace StructureLib
                 if (d == null || !MoonStructures.IsModded(d.Kind)) { Report(entry, false, -1, "no registered structure with this id"); return; }
                 kind = d.Kind;
             }
-            int existing = SelfTest.DepotOfKind(world, kind);
+            // Only a modded kind is reused (one built earlier in this run, or restored from the save once saves carry modded
+            // kinds); a vanilla kind is always built anew, since slot-2 already holds vanilla structures.
+            int existing = MoonStructures.IsModded(kind) ? SelfTest.DepotOfKind(world, kind) : -1;
             if (existing >= 0)
             {
-                CoreLog.Info($"[dev] AutoBuild: '{entry}' (kind {kind}) already has depot {existing} in this world; reusing it");
+                CoreLog.Info($"[dev] AutoBuild: '{entry}' (modded kind {kind}) already has depot {existing} in this world; reusing it");
                 Report(entry, true, existing, "reused existing depot");
                 return;
             }
@@ -164,20 +168,14 @@ namespace StructureLib
             Report(entry, ok, id, reason);
         }
 
-        // DevAddMoney is a no-op in this build; the wallet is team-wide, so SetTeamDollars is the fallback.
+        // DevAddMoney is a no-op in this build; the wallet is team-wide, so it is set directly.
         static void EnsureMoney(MoonWorld world, int price)
         {
             string player = MoonWorld.LocalPlayer;
             decimal have = SelfTest.DecimalOf(world.WalletDollars(player));
             if (have >= price) return;
-            decimal target = price + 100;
-            world.DevAddMoney(player, new Il2CppSystem.Decimal((double)(target - have)));
+            world.SetTeamDollars(new Il2CppSystem.Decimal((double)(price + 100)));
             decimal now = SelfTest.DecimalOf(world.WalletDollars(player));
-            if (now < price)
-            {
-                world.SetTeamDollars(new Il2CppSystem.Decimal((double)target));
-                now = SelfTest.DecimalOf(world.WalletDollars(player));
-            }
             CoreLog.Info($"[dev] AutoBuild: wallet ${have} was short of ${price}; now ${now}");
         }
 
@@ -401,6 +399,11 @@ namespace StructureLib
                 decimal price = lamp.Price;
                 CoreLog.Info($"[selftest] refund for depot {depot} ('{lamp.Id}', price ${price}): ${refund} = {(price != 0 ? refund / price : 0):0.###} of the price");
                 if (!(refund > 0 && refund <= price)) return (false, $"StructureRefund({depot}) = {refund}, expected > 0 and <= {price}");
+                if (!DevTools.AutoRemove.Value)
+                {
+                    CoreLog.Info($"[selftest] AutoRemove=false: depot {depot} left in place (refund checked, removal not run)");
+                    return (true, null);
+                }
                 world.RemoveStructureNow(depot);
                 if (world.depots.ContainsKey(depot)) return (false, $"depot {depot} is still in world.depots after RemoveStructureNow");
                 if (!removedEvents.Contains(depot)) return (false, $"MoonStructures.Removed was not raised for depot {depot}");
@@ -409,6 +412,18 @@ namespace StructureLib
         }
 
         static readonly HashSet<int> builtEvents = new(), removedEvents = new();
+
+        // Called when AutoBuild starts: forget every event id except Built for modded depots that exist in this world now
+        // (raised when the save restored them), so an id from an earlier build cannot satisfy a later assertion.
+        internal static void ResetEvents(MoonWorld world)
+        {
+            var live = new HashSet<int>();
+            if (world?.depots != null)
+                foreach (var kv in world.depots)
+                    if (kv.Value != null && MoonStructures.IsModded(kv.Value.kind)) live.Add(kv.Key);
+            builtEvents.IntersectWith(live);
+            removedEvents.Clear();
+        }
 
         // Records the library's events so the checks can see they fired. Called once from DevTools.Bind.
         internal static void Subscribe()

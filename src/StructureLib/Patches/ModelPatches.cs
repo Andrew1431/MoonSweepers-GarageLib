@@ -33,7 +33,7 @@ namespace StructureLib.Patches
                 if (view.name == name) return;
 
                 var world = __instance.world ?? CoreState.World;
-                var record = world?.depots != null && world.depots.ContainsKey(data.id) ? world.depots.get_Item(data.id) : data;
+                var record = (world?.depots != null && world.depots.ContainsKey(data.id) ? world.depots.get_Item(data.id) : null) ?? data;
                 if (d.DecorateModel != null)
                 {
                     var ctx = new ModelContext { Definition = d, Parent = view.transform.parent, Donor = world?.BuildDefinition(d.BaseStructure) };
