@@ -93,9 +93,16 @@ instance, so parallel agents would share one scene. Instead each agent writes a 
 
     "C:\Program Files\Blender Foundation\Blender 4.5\blender.exe" -b --factory-startup --python vehicles/<Name>/blender/build.py
 
-The script builds the mesh, saves `vehicles/<Name>/blender/<name>.blend`, exports with
-`shared/Rotorcraft/tools/export_mesh_model.py`, and renders a preview PNG the agent then views with Read to check its
-work. Every run is its own process, so any number run side by side. Use the MCP only for one-at-a-time interactive work.
+The script builds the mesh with `shared/blender/kit.py` (game materials, wheels, brushes, rods, lamps), saves
+`vehicles/<Name>/blender/<name>.blend`, renders `preview_{hero,rear,side,front}.png` beside a 1.8 m astronaut, and
+exports `vehicles/<Name>/<name>.bin`. The agent views the previews with Read and iterates. A build takes seconds and
+every run is its own process, so any number run side by side. Follow `vehicles/STYLE.md`. Use the MCP only for
+one-at-a-time interactive work. Blender's Python can't open scripts on very long paths: keep build scripts in the repo.
+
+Review: `powershell -ExecutionPolicy Bypass -File shared/blender/gallery.ps1` rebuilds
+`research/concept-gallery/index.html` from every vehicle's previews and `CONCEPT.md`; republish it to the concept
+gallery (https://claude.ai/artifact/CFd3EBwqdpi2JZvzp5Dmam). Reviewers mark Keep / Tweak / Redo there; read the
+`verdicts` collection with `ArtifactData` before a rework pass.
 
 ## Repo rules agents tend to miss
 
