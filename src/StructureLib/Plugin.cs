@@ -62,6 +62,13 @@ namespace StructureLib
                 try { h.CreateClassProcessor(t).Patch(); ok++; CoreLog.Debug($"Patched {t.Name}"); }
                 catch (Exception e) { failed++; CoreLog.Error($"Patching {t.Name} failed: {e}"); }
             }
+            if (failed > 0)
+            {
+                // A half-patched library could strip a record on save and never restore it, or the reverse. The registry
+                // never freezes while Disabled, so no modded kind or cargo exists and every guarded patch stands down.
+                MoonStructures.Disabled = true;
+                CoreLog.Error($"StructureLib is disabled: {failed} of {ok + failed} patch groups failed to apply (each logged above); no modded structures or cargo this session.");
+            }
             CoreDriver.Instance = AddComponent<CoreDriver>();
             CoreLog.Info($"StructureLib {Version} loaded ({ok} patch groups, {failed} failed). Structures register from other plugins' Load().");
         }

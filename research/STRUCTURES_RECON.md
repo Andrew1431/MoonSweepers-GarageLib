@@ -101,6 +101,52 @@ Everywhere (catalog, placement, built records, production, power, save), a struc
 - `MoonDroppedCanister.IsDust` is false for a canister constructed with cargo 250 (and true for Dust), so it needs no
   patch.
 
+### Per-depot savers audit (final fix wave, 2026-11-02)
+
+**The bug.** A modded structure placed from the build menu made every later vanilla save fail with
+`InvalidDataException: Structure pose ID` (`MoonStructurePoseSave.Read`, the game's read-back). The build menu places
+a structure through `PlanStructure` → `BeginStructureCheck` → `TryBuildStructure`, which sets the depot's
+`placedPose = true` and its quaternion (`TryBuildDepot`, the dev AutoBuild path, leaves `placedPose` false). There is no
+pose list in `MoonLooseDustSnapshot`: `MoonStructurePoseSave.Write` derives one record per posed depot from
+`state.depots`, and its `Read` refuses a record whose depot id is not among the depots read. StructureLib used to put
+the stripped depots back in the `MoonDepotSave.Write` finalizer, so the pose saver (5th in the order above) saw them
+and wrote records for depots the depot section did not hold.
+
+**Reproduced** with `[Dev] AutoBuildViaPlan` (AutoBuild through that same plan path) on the pre-fix library: depot 26
+came back `placedPose=True q=(0,0,0,1)` and both saves of the run were refused with "Structure pose ID" (run `red1`,
+`.superpowers/sdd/2026-11-01-structurelib/final-fix-logs/`). The old `vanilla-save-clean` assertion passed regardless
+(the refusal is an exception out of `MoonProgressStore.Write`, not a Unity "Moon save failed" line).
+
+**Fix.** Inside a `Serialize` the stripped depots stay out of `state.depots` until the `Serialize` finalizer, so every
+saver after `MoonDepotSave` sees exactly the depots the vanilla save holds. The pose needs no record of its own: it is
+part of the depot record, which the sidecar already keeps (`PlacedPose`, `Qx..Qw`) and re-injects. The production
+strip matches against the depots the depot prefix took. Checked: run `green1` (same plan-path lamp, fixed library) saved
+cleanly with the lamp's pose in `structurelib.json`; see the final-fix report for the reload.
+
+| Saver (write order) | Snapshot data | Names a depot / canister? | Status |
+|---|---|---|---|
+| `Serialize` core sections | `canisters` / `nextCanisterId`, piles, inventories, vehicle storage, wallets, upgrades | canister id (canisters) | canisters of modded cargo **stripped** (Task 9); the rest vanilla-safe (no depot id, no cargo) |
+| `MoonDepotSave` | `depots` / `nextDepotId` | depot id | **stripped** (Task 8), now out of the snapshot for the whole `Serialize` |
+| `MoonLoadoutSave` | loadout slots (strings) | no | vanilla-safe |
+| `MoonVehicleStorageSave` | `vehicles` (`MoonVehicleStorageSnapshot`: string id, kg) | no | vanilla-safe |
+| `MoonConveyorSave` | `conveyors` (`MoonConveyorSnapshot`: id, owner, endpoints) | no depot member | vanilla-safe; a belt joined to a modded machine port is unsupported (belt input is) |
+| `MoonStructurePoseSave` | derived from `state.depots` (`placedPose`, quaternion) | depot id | **stripped** with the depots (the C1 fix); the pose is kept in the sidecar depot record |
+| `MoonToolContainerSave` | `toolContainers` (player, tool, tier, kg) | no | vanilla-safe |
+| `MoonUpgradeTreeSave` | `upgradeTree` (player, node ids) | no | vanilla-safe |
+| `MoonStructureAnchorSave` | `anchors` (`MoonDepotSnapshot`s; `ValidateSupports`) | own id + kind | an anchor of a **modded kind** is **stripped** for the write and put back (not kept across a reload; none seen in game); an anchor whose id equals a stripped depot id is only logged (whether anchor ids share the depot id space is unknown) |
+| `MoonRobotSettingsSave` | `robotsOff` (depot ids) | depot id | an entry naming a stripped depot is **stripped** for the write and put back; not kept across a reload, so a modded robot dock's robots-off setting is **unsupported** (resets on load) |
+| `MoonPlayerRecordSave` | `players` (pose, signature) | no | vanilla-safe; no cargo member |
+| `MoonProductionSave` | `production` | depot id | **stripped** (Task 10), matched against the stripped depots |
+| `MoonScoreSave` | `scores` | no | vanilla-safe |
+| `MoonGarageSave` | filters `state.depots` by the garage kind | depot id | sees no modded depot (stripped); a modded structure borrowing the garage is **unsupported** (untested) |
+| `MoonRadioSave`, `MoonRegionTouchSave`, `MoonWaypointSave`, `MoonLandmarkSave` | radio, regions, waypoints, landmarks | no | vanilla-safe |
+| `MoonOwnedVehicleSave` | `ownedVehicles` (`garage` = a garage depot id) | depot id | **unsupported**: a vehicle kept in a modded garage would name a stripped depot (untested; garages are not refused as donors) |
+| (`cargo`, written by one of the savers) | `MoonCargoSnapshot` (canister id, byte) | canister id | **stripped** (Task 9) |
+| (`premiums`) | `MoonPremiumSnapshot` (station, player, kg) | `station` (meaning unchecked) | unknown; no modded structure is a station |
+
+Vanilla depots standing on a stripped depot (`support`) are counted and logged at each save; none is expected, since
+decks and foundations are refused as donors.
+
 ## Production (processors)
 
 - `MoonWorld.ProcessorSpec`: `name`, `product`, `runningKw`, `cycleSeconds`, `slotNames[]`, `slotCargo[]`,
@@ -209,7 +255,9 @@ chamber (96): Input dust 10 kg, Batch dust 2 kg, Output grit 10 kg, 1 kW, 4 s cy
 - **The production save shape.** `MoonProductionSnapshot` holds `id, progress, running, charge` and `stores`, with no
   kind and no cargo. `stores` is a per-slot list of `MoonWalletSnapshot` owner shares. **The kilograms are in
   `pendingKilograms`; `dollars` is 0.** `MoonProductionSave.Write` runs inside the same `Serialize` as
-  `MoonDepotSave.Write`, after it; by then the depot finalizer has put the modded depots back into `state.depots`.
+  `MoonDepotSave.Write`, after it. (Since the final fix wave the modded depots stay out of `state.depots` until the
+  `Serialize` finalizer, so the production strip matches against the depots the depot prefix took; see "Per-depot
+  savers audit".)
 - **`IsProcessor(kind)` callers that refuse a modded machine** (inlined, or calling the unpatchable static), and what
   StructureLib does about each:
   - `CrewProcessorLoad`: vanilla loads nothing into a modded machine, and no `InputSlot` call was seen.

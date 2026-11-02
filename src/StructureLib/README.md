@@ -93,9 +93,9 @@ The recon behind all this, with the evidence, is in
 | Area | Works (checked in game, single player) | Unsupported | Untested |
 |---|---|---|---|
 | Registration | Hashed kinds, freeze, donor and cargo checks, refusal messages | Foundations, decks, building parts and catwalk supports as donors | |
-| Build menu | Catalog entry, note, rendered card art | | Placing a structure by hand from the menu (the self-test uses the game's own build call) |
+| Build menu | Catalog entry, note, rendered card art; placement through the menu's own path (`PlanStructure`, site check, `TryBuildStructure`, which records a free pose) saves and reloads cleanly with its pose (dev `AutoBuildViaPlan`) | | Placing a structure by hand (the real ghost and the remove tool) |
 | Build and remove | Build, refund, removal, `Built` and `Removed` | | |
-| Save | Sidecar for depots, production states and modded-cargo canisters; orphans kept; reload restores | | |
+| Save | Sidecar for depots (pose included), production states and modded-cargo canisters; orphans kept; reload restores (see [Save audit](#save-audit)) | A modded robot dock's robots-off setting (resets on load); a modded garage holding vehicles | |
 | Cargo | Names, unit mass, price, canister round trip (see [Cargo audit](#cargo-audit)) | Depositing modded cargo at the collector; co-op cargo events; `CanisterTint` (not applied) | Whether `EmitCargo` keeps the modded value on a belt |
 | Processors | Cycle, batch moved at the same mass, `CycleFinished`, loading through `CrewProcessorLoad` | Walker loading (`LoadProcessor` refuses: "Not a production machine"); belt input (`FeedProcessor`, `EnterMachine`, `PortCargo`) and canister input into a machine: unsupported and untested, the vanilla port path refuses modded machines | Belt output (an outfeed belt, `EmitCargo`) |
 | Power | Machines on a vanilla grid's surplus and batteries; fuel generators charge, supply modded machines and keep their charge across saves; a modded-only group gets a negative grid id | Fuel generators feeding vanilla machines; power links drawn to modded structures; `SupplyMode.Solar`; `Power` without a `Processor`; a generator's `RunningKw` (ignored) | |
@@ -168,6 +168,31 @@ side) and `Pure/HandshakePayload.cs` (the registry-agnostic payload). Why this h
   read from the interop signatures, not traced. Only the single-player self-test `handshake-manifest` (live manifest,
   encode/decode, self-compare) has run.
 
+## Save audit
+
+The game writes the save through `MoonProgressStore.Serialize` (core sections, then one saver per section) and reads
+it straight back; a section that names a depot or canister the save does not hold, or a kind it does not know, makes
+it refuse the whole save. The modded depots therefore leave the save snapshot in the `MoonDepotSave.Write` prefix and
+stay out until the `Serialize` finalizer, so every later saver sees only the depots the save holds. The build menu
+records a free pose for what it places (`placedPose`), which `MoonStructurePoseSave` writes per depot; before this the
+depots came back right after `MoonDepotSave.Write` and every save after a menu-placed modded structure was refused
+("Structure pose ID"). The pose is part of the depot record, so the sidecar keeps it. Evidence and dumps:
+`research/STRUCTURES_RECON.md`, "Per-depot savers audit".
+
+| Saver | Names | Status |
+|---|---|---|
+| `Serialize` core (`canisters`, piles, inventories, vehicle storage, wallets, upgrades) | canister id | modded-cargo canisters stripped to the sidecar; the rest vanilla-safe |
+| `MoonDepotSave` | depot id | stripped to the sidecar |
+| `MoonStructurePoseSave` (derived from `depots`) | depot id | stripped with the depots; pose kept in the sidecar depot record |
+| `MoonProductionSave` | depot id | stripped to the sidecar |
+| (`cargo`) | canister id | stripped to the sidecar with the canisters |
+| `MoonStructureAnchorSave` (`anchors`) | own id and kind | an anchor of a modded kind is left out of the vanilla save and put back after; not kept across a reload (none seen) |
+| `MoonRobotSettingsSave` (`robotsOff`) | depot id | an entry naming a modded depot is left out and put back after; unsupported: a modded robot dock's robots-off setting resets on load |
+| `MoonGarageSave` (garage depots) | depot id | sees no modded depot; a modded structure borrowing the garage is unsupported (untested) |
+| `MoonOwnedVehicleSave` (`garage`) | depot id | unsupported: a vehicle kept in a modded garage would name a stripped depot (untested) |
+| `MoonLoadoutSave`, `MoonVehicleStorageSave`, `MoonConveyorSave`, `MoonToolContainerSave`, `MoonUpgradeTreeSave`, `MoonPlayerRecordSave`, `MoonScoreSave`, `MoonRadioSave`, `MoonRegionTouchSave`, `MoonWaypointSave`, `MoonLandmarkSave` | nothing | vanilla-safe: no depot id, canister id or cargo member |
+| (`premiums`, `station`) | unchecked | unknown; no modded structure is a station |
+
 ## Cargo audit
 
 The game's `MoonCargo` is a byte enum (Dust 0, Sand 1, Stone 2), and vanilla code answers every value it does not
@@ -207,3 +232,4 @@ Status:
 | `MoonCrewSession` (co-op world stream, joins) | unknown | Not dumped. A joining client receives the host's serialized world, which (through `Serialize`) has no modded canisters. |
 | `MoonCanisterStreaming/FarShown.cargo` | unknown | Far-LOD canister drawing. A grit canister in the world (end-to-end run) logged no exceptions; how it is tinted was not looked at. |
 | `MoonProductionState` | n/a | No `MoonCargo` member (slot stores are per owner; slot cargo comes from `ProcessorSpec.slotCargo`). |
+| Cargo carried by a walker or a vehicle (`MoonPlayerRecordSnapshot`, `MoonLoadoutSave`, `MoonOwnedVehicle` / `MoonOwnedVehicleSave`, `MoonVehicleStorageSnapshot`, `MoonInventorySnapshot`, `MoonToolContainerSnapshot`) | n/a (checked) | The dumps of these records have no `MoonCargo` or cargo-byte member (walkers and vehicle storage hold kilograms only), and there is no separate carried-canister save record. Whether a canister held in hand or riding a vehicle is saved through `state.canisters` + `state.cargo` (and so stripped like a dropped one) is not checked: see the by-hand list in the SandPower README. |

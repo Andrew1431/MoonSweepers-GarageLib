@@ -16,7 +16,7 @@ namespace StructureLib
     internal static class DevTools
     {
         internal static ConfigEntry<int> AutoLoadSlot;
-        internal static ConfigEntry<bool> AllowSlot1, RunSelfTest, ScreenshotMenu, AutoRemove, AutoSave, ForcePower;
+        internal static ConfigEntry<bool> AllowSlot1, RunSelfTest, ScreenshotMenu, AutoRemove, AutoSave, ForcePower, AutoBuildViaPlan;
         internal static ConfigEntry<string> AutoBuild, AutoFeed;
         static float menuT, gameT, saveAt = -1f, feedAt = -1f;
         static bool loadRequested, selfTestRan, menuShot, autoBuilt;
@@ -42,9 +42,10 @@ namespace StructureLib
             AutoRemove = cfg.Bind("Dev", "AutoRemove", true, "Dev build: the self-test removes the example lamp it checked. false leaves it in place (the sidecar carries it into the next launch).");
             AutoSave = cfg.Bind("Dev", "AutoSave", false, "Dev build: request a save 10 s after the AutoBuild step (whether or not AutoBuild names anything). The self-test waits for that save and checks the structurelib.json sidecar.");
             ForcePower = cfg.Bind("Dev", "ForcePower", false, "Dev build: run every modded processor at full power (Power = 1) whatever its grid supplies. For isolating power problems; no self-test relies on it.");
+            AutoBuildViaPlan = cfg.Bind("Dev", "AutoBuildViaPlan", false, "Dev build: AutoBuild places modded structures through the build menu's own path (PlanStructure, BeginStructureCheck, TryBuildStructure), which records a free pose (placedPose), instead of TryBuildDepot. Vanilla kinds still use TryBuildDepot.");
             SelfTest.Subscribe();
             ScreenshotMenu = cfg.Bind("Dev", "ScreenshotMenu", false, "Dev build: 5 s after the self-test, open the build menu on the example lamp and save a screenshot to BepInEx/cache/structurelib/menu.png.");
-            CoreLog.Info($"[dev] AutoLoadSlot={AutoLoadSlot.Value} AllowSlot1={AllowSlot1.Value} SelfTest={RunSelfTest.Value} ScreenshotMenu={ScreenshotMenu.Value} AutoRemove={AutoRemove.Value} AutoSave={AutoSave.Value} ForcePower={ForcePower.Value} AutoBuild='{AutoBuild.Value}' AutoFeed='{AutoFeed.Value}'");
+            CoreLog.Info($"[dev] AutoLoadSlot={AutoLoadSlot.Value} AllowSlot1={AllowSlot1.Value} SelfTest={RunSelfTest.Value} ScreenshotMenu={ScreenshotMenu.Value} AutoRemove={AutoRemove.Value} AutoSave={AutoSave.Value} ForcePower={ForcePower.Value} AutoBuildViaPlan={AutoBuildViaPlan.Value} AutoBuild='{AutoBuild.Value}' AutoFeed='{AutoFeed.Value}'");
             // MoonStructures.Register reads this static at plugin Load time; prove the interop read works that early.
             try { CoreLog.Info($"[dev] MoonProductionSave.MaxSlots at Load = {MoonProductionSave.MaxSlots}"); }
             catch (Exception e) { CoreLog.Error("[dev] reading MoonProductionSave.MaxSlots at Load threw: " + e); }
@@ -194,17 +195,40 @@ namespace StructureLib
             bool ok = false;
             string reason = "";
             int id = -1;
+            bool viaPlan = DevTools.AutoBuildViaPlan.Value && MoonStructures.IsModded(kind);
             foreach (float h in Headings)
             {
                 var at = wt.position + Quaternion.AngleAxis(h, up) * wt.forward * dist;
                 var before = DepotIds(world);
-                ok = world.TryBuildDepot(walker, at.normalized, 0f, out reason, null, kind);
+                ok = viaPlan ? BuildViaPlan(world, walker, kind, at, wt.position.magnitude, out reason) : world.TryBuildDepot(walker, at.normalized, 0f, out reason, null, kind);
                 if (ok) foreach (var kv in world.depots) if (!before.Contains(kv.Key)) { id = kv.Key; break; }
-                CoreLog.Info($"[dev] AutoBuild: '{entry}' (kind {kind}) at {dist:F0} m, heading {h:F0} deg from facing: ok={ok} reason='{reason}'");
+                CoreLog.Info($"[dev] AutoBuild: '{entry}' (kind {kind}) {(viaPlan ? "via the build-menu plan path " : "")}at {dist:F0} m, heading {h:F0} deg from facing: ok={ok} reason='{reason}'");
                 if (ok) break;
+            }
+            if (ok && id >= 0)
+            {
+                var rec = world.depots.get_Item(id);
+                CoreLog.Info($"[dev] AutoBuild: depot {id} placedPose={rec.placedPose} q=({rec.qx:F3},{rec.qy:F3},{rec.qz:F3},{rec.qw:F3}) yaw={rec.yaw:F1} support={rec.support}");
             }
             if (ok && id >= 0 && MoonStructures.IsModded(kind)) SeedContribution(world, id, def.priceDollars);
             Report(entry, ok, id, reason);
+        }
+
+        // The build menu's own placement path for a structure: PlanStructure (free placement at a ground point), the sliced
+        // site check run to completion, then TryBuildStructure, which records the plan's rotation as a free pose
+        // (placedPose). Only reference-type outs here (no out structs; see Interop hazards).
+        static bool BuildViaPlan(MoonWorld world, MoonWalker walker, int kind, Vector3 at, float radius, out string reason)
+        {
+            var normal = at.normalized;
+            var plan = world.PlanStructure(kind, normal * radius, 0f, -1, true, 0f, 0, normal);
+            if (plan == null) { reason = "PlanStructure returned null"; return false; }
+            CoreLog.Info($"[dev] AutoBuildViaPlan: plan kind {plan.kind} at {plan.position} rotation {plan.rotation} support {plan.support} free {plan.free} snapped {plan.snapped} hint '{plan.hint}'");
+            var check = world.BeginStructureCheck(plan);
+            int slices = 0;
+            while (check != null && !check.Done && slices < 5000) { check.Advance(5.0); slices++; }
+            CoreLog.Info($"[dev] AutoBuildViaPlan: site check {(check == null ? "null" : $"done={check.Done} valid={check.Valid} reason='{check.Reason}'")} after {slices} slices");
+            if (check != null && check.Done && !check.Valid) { reason = "site check: " + check.Reason; return false; }
+            return world.TryBuildStructure(walker, plan, check, out reason);
         }
 
         // The lamp's own build leaves contributions empty (single player). One entry for the local player at the price
@@ -535,6 +559,13 @@ namespace StructureLib
                 if (depot >= 0 && !builtEvents.Contains(depot)) return (false, $"MoonStructures.Built was not raised for depot {depot}");
                 return (true, null);
             });
+            // [Dev] AutoBuildViaPlan: the lamp went in through the build menu's path, which records a free pose. This is the
+            // record shape that made every later vanilla save fail before the depots stayed stripped through the Serialize.
+            if (autoBuilt && DevTools.AutoBuildViaPlan.Value) Check("build-plan-pose", noWorld ?? (depot < 0 ? "no example lamp depot" : null), () =>
+            {
+                var rec = world.depots.get_Item(depot);
+                return (rec.placedPose, $"depot {depot} built through the plan path has placedPose=false (the pose path was not exercised)");
+            });
             Check("remove-modded-refund", noWorld ?? (depot < 0 ? "no example lamp depot to remove" : null), () =>
             {
                 decimal refund = DecimalOf(world.StructureRefund(depot));
@@ -722,9 +753,13 @@ namespace StructureLib
                     foreach (var kv in world.depots) if (kv.Value != null && kv.Value.kind >= KindAllocator.FirstModdedKind) worldModded++;
                 string failedNote = "";
                 try { failedNote = MoonWorld.saveFailed ?? ""; } catch (Exception) { }
-                CoreLog.Info($"[selftest] save write #{w.Seq}: snapshot {w.Before} depots, {w.Modded} modded, {w.Stripped} stripped, {w.VanillaAfter} written to the vanilla save, {w.PutBack} put back ({(w.MainThread ? "main thread" : "worker thread")}); world {worldTotal} depots, {worldModded} modded; 'Moon save failed' seen {saveFailures}x; MoonWorld.saveFailed='{Trim(CoreLog.Redact(failedNote), 200)}'");
+                int refused = Sidecar.VanillaFailures - vanillaFailuresAtWatch;
+                CoreLog.Info($"[selftest] save write #{w.Seq}: snapshot {w.Before} depots, {w.Modded} modded ({w.Posed} with a free pose), {w.Stripped} stripped, {w.VanillaAfter} written to the vanilla save, {w.PutBack} put back ({(w.MainThread ? "main thread" : "worker thread")}); {w.AnchorsStripped} anchor and {w.RobotsOffStripped} robots-off entries stripped, {w.SupportRefs} vanilla depots on a modded one; world {worldTotal} depots, {worldModded} modded; vanilla saves that threw since the watch started: {refused}; 'Moon save failed' seen {saveFailures}x; MoonWorld.saveFailed='{Trim(CoreLog.Redact(failedNote), 200)}'");
                 if (w.Stripped != w.Modded) return (false, $"stripped {w.Stripped} of {w.Modded} modded records");
                 if (w.VanillaAfter != worldTotal - worldModded) return (false, $"vanilla save got {w.VanillaAfter} depots, world has {worldTotal} - {worldModded} modded");
+                // The game's read-back refusal surfaces as an exception out of MoonProgressStore.Write (seen by the save
+                // finalizers), not always as a Unity "Moon save failed" error line.
+                if (refused > 0) return (false, $"{refused} vanilla save(s) threw since the watch started (the game refused them; see 'the vanilla write threw' lines)");
                 if (saveFailures > 0) return (false, $"the game logged 'Moon save failed' {saveFailures}x: {Trim(CoreLog.Redact(firstSaveFailure ?? ""), 300)}");
                 return (true, null);
             });
@@ -781,6 +816,19 @@ namespace StructureLib
                 if (!builtViews.Contains(depot)) return (false, $"MoonStructures.Built was not raised with a view for restored depot {depot}");
                 CoreLog.Info($"[selftest] restored '{LampId}' is depot {depot}, Built fired with its view; contributions {ContributionText(world.depots.get_Item(depot))}");
                 return (true, null);
+            });
+            // A lamp saved with a free pose (built through the build menu's path) comes back with the same pose.
+            var saved = Sidecar.LoadedStructure(LampId);
+            if (saved == null || !saved.PlacedPose) return;
+            Check("reload-pose-intact", world == null ? "no MoonWorld found" : null, () =>
+            {
+                int depot = DepotOfKind(world, lamp.Kind);
+                if (depot < 0) return (false, "no restored lamp");
+                var rec = world.depots.get_Item(depot);
+                static bool Near(float a, float b) => Math.Abs(a - b) < 1e-4f;
+                bool same = rec.placedPose && Near(rec.qx, saved.Qx) && Near(rec.qy, saved.Qy) && Near(rec.qz, saved.Qz) && Near(rec.qw, saved.Qw);
+                CoreLog.Info($"[selftest] restored lamp depot {depot}: placedPose={rec.placedPose} q=({rec.qx:F4},{rec.qy:F4},{rec.qz:F4},{rec.qw:F4}); sidecar q=({saved.Qx:F4},{saved.Qy:F4},{saved.Qz:F4},{saved.Qw:F4})");
+                return (same, $"depot {depot} placedPose={rec.placedPose} q=({rec.qx},{rec.qy},{rec.qz},{rec.qw}), saved ({saved.Qx},{saved.Qy},{saved.Qz},{saved.Qw})");
             });
         }
 
@@ -1246,6 +1294,7 @@ namespace StructureLib
             unityErrors = 0;
             firstUnityError = null;
             saveFailures = 0;
+            vanillaFailuresAtWatch = Sidecar.VanillaFailures;
             firstSaveFailure = null;
             logPath = Path.Combine(BepInEx.Paths.BepInExRootPath, "LogOutput.log");
             FlushDiskLog();
@@ -1305,7 +1354,7 @@ namespace StructureLib
         }
 
         // Unity log hook. The converted delegate stays in a static field so the GC does not collect it while hooked.
-        static int unityErrors, saveFailures;
+        static int unityErrors, saveFailures, vanillaFailuresAtWatch;
         static string firstUnityError, firstSaveFailure;
         static bool unityHooked;
         static Application.LogCallback unityHook;

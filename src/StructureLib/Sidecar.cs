@@ -61,6 +61,9 @@ namespace StructureLib
         {
             internal int Seq;
             internal int Before, Modded, Stripped, VanillaAfter, PutBack = -1;
+            // Stripped depots placed with a free pose (placedPose: the build menu path), and the per-depot entries that left
+            // with them (see StripDepotRefs).
+            internal int Posed, AnchorsStripped, RobotsOffStripped, SupportRefs;
             internal readonly List<int> StrippedIds = new(), StrippedKinds = new();
             internal bool MainThread;
         }
@@ -240,23 +243,41 @@ namespace StructureLib
             }
         }
 
-        // After RestoreDepots: every injected record must now be in world.depots. One that is not would be lost on the
-        // next write (the world no longer holds it), so it stops counting as in the world and is kept verbatim.
-        internal static void CheckRestored(MoonWorld world)
+        // RestoreDepots finalizer, whether it returned or threw: every injected record must now be in world.depots. One that
+        // is not would be lost on the next write (the world no longer holds it), so it stops counting as in the world and
+        // is kept verbatim (SaveRefs.Unrestored).
+        internal static void CheckRestored(MoonWorld world, Exception vanillaFailed)
         {
             lock (gate)
             {
+                if (vanillaFailed != null)
+                    CoreLog.Error($"Load: RestoreDepots threw ({vanillaFailed.GetType().Name}: {vanillaFailed.Message}); {inWorld.Count} injected modded structure(s) are checked against what the world holds");
                 if (inWorld.Count == 0) return;
-                var depots = world?.depots;
-                foreach (var (r, id) in inWorld.ToList())
+                Il2CppSystem.Collections.Generic.Dictionary<int, MoonDepotSnapshot> depots = null;
+                try { depots = world?.depots; } catch (Exception) { }
+                int? KindOf(int id)
                 {
-                    var d = MoonStructures.Definition(r.Id);
-                    bool there = d != null && depots != null && depots.ContainsKey(id) && depots.get_Item(id)?.kind == d.Kind;
-                    if (there) continue;
+                    try { return depots != null && depots.ContainsKey(id) ? depots.get_Item(id)?.kind : null; }
+                    catch (Exception) { return null; }
+                }
+                var injected = inWorld.Select(kv => (kv.Key, kv.Value, MoonStructures.Definition(kv.Key.Id)?.Kind ?? int.MinValue)).ToList();
+                foreach (var r in SaveRefs.Unrestored(injected, KindOf))
+                {
+                    int id = inWorld[r];
                     inWorld.Remove(r);
                     CoreLog.Error($"Sidecar: '{r.Id}' depot {id} was injected but the world did not restore it; kept in the sidecar untouched");
                 }
                 CoreLog.Info($"Sidecar: world restored {inWorld.Count} modded structures; world has {depots?.Count ?? 0} depots");
+            }
+        }
+
+        /// <summary>A copy of the first loaded structure record with this id (null if none). Read by the dev self-test.</summary>
+        internal static StructureRecord LoadedStructure(string id)
+        {
+            lock (gate)
+            {
+                var r = loaded.Structures.FirstOrDefault(s => s.Id == id);
+                return r == null ? null : SidecarCodec.Deserialize(SidecarCodec.Serialize(new SidecarFile { Structures = { r } })).Structures[0];
             }
         }
 
@@ -323,11 +344,13 @@ namespace StructureLib
         // read-back then refuses it, which loses nothing). Pass 2 only removes. The .tmp is written last, in its own try.
         // `canisters` are the records the canister strip of this same save produced (null: that strip failed or did not
         // run, so every loaded canister record is written back verbatim).
-        internal static PendingWrite StripDepots(MoonLooseDustSnapshot state, List<MoonDepotSnapshot> removed, List<CanisterRecord> canisters)
+        internal static PendingWrite StripDepots(MoonLooseDustSnapshot state, List<MoonDepotSnapshot> removed, List<CanisterRecord> canisters, out WriteStats written)
         {
+            written = null;
             var list = state?.depots;
             if (list == null) return null;
             var stats = new WriteStats { Before = list.Count, MainThread = Thread.CurrentThread.ManagedThreadId == mainThreadId };
+            written = stats;
 
             // No Frozen/Disabled guard on the strip itself: before the registry freezes no modded kind can be in a world,
             // so stripping every kind in the modded range is equivalent, and it can never let one reach the vanilla save.
@@ -338,6 +361,7 @@ namespace StructureLib
                 var s = list.get_Item(i);
                 if (s == null || s.kind < KindAllocator.FirstModdedKind) continue;
                 take.Add((i, s));
+                if (s.placedPose) stats.Posed++;
                 var d = Remap.Live(s.kind);
                 // Any kind in the modded range would make the game refuse the save, registered or not.
                 if (d == null) CoreLog.Warn($"Save: depot {s.id} has unknown modded kind {s.kind}; left out of the vanilla save and not recorded");
@@ -357,7 +381,7 @@ namespace StructureLib
             stats.VanillaAfter = list.Count;
             stats.Seq = Interlocked.Increment(ref writeSeq);
             LastWrite = stats;
-            CoreLog.Info($"Save: moved {removed.Count} modded structures out of the vanilla save ({stats.VanillaAfter} vanilla depots stay; write #{stats.Seq}, {(stats.MainThread ? "main thread" : "thread " + Thread.CurrentThread.ManagedThreadId)})");
+            CoreLog.Info($"Save: moved {removed.Count} modded structures ({stats.Posed} placed with a free pose) out of the vanilla save ({stats.VanillaAfter} vanilla depots stay; write #{stats.Seq}, {(stats.MainThread ? "main thread" : "thread " + Thread.CurrentThread.ManagedThreadId)})");
 
             try
             {
@@ -370,9 +394,10 @@ namespace StructureLib
             }
         }
 
-        // Called by the finalizer. Pass 2 removed from the highest index down, so walking `removed` backwards appends the
-        // records in their original relative order.
-        internal static void PutBackDepots(MoonLooseDustSnapshot state, List<MoonDepotSnapshot> removed)
+        // Called by the Serialize finalizer (or the depot Write finalizer outside a Serialize). Pass 2 removed from the
+        // highest index down, so walking `removed` backwards appends the records in their original relative order.
+        // `stats` is the WriteStats of the same strip (null when it failed before making one).
+        internal static void PutBackDepots(MoonLooseDustSnapshot state, List<MoonDepotSnapshot> removed, WriteStats stats)
         {
             if (removed == null) return;
             int n = 0;
@@ -381,9 +406,100 @@ namespace StructureLib
                 if (state?.depots == null) { CoreLog.Error($"Save: cannot put {removed.Count} modded structures back: the snapshot has no depot list"); return; }
                 for (int i = removed.Count - 1; i >= 0; i--) { state.depots.Add(removed[i]); n++; }
             }
-            var stats = LastWrite;
             if (stats != null) stats.PutBack = n;
         }
+
+        // ---- per-depot entries ----
+        // Sections written after MoonDepotSave that name depots (see the save audit in research/STRUCTURES_RECON.md):
+        // MoonStructurePoseSave derives its records from state.depots (the depots stay stripped, so it never sees a modded
+        // one); MoonStructureAnchorSave writes state.anchors (more MoonDepotSnapshots) and MoonRobotSettingsSave writes
+        // state.robotsOff (depot ids). A robots-off entry naming a stripped depot, or an anchor of a modded kind,
+        // leaves the vanilla save with it and comes back after the write. They are not kept in the sidecar: a modded
+        // structure has not been seen with either (both log a warning when one turns up).
+
+        /// <summary>Anchor and robots-off entries a strip took out, with their original indexes. Owned by the SaveRun.</summary>
+        internal sealed class StrippedRefs
+        {
+            internal readonly List<(int index, MoonDepotSnapshot s)> Anchors = new();
+            internal readonly List<(int index, int id)> RobotsOff = new();
+            internal int Count => Anchors.Count + RobotsOff.Count;
+        }
+
+        // Pass 1 decides (SaveRefs), pass 2 only removes, from the highest index down. Vanilla depots standing on a stripped
+        // depot (support) are only counted and logged: the depots they stand on are refused as donors, so none is expected.
+        internal static void StripDepotRefs(MoonLooseDustSnapshot state, ICollection<int> strippedIds, StrippedRefs into, WriteStats stats)
+        {
+            if (state == null) return;
+            var anchors = state.anchors;
+            if (anchors != null && anchors.Count > 0)
+            {
+                var entries = new List<(int, int)>();
+                for (int i = 0; i < anchors.Count; i++) { var a = anchors.get_Item(i); entries.Add(a == null ? (int.MinValue, 0) : (a.id, a.kind)); }
+                // By kind only: whether anchor ids share the depot id space is not known, so an id match is only logged.
+                var take = SaveRefs.IndexesToStrip(entries, null, KindAllocator.FirstModdedKind);
+                int idMatches = entries.Count(e => strippedIds.Contains(e.Item1)) - take.Count(i => strippedIds.Contains(entries[i].Item1));
+                if (idMatches > 0) CoreLog.Warn($"Save: {idMatches} vanilla-kind anchor entr(ies) carry the id of a stripped modded structure; kept in the vanilla save");
+                for (int k = take.Count - 1; k >= 0; k--)
+                {
+                    int i = take[k];
+                    var a = anchors.get_Item(i);
+                    anchors.RemoveAt(i);
+                    into.Anchors.Insert(0, (i, a));
+                }
+            }
+            var off = state.robotsOff;
+            if (off != null && off.Count > 0 && strippedIds.Count > 0)
+            {
+                var entries = new List<(int, int)>();
+                for (int i = 0; i < off.Count; i++) entries.Add((off.get_Item(i), 0));
+                var take = SaveRefs.IndexesToStrip(entries, strippedIds, KindAllocator.FirstModdedKind);
+                for (int k = take.Count - 1; k >= 0; k--)
+                {
+                    int i = take[k];
+                    int id = off.get_Item(i);
+                    off.RemoveAt(i);
+                    into.RobotsOff.Insert(0, (i, id));
+                }
+            }
+            int supportRefs = 0;
+            var depots = state.depots;
+            for (int i = 0; depots != null && strippedIds.Count > 0 && i < depots.Count; i++)
+            {
+                var d = depots.get_Item(i);
+                if (d != null && strippedIds.Contains(d.support)) supportRefs++;
+            }
+            if (stats != null) { stats.AnchorsStripped = into.Anchors.Count; stats.RobotsOffStripped = into.RobotsOff.Count; stats.SupportRefs = supportRefs; }
+            if (into.Count > 0)
+                CoreLog.Warn($"Save: {into.Anchors.Count} anchor and {into.RobotsOff.Count} robots-off entr(ies) of modded structures left out of the vanilla save (put back after the write; not kept across a reload)");
+            if (supportRefs > 0)
+                CoreLog.Warn($"Save: {supportRefs} vanilla structure(s) stand on a modded one; the vanilla save holds them without the structure they stand on");
+        }
+
+        internal static void PutBackDepotRefs(MoonLooseDustSnapshot state, StrippedRefs refs)
+        {
+            if (refs == null || refs.Count == 0) return;
+            if (refs.Anchors.Count > 0)
+            {
+                if (state?.anchors == null) CoreLog.Error($"Save: cannot put {refs.Anchors.Count} anchor entries back: the snapshot has no anchor list");
+                else foreach (var (i, a) in refs.Anchors) state.anchors.Insert(Math.Min(i, state.anchors.Count), a);
+            }
+            if (refs.RobotsOff.Count > 0)
+            {
+                if (state?.robotsOff == null) CoreLog.Error($"Save: cannot put {refs.RobotsOff.Count} robots-off entries back: the snapshot has no robots-off list");
+                else foreach (var (i, id) in refs.RobotsOff) state.robotsOff.Insert(Math.Min(i, state.robotsOff.Count), id);
+            }
+            refs.Anchors.Clear();
+            refs.RobotsOff.Clear();
+        }
+
+        // ---- refused saves ----
+        static int vanillaFailures;
+
+        /// <summary>Vanilla saves that threw (the game's read-back refusal among them) since the plugin loaded.</summary>
+        internal static int VanillaFailures => Volatile.Read(ref vanillaFailures);
+
+        /// <summary>Called by the save finalizers once per vanilla save that threw (the outermost Write, or a Serialize outside one).</summary>
+        internal static void NoteVanillaFailure() => Interlocked.Increment(ref vanillaFailures);
 
         // ---- canisters ----
         // A canister's cargo is not in MoonCanisterSnapshot. In a save snapshot SnapshotProduction lists it in state.cargo
@@ -717,22 +833,25 @@ namespace StructureLib
         }
 
         /// <summary>
-        /// Takes the production snapshot of every depot in the modded range (by state.depots, which holds the modded depots
-        /// again once the depot Write finalizer ran) out of state.production into <paramref name="stripped"/>, and returns
-        /// the records of the registered processors. Pass 1 builds every record; pass 2 only removes. Touches nothing but
-        /// the snapshot and the frozen registry, so it may run off the main thread.
+        /// Takes the production snapshot of every modded depot out of state.production into <paramref name="stripped"/>, and
+        /// returns the records of the registered processors. Inside a Serialize the modded depots are out of state.depots
+        /// at this point, so <paramref name="moddedKinds"/> (depot id -> kind of the depots the depot Write prefix took) says
+        /// which; null (a production Write outside a Serialize) reads them from state.depots. Pass 1 builds every record;
+        /// pass 2 only removes. Touches nothing but the snapshot and the frozen registry, so it may run off the main thread.
         /// </summary>
-        internal static List<ProductionRecord> StripProduction(MoonLooseDustSnapshot state, StrippedProduction stripped)
+        internal static List<ProductionRecord> StripProduction(MoonLooseDustSnapshot state, StrippedProduction stripped, IReadOnlyDictionary<int, int> moddedKinds)
         {
             var records = new List<ProductionRecord>();
             var list = state?.production;
-            var depots = state?.depots;
-            if (list == null || list.Count == 0 || depots == null) return records;
-            var kindOf = new Dictionary<int, int>();
-            for (int i = 0; i < depots.Count; i++)
+            if (list == null || list.Count == 0) return records;
+            var kindOf = moddedKinds;
+            if (kindOf == null)
             {
-                var s = depots.get_Item(i);
-                if (s != null && s.kind >= KindAllocator.FirstModdedKind) kindOf[s.id] = s.kind;
+                var depots = state.depots;
+                if (depots == null) return records;
+                var all = new List<(int, int)>();
+                for (int i = 0; i < depots.Count; i++) { var s = depots.get_Item(i); if (s != null) all.Add((s.id, s.kind)); }
+                kindOf = SaveRefs.ModdedKinds(all, KindAllocator.FirstModdedKind);
             }
             if (kindOf.Count == 0) return records;
 
@@ -865,7 +984,10 @@ namespace StructureLib
                     if (action == ProductionRestoreAction.Restore) { plan.Add((p, ToProductionSnapshot(p, id), id, false)); continue; }
                     var empty = new MoonProductionSnapshot();
                     empty.id = id;
+                    // One empty inner list per slot of the current layout, so RestoreProduction never indexes past it.
                     empty.stores = new Il2CppSystem.Collections.Generic.List<Il2CppSystem.Collections.Generic.List<MoonWalletSnapshot>>();
+                    for (int slot = 0, n = ProductionPlan.EmptySlotCount(SpecBuilder.SlotCargoIds(d)); slot < n; slot++)
+                        empty.stores.Add(new Il2CppSystem.Collections.Generic.List<MoonWalletSnapshot>());
                     p.Superseded = true;
                     productionSuperseded[p] = id;
                     plan.Add((p, empty, id, true));

@@ -13,7 +13,9 @@ whoever can write there. One line per decision: date, who, what, where the detai
   allocated in sorted order, so co-op players agree on numbers without identical mod lists. Cargo values are declared
   bytes claimed in `docs/cargo-registry.md`. Detail: `docs/superpowers/specs/2026-11-01-structurelib-design.md`.
 - 2026-11-01, Ryan: **StructureLib** (`src/StructureLib`) is the second shared library; first consumer **SandPower**
-  (`mods/SandPower`): belt-fed sand compactor → sand briquettes → briquette generator feeding the vanilla power grid.
+  (`mods/SandPower`): belt-fed sand compactor → sand briquettes → briquette generator feeding the vanilla power grid
+  (superseded in part: what shipped feeds StructureLib machines only and is not belt-fed; see the 2026-11-02 SandPower
+  0.1.0 line above).
   No modded foundations or decks this milestone. GUIDs `com.ryanhartwig.structurelib`, `com.ryanhartwig.sandpower`.
 - 2026-11-01, Ryan + Andrew: **Co-op handshake (missing-mod detection) ships with StructureLib's first release;**
   graceful degradation for clients missing a mod is deferred, for vehicles and structures alike.

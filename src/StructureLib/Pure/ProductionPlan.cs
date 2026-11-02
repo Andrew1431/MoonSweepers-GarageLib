@@ -26,5 +26,11 @@ namespace StructureLib
             if (!processorRegistered || !structureInWorld || depotTaken || superseded) return ProductionRestoreAction.Keep;
             return mismatch == null ? ProductionRestoreAction.Restore : ProductionRestoreAction.RestoreEmpty;
         }
+
+        /// <summary>
+        /// Inner store lists a RestoreEmpty snapshot gets: one per slot of the current layout, so the game's
+        /// RestoreProduction never indexes past the list.
+        /// </summary>
+        public static int EmptySlotCount(System.Collections.Generic.IReadOnlyCollection<string> currentSlotCargoIds) => currentSlotCargoIds?.Count ?? 0;
     }
 }

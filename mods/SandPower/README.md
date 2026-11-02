@@ -46,8 +46,12 @@ Untested (may work, nobody has tried it):
 
 - **Outfeed belt.** Briquettes leaving the compactor on an outfeed belt. Whether a briquette canister on a belt keeps
   its cargo is unknown.
-- **Building both from the build menu by hand** (the self-test builds them through the game's own build call).
+- **Building both from the build menu by hand** (the real ghost and the remove tool). The build menu's own placement
+  call is checked in StructureLib's self-test with the example lamp: it saves and reloads cleanly with its pose. Before
+  that fix a structure placed from the menu made the game refuse every later save.
 - **Co-op.** Two players with SandPower; StructureLib refuses a join when the mods differ.
+- **Carrying a briquette canister.** Pick up a briquette canister (or load it on a vehicle), save, and inspect the
+  save: the canister should be in `structurelib.json`, and the game should not refuse the save.
 
 ## Saves
 
