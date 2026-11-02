@@ -122,6 +122,15 @@ Everywhere (catalog, placement, built records, production, power, save), a struc
   struct). Read the static `PostPanel` / `TwinPanel` / `TrackerPanel` instead.
 - `MoonWorld.BuiltDepots` (`IEnumerable<MoonDepotSnapshot>`) is not foreach-able from managed code; iterate `depots`.
 - `MoonWorld.PowerLinks` is an `IReadOnlyList` interop interface; use the `powerLinks` list.
+- `MoonWorld.DevAddMoney(player, dollars)` does nothing in this build (wallet unchanged; the `Il2CppSystem.Decimal`
+  argument marshals fine, it prints `20000`). The wallet is team-wide (`wallets.Balance`); `SetTeamDollars(Decimal)`
+  works. GarageLib's `DevTools.Buy` relies on `DevAddMoney`, so its "adding money" step is silently a no-op.
+- Enumerating `DepotPlacementSteps(check)` with `MoveNext()` ends after one step with `check.Done` still false. Drive
+  a check with `check.Advance(milliseconds)` (one `Advance(50)` completes it: `Done=True`, `Slices=1`).
+- There is no static `MoonWalker.Local`; `FindObjectsByType<MoonWalker>` finds the one walker. The local player id is
+  `MoonWorld.LocalPlayer` (a `local…` id in single player). `MoonWorld.solarSystem` was null in one session 20 s after
+  load; `FindFirstObjectByType<MoonSolarSystem>()` finds it.
+- `PowerNode.spec` (a non-blittable `PanelSpec`) reads fine through the property; only `TryPanel`'s `out` crashes.
 
 ## World-time findings (new game in slot-1, 2026-11-01)
 
@@ -143,11 +152,83 @@ Everywhere (catalog, placement, built records, production, power, save), a struc
   kind above 192 is still untested; the sidecar design makes it moot for our own saves.
 - Pressure chamber costs $500, stone press $1,000, solar post / twin / tracker prices are in the definitions.
 
+## Answered by S0 (behaviour spike, 2026-11-01)
+
+Source: `spike-structures/` `WorldProbe` + traces, five in-game runs on `slot-2` (a `tools/copy-slot.ps1` clone of
+slot-1): build a solar twin (94) 12 m ahead of the walker and a pressure chamber (96) 10 m beyond it, log production
+and power every second for 120 s, `CrewProcessorLoad` 10 kg of dust at +30 s, save at the end. Runs 3 and 4 loaded a
+save holding the earlier rig, which covers restore. The sun was below the horizon at the walker on load (`SunFactor`
+0, status 'Night: no sunlight, and its batteries are empty'); the probe sets `SetLunarTime` to the time whose
+`SunDirectionAt` is closest to the walker's up (0.8225 here, ~42° elevation, `SunFactor` ~0.74–0.81).
+
+- **(a) Where the built view is instantiated: `MoonDepotConstruction.Spawn(MoonDepotSnapshot data)`, on build and
+  on restore.** A postfix sees the view with `__instance.ViewOf(data.id)`: an unparented root named
+  `'<display name> <id>'` (`'Solar twin 1'`, `'Pressure chamber 2'`). Inside `Spawn`, the prefab's
+  `MoonProductionView.Setup(world, id)` runs (`MoonSolarPanelView` / `MoonPressureChamberView`), then
+  `Keep(id, root)` registers it. Order:
+  - Build: all synchronous inside `TryBuildDepot`, same frame: `Setup` → `Keep` → `Spawn` returns true →
+    `MoonBuildReveal.Begin` / `MoonBuildReveal.Play(root)` → `MoonWorld.RevealBuilt(view, belt=0)` → a save snapshot
+    (`SnapshotCanisters`, `SnapshotDepots`) → `TryBuildDepot` returns true. `MoonDepotSave.Write` follows when the
+    save is written.
+  - Restore, one frame: `MoonDepotSave.Read` → `RestoreCanisters` → `RestoreDepots` → `RestoreProduction`
+    (`NewProduction` per machine) → `MoonDepotConstruction.Awake` → `Spawn` per depot (`Setup`, `Keep`). No
+    `RevealBuilt` and no `MoonBuildReveal` on restore, and `RestoreExistingViews` never fired, so neither is a
+    restore hook. `MoonBuildReveal` has no `Awake`/`Start` in this build; `Play` is its static entry point.
+  - Clean hook, so no fallback is needed: prefix/postfix `MoonDepotConstruction.Spawn` for modded kinds. The prefab it
+    instantiates comes from the definition (candidate path `SkinOf(def, style)`, not traced), so a cloned definition
+    with its own `prefab` should be enough for `BuildModel`, with `DecorateModel` in the `Spawn` postfix.
+- **(b) Power nodes are built inside `SolvePower`, which also works out each panel's `SunFactor` itself.**
+  - Nodes: the first `SolvePower` after a build went from `nodes=0` to `nodes=2` (`pool=2`, new objects); after that
+    the same objects are reused every call (`firstNodeSameObject=True`); after a second rig was built the next sampled
+    solve already had 4. Each node holds the depot `record` and its `MoonProductionState`
+    `state`; `panel=True` for the twin, with `spec` = 'Solar twin' 7.5 kW / 4 kWh; `parent=0` on every node; links 1
+    for 2 nodes, 5 for 4. `SolvePower` runs about four times a second (`dt` 0.25–0.27 s), not every frame.
+    `PowerCandidates(kind, position, rotation, result)` is only a placement query (it returned `[1]`, the twin, for a
+    chamber 8 m away) and is never called during play, so it is not a node-creation hook.
+  - Per panel, each solve: `SunFactor` is recomputed (planting `SunFactor = 0.25` just before a solve came out as
+    0.744), `UsedKw = spec.peakKw × SunFactor` (7.5 × 0.736 = 5.52), `SuppliedKw` = the panel's share of machine
+    demand (two panels and one 10 kW chamber: 5.00 each; one panel: all of its 5.70), `BatteryKw` = surplus × ~0.92
+    while charging (5.52 − 5.00 → 0.48; 5.84 idle → 5.38) or minus the deficit while discharging (−4.30 = 10 − 5.70,
+    no loss), and `ChargeKwh` integrates `BatteryKw` over real seconds (0.0416 → 0.0404 kWh in 1 s at −4.30 kW).
+  - Grid (`MoonPowerGrid`): `supplyKw` = Σ panel `UsedKw`, `peakKw` = Σ `spec.peakKw`, `capacityKwh` = Σ
+    `batteryKwh`, `storedKwh` = Σ `ChargeKwh`, `demandKw` = Σ running machines' `runningKw`. `satisfaction` was 1
+    whenever sun plus battery covered demand and 0 at night with empty batteries. Machine node: `DemandKw` = 10 only
+    while `Running`, `UsedKw = DemandKw × satisfaction`, `Power` = satisfaction (it reads 1.0 while idle). A
+    satisfaction between 0 and 1 was not observed.
+  - No clean per-node hook: there is no node-creation method outside `SolvePower`, and a `SunFactor` written before the
+    solve is overwritten. The spec's fallback applies: **postfix `SolvePower` to add supply for modded nodes
+    directly** (and "force `SunFactor` to 1 for fuel nodes" cannot be done by pre-setting the field).
+- **(c) The cycle mass rule is 1:1 and moves whole slots.** Pressure chamber, 10 kg dust loaded: `TryStartCycle`
+  moves `ChamberBatchKg` (5 kg) from slot 0 (Dust) to slot 1 (Pressing). After 12 s at `Power` 1 (progress +0.083 per
+  second), `FinishCycle` moves all of slot 1 into the output slot 2 at the same mass: pre `[0:5 1:5 2:0]` → post
+  `[0:5 1:0 2:5]`, then the next batch starts the same frame; the second cycle gave `[0:0 1:0 2:10]`. Owner shares
+  carry over (one owner throughout). `Cycles` goes up after `FinishCycle` returns (the post still shows the old value).
+  Mass is neither made nor lost: 10 kg dust → 10 kg sand. The stone press was not run.
+- **(d) `EmitCargo` needs a connected outfeed belt; without one it is never called.** With sand in the output slot
+  and no belt, `EmitProduct` runs on a short timer, leaves the output untouched and sets status
+  `'Connect a belt to the sand output'`. `EmitCargo` was patched and traced zero times across two full runs. The
+  output slot just fills (5 → 10 kg, its capacity).
+- **(e) `TryBuildDepot(builder, direction, yaw, out reason, null, kind)` accepts a null check** and validates inline:
+  `ok=True 'Solar twin built!'` / `'Pressure chamber built!'` on a clear site, and refusals with a null check read
+  `'Not enough money.'` (checked before the site), `'Too close to another structure.'`. The completed-check route
+  (`BeginDepotCheck` + `Advance`) gives the same kind of answer (`Valid`, `Reason` such as 'Too close to another
+  structure.' or 'Blocked by a player, object, or structure.'), and `TryBuildDepot` still refuses for money when
+  handed a check with `Valid=True`. Building at 22 m from the walker
+  was not refused for reach. The price comes off the team wallet: twin + chamber cost $650 (chamber $500, so twin
+  $150). A new machine's `MoonProductionState` is not created inside `TryBuildDepot` (`production` has no entry right
+  after it returns); `NewProduction` runs later in the same frame.
+
+Also answered:
+- Dev automation can load an existing slot from the menu: set `MoonSaveSlots.Active` to the index whose
+  `SlotFolder` ends in `/slot-<n>` (slot-2 is index 2), then `MoonSession.StartShift()` (spike `AutoLoad`).
+- `CrewProcessorLoad(player, machine, Dust, 10)` puts the 10 kg straight into input slot 0 under the player's owner
+  share; it does not wait for a canister.
+- `MoonCanisterSnapshot` has no `cargo` field (id, owner, kilograms, capacity, pose only). Every canister in this save
+  was dust, so it was not observed, but a non-dust canister presumably comes back as dust after a save.
+
 ## Still open
 
-- What `SolvePower` does per node (supply = `peakKw × SunFactor`, battery charge / discharge, `parent` links), to
-  choose how a fuel-burning generator plugs in. IL2CPP, so there is no IL to read: needs a behaviour spike with a
-  solar panel and a processor built, logging `MoonProductionState` per tick.
-- Where processor input arrives in practice (hand-fed canister vs. belt from a catcher or garage outfeed).
-- How the vanilla new-game flow starts from code (`MoonMainMenu.PlayChosen()` and `MoonSession.StartShift()` from a
-  plugin both did nothing from the menu). Starting by hand works; dev automation can load an existing slot instead.
+- How belt input reaches a processor (catcher / garage outfeed belt into a port, `EnterMachine`, `FeedProcessor`).
+- What `EmitProduct` → `EmitCargo` does with a belt attached, and whether the output slot's capacity stalls the cycle.
+- `SolvePower` with satisfaction between 0 and 1 (battery drained under load), and whether the press behaves like the
+  chamber.
