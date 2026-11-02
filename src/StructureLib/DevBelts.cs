@@ -15,8 +15,7 @@ namespace StructureLib
     internal static partial class DevTools
     {
         internal static ConfigEntry<string> AutoBelt, AutoBuildLayout;
-        internal static ConfigEntry<bool> DumpCards, RegisterBadPorts, SunOverhead, RegisterBoxProbe, PrefixProbe;
-        internal static ConfigEntry<string> HopProbe;
+        internal static ConfigEntry<bool> DumpCards, RegisterBadPorts, SunOverhead, RegisterBoxProbe;
         static bool cardsDumped, sunSet;
 
         static void BindBelts(ConfigFile cfg)
@@ -1261,39 +1260,20 @@ namespace StructureLib
         }
     }
 
-    // Box spike (belt-boxes plan, Task 1). Facts for the routers, from three dev switches:
-    //  [Dev] RegisterBoxProbe: the example plugin registers ryanhartwig.example-box-probe (a clone of the vanilla splitter,
-    //    kind 11, no processor, the donor's ports). 5 s after AutoBuild: the prefab components (distinct type names,
-    //    collider count) of kinds 4, 10, 11, 12, 93 and the probe's view, Routes(def, kind) for each, MachineJoins for the
-    //    probe's runtime ports, and a dust canister put at the end of the belt into the probe, followed for 10 s.
-    //  [Dev] HopProbe = emit|place: 10 s after AutoBelt (and after the self-test's belt checks) a 3 kg grit canister at
-    //    the end of the first AutoBelt belt; on its first HandOff the prefix hops it onto the second belt's start and
-    //    answers true. 'emit': EmitCargo(B, owner, cargo, 3.0), MoveCanisterRecord of the new canister to 3 kg / capacity
-    //    3, RemoveCanister of the arriving one. 'place': PlaceRider(id, BeltPath(B), 0f). Riders and queues of both belts
-    //    are logged before, after and for 3 s (and once at 10 s).
-    //  [Dev] PrefixProbe: inside the HandOff prefix for a belt ending at a modded machine, EntranceClear, WaitingAtEnd,
-    //    BeltStartingAt and BeltEndingAt on every call (one log line per belt, a call count every 10 s).
+    // [Dev] RegisterBoxProbe: the example plugin registers ryanhartwig.example-box-probe, a router (a splitter: In on -X,
+    // Forward on +X, Left on +Z, Right on -Z) cloned from the floodlight (kind 4) with a 1.4 x 1.4 m Footprint. 15 s
+    // after load: the donor's and the probe's build definitions (halfFootprint, Routes(def, kind), port count), the
+    // prefab components and colliders of both and of the probe's built view, MachineJoins for the probe's runtime ports,
+    // and three dust canisters put on the AutoBelt belt into the probe, followed for 10 s (each hops onto a belt at
+    // one of the probe's outputs that can take it, or waits: RouterHop, CargoRouted). Belt-boxes plan Tasks 1 and 3.
     internal static class BoxSpike
     {
         internal const string ProbeId = "ryanhartwig.example-box-probe";
-        const string GritCargoId = "ryanhartwig.example-grit";
-        static readonly int[] DonorKinds = { 4, 10, 11, 12, 93 };
+        static readonly int[] DonorKinds = { 4 };
 
         static bool donorDone;
         static int dustId = -1, dustBelt = -1, dustDepot = -1;
         static float dustFrom = -1f, dustNext = -1f;
-
-        static float beltsAt = -1f;
-        static int hopPhase, hopId = -1, hopNew = -1, beltA = -1, beltB = -1, hopTries;
-        static float hopFrom = -1f, hopNext = -1f;
-        static bool hopLate, hopAgain;
-
-        static MoonWorld probeWorld;
-        static readonly HashSet<int> probed = new();
-        static int probeCalls, probeThrew;
-        static float probeNext = -1f;
-
-        static string Mode => (DevTools.HopProbe?.Value ?? "").Trim().ToLowerInvariant();
 
         internal static void Tick(float gameT)
         {
@@ -1304,20 +1284,10 @@ namespace StructureLib
                 float now = Time.unscaledTime;
                 if (DevTools.RegisterBoxProbe.Value && !donorDone && gameT > 15f) { donorDone = true; Donors(world); }
                 if (dustId >= 0 && now >= dustNext) DustTick(world, now);
-                if (beltsAt < 0f && AutoBelter.Results.Count(r => r.Ok) >= 2) beltsAt = gameT;
-                if ((Mode == "emit" || Mode == "place") && hopPhase == 0 && beltsAt >= 0f && gameT > beltsAt + 10f && gameT > 21f && !SelfTest.BeltPending) ArmHop(world, now);
-                if (hopPhase == 1 && now > hopFrom + 30f) { hopPhase = 9; CoreLog.Warn($"[spike] hop: canister {hopId} got no hop within 30 s ({hopTries} HandOff calls seen); {Canister(world, hopId)}; belt {beltA}: {SelfTest.RidersText(world, beltA)}"); }
-                if (hopPhase == 2 && now >= hopNext) HopTick(world, now);
-                if (DevTools.PrefixProbe.Value && probeCalls > 0 && now >= probeNext)
-                {
-                    probeNext = now + 10f;
-                    CoreLog.Info($"[spike] PrefixProbe: {probeCalls} prefix calls so far, {probeThrew} threw, {probed.Count} belt(s) seen");
-                }
             }
             catch (Exception e) { CoreLog.Once("spike-tick", "[spike] tick threw: " + e, 3); }
         }
 
-        // (a) Donor facts.
         static void Donors(MoonWorld world)
         {
             var probe = MoonStructures.Definition(ProbeId);
@@ -1340,32 +1310,45 @@ namespace StructureLib
             var rec = world.depots.get_Item(depot);
             var view = UnityEngine.Object.FindFirstObjectByType<MoonDepotConstruction>()?.ViewOf(depot);
             Components($"probe depot {depot} view", view);
-            var bodies = view == null ? null : view.GetComponentsInChildren<MoonMachineBelt>(true);
-            CoreLog.Info($"[spike] probe depot {depot}: MoonMachineBelt {(bodies == null ? "no view" : bodies.Length == 0 ? "absent" : $"present x{bodies.Length} on '{bodies[0].gameObject.name}' (enabled {bodies[0].enabled}, active {bodies[0].gameObject.activeInHierarchy})")}; ports {PortResolver.Describe(MoonStructures.PortsOf(probe)?.ToList())}");
+            var colliders = view == null ? null : view.GetComponentsInChildren<Collider>(true);
+            string colliderText = colliders == null ? "no view" : string.Join(", ", colliders.Select(c => c.GetIl2CppType().Name + " on '" + PathOf(c.transform, view.transform) + "'"));
+            CoreLog.Info($"[spike] probe depot {depot}: colliders on the view [{colliderText}]; ports {PortResolver.Describe(MoonStructures.PortsOf(probe)?.ToList())}");
             foreach (var p in AutoBelter.RuntimePorts(world, rec))
             {
                 string joins;
                 try { joins = world.MachineJoins(rec.kind, p).ToString(); } catch (Exception e) { joins = "threw " + e.Message; }
                 CoreLog.Info($"[spike] probe depot {depot} runtime port '{p.label}' {(p.output ? "out" : "in")} at {AutoBelter.V(p.position)} dir {AutoBelter.V(p.direction)} belt {p.belt}: MachineJoins {joins}");
             }
-            // Any AutoBelt belt into a probe depot (the second probe of a probe-to-probe line, for one).
             var r = AutoBelter.Results.FirstOrDefault(x => x.Ok && x.To >= 0 && world.depots.ContainsKey(x.To) && world.depots.get_Item(x.To).kind == probe.Kind);
             if (r == null) { CoreLog.Info("[spike] no AutoBelt belt into a probe: dust canister not placed"); return; }
+            // Three dust canisters, as the belt's spacing allows: each hops to the next output that can take it, and
+            // one that no output can take (an output belt full, the others not joined) waits at the input.
             var path = world.BeltPath(r.Belt);
-            int id = SelfTest.Spawn(world, path, path.Length - 0.4f, MoonCargo.Dust, out string why);
-            CoreLog.Info($"[spike] probe dust: canister {id} put at d {path.Length - 0.4f:F2} of belt {r.Belt} (length {path.Length:F2}) into probe depot {r.To}{(id < 0 ? ": " + why : "")}");
-            if (id < 0) return;
-            dustId = id; dustBelt = r.Belt; dustDepot = r.To;
+            if (!routedHooked) { routedHooked = true; MoonStructures.CargoRouted += c => { if (c.DepotId == dustDepot) routed.Add(c); }; }
+            routed.Clear();
+            dustDepot = r.To;
+            var ids = new List<int>();
+            foreach (float d in new[] { path.Length - 0.4f, path.Length - 1.15f, path.Length - 1.9f })
+            {
+                if (d < 0.1f) break;
+                int id = SelfTest.Spawn(world, path, d, MoonCargo.Dust, out string why);
+                CoreLog.Info($"[spike] probe dust: canister {id} put at d {d:F2} of belt {r.Belt} (length {path.Length:F2}) into probe depot {r.To}{(id < 0 ? ": " + why : "")}");
+                if (id >= 0) ids.Add(id);
+            }
+            if (ids.Count == 0) return;
+            dustId = ids[0]; dustBelt = r.Belt;
+            outBelt = AutoBelter.Results.FirstOrDefault(x => x.Ok && x.From == r.To)?.Belt ?? -1;
             dustFrom = Time.unscaledTime; dustNext = dustFrom + 1f;
         }
+
+        static readonly List<CargoRouted> routed = new();
+        static bool routedHooked;
+        static int outBelt = -1;
 
         static void DustTick(MoonWorld world, float now)
         {
             dustNext = now + 2f;
-            var rec = world.depots != null && world.depots.ContainsKey(dustDepot) ? world.depots.get_Item(dustDepot) : null;
-            float toDepot = -1f;
-            if (rec != null && world.canisters.ContainsKey(dustId)) toDepot = Vector3.Distance(world.canisters.get_Item(dustId).position, new Vector3(rec.x, rec.y, rec.z));
-            CoreLog.Info($"[spike] probe dust t+{now - dustFrom:F0} s: {Canister(world, dustId)}, {toDepot:F2} m from the depot centre; WaitingAtEnd({dustBelt}) {Try(() => world.WaitingAtEnd(dustBelt).ToString())}; riders on belt {dustBelt}: {SelfTest.RidersText(world, dustBelt)}; machineTurns has depot {Try(() => world.machineTurns?.ContainsKey(dustDepot).ToString())}, lastInput {Try(() => world.lastInput?.ContainsKey(dustDepot).ToString())}, crossingByMachine {Try(() => world.crossingByMachine?.ContainsKey(dustDepot).ToString())}");
+            CoreLog.Info($"[spike] probe dust t+{now - dustFrom:F0} s: first {Canister(world, dustId)}; CargoRouted {routed.Count}x [{string.Join(", ", routed.Select(c => $"{c.Kilograms} kg {c.Cargo} belt {c.FromBeltId}->{c.ToBeltId}"))}]; riders on in belt {dustBelt}: {SelfTest.RidersText(world, dustBelt)}; WaitingAtEnd({dustBelt}) {Try(() => world.WaitingAtEnd(dustBelt).ToString())}; riders on out belt {outBelt}: {(outBelt >= 0 ? SelfTest.RidersText(world, outBelt) : "none")}");
             if (now > dustFrom + 10.5f) dustId = -1;
         }
 
@@ -1395,127 +1378,6 @@ namespace StructureLib
             return parts.Count == 0 ? "<root>" : string.Join("/", parts);
         }
 
-        // (b)/(c) The hop.
-        static void ArmHop(MoonWorld world, float now)
-        {
-            hopPhase = 9;
-            var ok = AutoBelter.Results.Where(r => r.Ok).ToList();
-            beltA = ok[0].Belt; beltB = ok[1].Belt;
-            var grit = MoonStructures.CargoDefinition(GritCargoId);
-            var pathA = world.BeltPath(beltA);
-            if (grit == null || pathA == null) { CoreLog.Warn($"[spike] hop: grit {(grit != null)}, BeltPath({beltA}) {(pathA != null)}"); return; }
-            // A canister already waiting at the end of belt A (the self-test's belt checks leave one there) is used
-            // instead of a new one, which would only queue behind it.
-            int id = -1;
-            float front = -1f;
-            foreach (var kv in world.riders)
-                if (kv.Value.belt == beltA && kv.Value.distance > front && world.canisters.ContainsKey(kv.Key)) { front = kv.Value.distance; id = kv.Key; }
-            if (id >= 0 && front >= pathA.Length - 0.05f) CoreLog.Info($"[spike] hop: canister {id} already waits at the end of belt A {beltA} (d {front:F2}); using it");
-            else
-            {
-                id = SelfTest.Spawn(world, pathA, pathA.Length - 0.4f, (MoonCargo)grit.Value, out string why);
-                if (id < 0) { CoreLog.Warn("[spike] hop: spawning the canister failed: " + why); return; }
-            }
-            // 3 kg / capacity 3 of grit, built the way BeltPatches.Intake builds its 'left' canister.
-            var c = world.canisters.get_Item(id);
-            var rotation = new Il2CppSystem.Nullable<Quaternion>(c.rotation);
-            var heavy = new MoonDroppedCanister(c.id, c.owner, 3.0, 3.0, c.position, c.up, c.createdAt, rotation, (MoonCargo)grit.Value);
-            heavy.physicalPose = c.physicalPose;
-            world.MoveCanisterRecord(heavy, c.position, c.up, rotation);
-            // Belt B is emptied first: the self-test's belt-save-clean pins a refused canister at its end, and a full belt
-            // refuses EmitCargo ('The grit output belt is full').
-            var onB = new List<int>();
-            foreach (var kv in world.riders) if (kv.Value.belt == beltB) onB.Add(kv.Key);
-            foreach (int k in onB) world.RemoveCanister(k);
-            CoreLog.Info($"[spike] hop: removed {onB.Count} canister(s) [{string.Join(",", onB)}] from belt B {beltB}; riders B now {SelfTest.RidersText(world, beltB)}");
-            hopId = id; hopPhase = 1; hopFrom = now;
-            CoreLog.Info($"[spike] hop ({Mode}): canister {id} put at d {pathA.Length - 0.4f:F2} of belt A {beltA} (length {pathA.Length:F2}); belt B {beltB}; {Canister(world, id)}");
-        }
-
-        /// <summary>Called by the HandOff prefix for a belt ending at a modded machine. Non-null: answer it, skip the rest.</summary>
-        internal static bool? InPrefix(MoonWorld world, int belt, MoonConveyorPath path, int id, int depot, StructureDefinition def)
-        {
-            if (DevTools.PrefixProbe.Value) Probe(world, belt, path, id, depot, def);
-            if (id != hopId) return null;
-            if (hopPhase >= 2 && !hopAgain) { hopAgain = true; CoreLog.Info($"[spike] hop: HandOff called again for canister {id} on belt {belt} after the hop (phase {hopPhase}); {Canister(world, id)}"); }
-            if (hopPhase != 1 || belt != beltA) return null;
-            hopTries++;
-            try
-            {
-                bool loud = hopTries == 1 || hopTries % 60 == 0;
-                if (loud) CoreLog.Info($"[spike] hop before (HandOff call {hopTries}): {Canister(world, id)}; {Belts(world)}; EntranceClear(B) {world.EntranceClear(beltB)}");
-                if (Mode == "place")
-                {
-                    var pathB = world.BeltPath(beltB);
-                    world.PlaceRider(id, pathB, 0f);
-                    CoreLog.Info($"[spike] hop place: PlaceRider({id}, BeltPath({beltB}), 0f) returned; {Canister(world, id)}; {Belts(world)}; answering true");
-                }
-                else
-                {
-                    var src = world.canisters.get_Item(id);
-                    string owner = string.IsNullOrEmpty(src.owner) ? MoonWorld.LocalPlayer : src.owner;
-                    var snapB = world.conveyors.get_Item(beltB);
-                    var before = new HashSet<int>();
-                    foreach (var kv in world.canisters) before.Add(kv.Key);
-                    bool ok = world.EmitCargo(snapB, owner, src.cargo, 3.0, out string reason);
-                    int fresh = -1;
-                    foreach (var kv in world.canisters) if (!before.Contains(kv.Key)) { fresh = kv.Key; break; }
-                    if (loud || ok) CoreLog.Info($"[spike] hop emit: EmitCargo(belt {beltB}, owner {CoreLog.Redact(owner)}, cargo {(byte)src.cargo}, 3.0) -> {ok} reason '{reason}'; new canister {fresh}: {(fresh >= 0 ? Canister(world, fresh) : "none")}");
-                    if (!ok || fresh < 0)
-                    {
-                        if (hopTries >= 300) { hopPhase = 9; CoreLog.Warn($"[spike] hop emit: gave up after {hopTries} tries"); }
-                        return false;
-                    }
-                    var n = world.canisters.get_Item(fresh);
-                    var rotation = new Il2CppSystem.Nullable<Quaternion>(n.rotation);
-                    var heavy = new MoonDroppedCanister(n.id, n.owner, 3.0, 3.0, n.position, n.up, n.createdAt, rotation, n.cargo);
-                    heavy.physicalPose = n.physicalPose;
-                    world.MoveCanisterRecord(heavy, n.position, n.up, rotation);
-                    CoreLog.Info($"[spike] hop emit: after MoveCanisterRecord(3 kg, capacity 3): {Canister(world, fresh)}");
-                    world.RemoveCanister(id);
-                    CoreLog.Info($"[spike] hop emit: RemoveCanister({id}) -> present {world.canisters.ContainsKey(id)}; {Belts(world)}; answering true");
-                    hopNew = fresh;
-                }
-                hopPhase = 2; hopFrom = Time.unscaledTime; hopNext = hopFrom + 0.5f;
-                return true;
-            }
-            catch (Exception e)
-            {
-                hopPhase = 9;
-                CoreLog.Warn($"[spike] hop ({Mode}) threw; the canister waits: {e}");
-                return false;
-            }
-        }
-
-        static void HopTick(MoonWorld world, float now)
-        {
-            float t = now - hopFrom;
-            CoreLog.Info($"[spike] hop t+{t:F1} s: {Canister(world, hopId)}{(hopNew >= 0 ? $"; new {Canister(world, hopNew)}" : "")}; {Belts(world)}");
-            if (t < 2.9f) hopNext = now + 0.5f;
-            else if (!hopLate) { hopLate = true; hopNext = hopFrom + 10f; }
-            else hopPhase = 3;
-        }
-
-        static string Belts(MoonWorld world) =>
-            $"riders A {beltA}: {SelfTest.RidersText(world, beltA)}; riders B {beltB}: {SelfTest.RidersText(world, beltB)}; queue A {Queue(world, beltA)}; queue B {Queue(world, beltB)}; leftBelts [{Try(() => LeftBelts(world))}]";
-
-        static string Queue(MoonWorld world, int belt) => Try(() =>
-        {
-            if (world.beltQueues == null || !world.beltQueues.ContainsKey(belt)) return "none";
-            var q = world.beltQueues.get_Item(belt);
-            // Only the entry count: the (distance, id) tuples read back as garbage through the interop enumerator.
-            int n = 0;
-            if (q != null) foreach (var _ in q) n++;
-            return $"{n} entr{(n == 1 ? "y" : "ies")}";
-        });
-
-        static string LeftBelts(MoonWorld world)
-        {
-            var parts = new List<string>();
-            if (world.leftBelts != null) foreach (var b in world.leftBelts) parts.Add(b.ToString());
-            return string.Join(",", parts);
-        }
-
         // One canister: present, kilograms / capacity, cargo, rider (belt, distance, moving).
         static string Canister(MoonWorld world, int id) => Try(() =>
         {
@@ -1529,37 +1391,6 @@ namespace StructureLib
             }
             return $"canister {id} {c.kilograms:F2} kg / capacity {c.capacity:F2}, cargo {(byte)c.cargo}, at {AutoBelter.V(c.position)}, {rider}";
         });
-
-        // (d) Calls from inside the prefix.
-        static void Probe(MoonWorld world, int belt, MoonConveyorPath path, int id, int depot, StructureDefinition def)
-        {
-            if (!ReferenceEquals(world, probeWorld)) { probeWorld = world; probed.Clear(); }
-            probeCalls++;
-            try
-            {
-                bool clear = world.EntranceClear(belt), waiting = world.WaitingAtEnd(belt);
-                var snap = world.conveyors != null && world.conveyors.ContainsKey(belt) ? world.conveyors.get_Item(belt) : null;
-                Vector3 start = snap != null ? snap.start : path.start, end = path != null ? path.end : snap.end;
-                var starting = world.BeltStartingAt(start);
-                var ending = world.BeltEndingAt(end);
-                var outs = new List<string>();
-                var view = UnityEngine.Object.FindFirstObjectByType<MoonDepotConstruction>()?.ViewOf(depot);
-                foreach (var p in (MoonStructures.PortsOf(def) ?? new List<PortDefinition>()).Where(p => p != null && p.Output))
-                {
-                    if (view == null) { outs.Add($"'{p.Name}' no view"); continue; }
-                    var at = view.transform.position + view.transform.rotation * p.Position;
-                    var b = world.BeltStartingAt(at);
-                    outs.Add(b == null ? $"'{p.Name}' BeltStartingAt null" : $"'{p.Name}' BeltStartingAt {b.id} EntranceClear {world.EntranceClear(b.id)}");
-                }
-                if (probed.Add(belt))
-                    CoreLog.Info($"[spike] PrefixProbe belt {belt} -> '{def.Id}' depot {depot}, canister {id}: EntranceClear {clear} WaitingAtEnd {waiting} BeltStartingAt(start) {(starting == null ? "null" : starting.id.ToString())} BeltEndingAt(end) {(ending == null ? "null" : ending.id.ToString())}; output ports [{string.Join("; ", outs)}]");
-            }
-            catch (Exception e)
-            {
-                probeThrew++;
-                CoreLog.Once("spike-probe:" + belt, $"[spike] PrefixProbe belt {belt} threw: {e}", 2);
-            }
-        }
 
         static string Try(Func<string> f)
         {

@@ -48,6 +48,16 @@ namespace StructureLib
 
         internal static (List<PortDefinition> Ports, string Rule) Resolve(StructureDefinition d, DonorShape donor, Func<StructureDefinition, DonorShape, List<PortDefinition>> modelPorts)
         {
+            var r = ResolveAny(d, donor, modelPorts);
+            // A router's ports carry no cargo of their own (a model's Port_* nodes need no cargo property, a declared
+            // port's Cargo is ignored): each is written into the clone with the dust byte (RouterRules.PortCargoId).
+            if (d.Router != null && r.Ports != null)
+                foreach (var p in r.Ports) p.Cargo = new Cargo(Cargo.Dust.Value, RouterRules.PortCargoId);
+            return r;
+        }
+
+        static (List<PortDefinition> Ports, string Rule) ResolveAny(StructureDefinition d, DonorShape donor, Func<StructureDefinition, DonorShape, List<PortDefinition>> modelPorts)
+        {
             List<PortDefinition> fromModel = null;
             if (modelPorts != null)
             {

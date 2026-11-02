@@ -16,7 +16,9 @@ namespace StructureLib.Patches
     // CrewProcessorLoad's prefix does), the canister is removed with the game's own RemoveCanister (or its kilograms
     // rewritten through MoveCanisterRecord when only part fits), and MoonStructures.CargoEntered fires. A refusal answers
     // false (the canister keeps waiting, as vanilla leaves a refused one) and sets the machine's flow status in vanilla's
-    // wording. Any belt whose end is not a modded machine runs vanilla untouched.
+    // wording. Any belt whose end is not a modded machine runs vanilla untouched. A router's input port (a structure with
+    // StructureDefinition.Router) goes to RouterHop instead: no slot, no cargo check, the canister moves onto a belt at one
+    // of its output ports or waits.
     //
     // Belt -> (depot, port) is resolved once per belt and cached (HandOff runs every frame for a waiting canister): the
     // machine is MachineWithPort(end, false), the port is the resolved PortDefinition whose local position, placed by the
@@ -33,7 +35,7 @@ namespace StructureLib.Patches
         sealed class Joined
         {
             internal Vector3 End;
-            internal int Depot = -1, Kind = -1;
+            internal int Belt = -1, Depot = -1, Kind = -1;
             internal StructureDefinition Definition;
             internal PortDefinition Port;
             internal string WaitingText;
@@ -56,13 +58,6 @@ namespace StructureLib.Patches
                 return true;
             }
             if (j?.Definition == null || j.Port == null) return true;
-#if DEVBUILD
-            // [Dev] HopProbe / PrefixProbe (DevBelts.cs BoxSpike): modded machines only, past the vanilla early-out above.
-            bool? spike = null;
-            try { spike = BoxSpike.InPrefix(__instance, belt, path, id, j.Depot, j.Definition); }
-            catch (Exception e) { CoreLog.Once("handoff-spike", $"[spike] HandOff probe threw: {e}", 1); }
-            if (spike.HasValue) { __result = spike.Value; return false; }
-#endif
             __result = Intake(__instance, j, id);
             return false;
         }
@@ -85,7 +80,7 @@ namespace StructureLib.Patches
                 cache.Remove(belt);
             }
 
-            j = new Joined { End = end };
+            j = new Joined { End = end, Belt = belt };
             int depot = world.MachineWithPort(end, false);
             var rec = depot >= 0 && world.depots != null && world.depots.ContainsKey(depot) ? world.depots.get_Item(depot) : null;
             var def = rec == null ? null : Remap.Live(rec.kind);
@@ -129,6 +124,7 @@ namespace StructureLib.Patches
             if (ReferenceEquals(world, cacheWorld) && belts == cacheBelts && depots == cacheDepots) return;
             cache.Clear();
             emitters.Clear();
+            RouterHop.Reset();
             cacheWorld = world;
             cacheBelts = belts;
             cacheDepots = depots;
@@ -177,6 +173,8 @@ namespace StructureLib.Patches
                 if (canisters == null || !canisters.ContainsKey(id)) return false;
                 var c = canisters.get_Item(id);
                 if (c.kilograms <= 0) return false;
+                // A router passes any cargo: no slot, no cargo check (RouterHop).
+                if (d.Router != null) return RouterHop.Hop(world, d, j.Depot, j.Port, j.Belt, id);
                 string cargoId = CargoId(c.cargo);
                 var s = world.ProductionOf(j.Depot);
                 (int Slot, double Kilograms, string Refusal) r;

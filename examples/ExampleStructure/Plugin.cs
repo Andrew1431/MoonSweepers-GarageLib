@@ -126,18 +126,28 @@ namespace ExampleStructure
                     Ports = new() { PortDefinition.In("Sand in", Cargo.Sand, new Vector3(-2.95f, 0.85f, 0f), Vector3.right) },
                 }, Guid);
 
-            // Dev builds of StructureLib only ([Dev] RegisterBoxProbe): a clone of the vanilla splitter (kind 11) with no
-            // processor and no declared ports, so the donor's IN / OUT_A / OUT_B stay. The box spike (DevBelts.cs BoxSpike)
-            // reads its donor facts and belts to it.
+            // Dev builds of StructureLib only ([Dev] RegisterBoxProbe): a router, a 1.4 m box splitter on the floodlight
+            // (kind 4: no game script, one collider, not a vanilla router). One input on -X, outputs on the other three
+            // faces, all flowing outward; round-robin in this port order (Forward, Left, Right). Router ports carry no cargo
+            // (any cargo passes), so Cargo here is ignored. DevBelts.cs BoxSpike logs its definition and view and belts to it.
             if (StructureLibDevFlag("RegisterBoxProbe"))
                 MoonStructures.Register(new StructureDefinition
                 {
                     Id = BoxProbeId,
                     Name = "Box probe",
                     Category = "Logistics",
-                    Note = "StructureLib dev probe: a splitter clone.",
+                    Note = "StructureLib dev probe: a box splitter.",
                     Price = 5m,
-                    BaseStructure = 11, // vanilla splitter
+                    BaseStructure = 4, // vanilla floodlight
+                    Router = new RouterDefinition { Mode = RouterMode.Splitter },
+                    Footprint = new Vector2(1.4f, 1.4f),
+                    Ports = new()
+                    {
+                        PortDefinition.In("In", Cargo.Dust, new Vector3(-0.70f, 0.85f, 0f), Vector3.right),
+                        PortDefinition.Out("Forward", Cargo.Dust, new Vector3(0.70f, 0.85f, 0f), Vector3.right),
+                        PortDefinition.Out("Left", Cargo.Dust, new Vector3(0f, 0.85f, 0.70f), Vector3.forward),
+                        PortDefinition.Out("Right", Cargo.Dust, new Vector3(0f, 0.85f, -0.70f), Vector3.back),
+                    },
                 }, Guid);
         }
 

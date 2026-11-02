@@ -112,6 +112,9 @@ from an input port to an output port, then board the output belt. The members th
 
 ## 3. Several ports on a StructureLib structure today
 
+> Settled by the spike: `Routes(def, kind)` reads the definition, so a clone of 11 or 12 answers True (see "Spike
+> facts (Task 1)" (a)); the last bullet's "probably false" below is wrong.
+
 - **Outputs: refused at freeze.** `PortRules.CheckPorts` adds "N output ports; a structure has at most one"
   (`src/StructureLib/Pure/PortRules.cs:45-47`). It also needs every output's cargo to be the single Output slot's
   (lines 39-42), so a processor-less structure cannot declare an output at all.
@@ -271,7 +274,7 @@ anyway. It is no cheaper than B and worse in every way.
 ## Open questions
 
 1. Does vanilla `HandOff` call `EnterMachine` for a splitter's input, and does `Routes(def, kind)` read the kind or
-   the definition? Settle it with a trace of `HandOff` / `EnterMachine` / `RouteEntranceClear` on a built vanilla
+   the definition? (Settled for `Routes` by the spike: it reads the definition, "Spike facts (Task 1)" (a).) Settle it with a trace of `HandOff` / `EnterMachine` / `RouteEntranceClear` on a built vanilla
    splitter, plus `Routes` answers for 11, 12 and a clone. This decides whether A is possible at all.
 2. Vanilla splitter rule: strict alternation through `machineTurns`, or skipping blocked or unconnected outputs?
    (Trace `machineTurns` with one output belt full.) The merger: what `GivesWay` prefers.
@@ -286,7 +289,7 @@ anyway. It is no cheaper than B and worse in every way.
 ## Spike facts (Task 1)
 
 Traced in game on slot-2 (restored from `.scratch/slot-2-backup-task11` before every run), 2026-11-02, with the dev
-switches `[Dev] RegisterBoxProbe`, `HopProbe`, `PrefixProbe` (`src/StructureLib/DevBelts.cs` `BoxSpike`; the probe
+switches `[Dev] RegisterBoxProbe`, `HopProbe`, `PrefixProbe` (the last two removed in Task 3, when the router hop replaced them; `src/StructureLib/DevBelts.cs` `BoxSpike`; the probe
 structure `ryanhartwig.example-box-probe` is a clone of kind 11 with no processor and `Ports` null, registered by
 `examples/ExampleStructure/Plugin.cs` behind the flag). Logs: `.superpowers/sdd/2026-11-02-belt-boxes/task-1-logs/`
 (`run1-donors`, `run2-sidebelts`, `run3-probe-dust`, `run4a`/`run4b`/`run4c` emit, `run5-place`). AutoBuild gained two
@@ -370,7 +373,7 @@ used the same chain. The signature is `Void PlaceRider(Int32 id, MoonConveyorPat
 
 **(d) The four calls are safe from the `HandOff` prefix.** With `PrefixProbe` on, these calls ran on every prefix call
 over four world loads (run3, run4a, run4b, run4c), with no throw and no native crash (`PrefixProbe: 51024 prefix calls
-so far, 0 threw, 2 belt(s) seen`, run4a):
+so far, 0 threw, 2 belt(s) seen` is an intermediate tick of run4a; its last was 57,296 calls, 0 threw):
 - `EntranceClear(belt)`, `WaitingAtEnd(belt)`, `BeltStartingAt(start)` and `BeltEndingAt(end)`;
 - per output port of the machine, `BeltStartingAt(port point)` and `EntranceClear` of that belt.
 
@@ -395,7 +398,8 @@ port flows +Z.
 - `routable` was True for every direction pairing, but `valid` never was:
   - as declared (+start, +end): 'Turn too tight', length 6.86 for OUT_A (4.46 m across) and 5.56 for OUT_B (3.06 m
     across);
-  - the reversed pairings: 'Blocked by a structure' (lengths 4.74–7.03).
+  - the reversed pairings: for OUT_A 'Blocked by a structure' (lengths 6.04–7.03); for OUT_B 'Turn too tight' with
+    one direction reversed (5.60) and 'Blocked by a structure' with both reversed (4.74).
 - Run1 failed the same way (`96,probe` at yaw 0, the chamber's +X output into the probe's +Z input; length 4.70,
   'Turn too tight').
 - The same probe at yaw 90 behind the chamber (run3) built a straight 2.53 m belt on the first route

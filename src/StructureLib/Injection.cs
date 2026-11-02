@@ -103,6 +103,14 @@ namespace StructureLib
             clone.name = "StructureLib_" + d.Id;
             // Nothing in the scene references the clone until something is built from it; keep asset GC off it.
             clone.hideFlags |= HideFlags.DontUnloadUnusedAsset;
+            // StructureDefinition.Footprint (full width and depth) replaces the donor's half footprint, which placement,
+            // spacing and the line layout read. Before the model, so a BuildModel sees the final shape.
+            if (d.Footprint.HasValue)
+            {
+                var was = clone.halfFootprint;
+                clone.halfFootprint = d.Footprint.Value / 2f;
+                CoreLog.Info($"'{d.Id}': halfFootprint ({was.x:F2}, {was.y:F2}) -> ({clone.halfFootprint.x:F2}, {clone.halfFootprint.y:F2}) from Footprint {d.Footprint.Value.x:F2} x {d.Footprint.Value.y:F2}");
+            }
             // A Model file with no BuildModel of the mod's own: the library's swap onto the donor template.
             var build = d.BuildModel ?? (d.ModelPath != null ? (ModelContext ctx) => ModelSwap.Build(d, ctx) : null);
             if (build != null) ApplyBuildModel(d, build, clone, donor);

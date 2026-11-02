@@ -9,7 +9,8 @@ namespace StructureLib
     // StructureDefinition.Model: a .bin from shared/blender/export_mesh_model.py next to the registering mod's DLL.
     // Build is the default BuildModel when Model is set (and BuildModel is not): the donor's prefab becomes the template
     // with every donor renderer hidden (its colliders, views and scripts stay) and the model under a "StructureLibModel" child
-    // of the template root, standing where the donor's meshes stood. Ports reads the model's Port_* nodes.
+    // of the template root, standing where the donor's meshes stood. With StructureDefinition.Footprint set, the donor's
+    // colliders are replaced by one box over the footprint and the model's height. Ports reads the model's Port_* nodes.
     internal static class ModelSwap
     {
         internal const string HolderName = "StructureLibModel";
@@ -93,7 +94,7 @@ namespace StructureLib
                 model.Instantiate(holder, IsPort, StructureMaterials.For);
 
                 // Check the placement against the built transforms: the lowest vertex must sit at y 0.
-                float measured = float.PositiveInfinity;
+                float measured = float.PositiveInfinity, top = float.NegativeInfinity;
                 int meshes = 0;
                 foreach (var mf in holder.GetComponentsInChildren<MeshFilter>(true))
                 {
@@ -102,9 +103,15 @@ namespace StructureLib
                     meshes++;
                     var t = mf.transform;
                     var verts = mesh.vertices;
-                    for (int i = 0; i < verts.Length; i++) measured = Mathf.Min(measured, root.InverseTransformPoint(t.TransformPoint(verts[i])).y);
+                    for (int i = 0; i < verts.Length; i++)
+                    {
+                        float y = root.InverseTransformPoint(t.TransformPoint(verts[i])).y;
+                        measured = Mathf.Min(measured, y);
+                        top = Mathf.Max(top, y);
+                    }
                 }
                 foreach (var t in holder.GetComponentsInChildren<Transform>(true)) t.gameObject.layer = template.layer;
+                if (d.Footprint.HasValue) SwapColliders(d, template, d.Footprint.Value, ctx.Donor.scale, measured, top);
 
                 CoreLog.Info($"'{d.Id}': model {d.Model} on base {d.BaseStructure} ('{prefab.name}'): hid {hidden} donor renderer(s) ({hiddenMeshes} mesh/skinned), {meshes} model mesh(es); donor lowest bound {donorBottom:F3} (floorOffset {ctx.Donor.floorOffset:F3}, not added), model lowest vertex {place.Lowest:F3} -> holder offset {place.Offset:F3}, scale {place.Scale:F2}; built lowest vertex {(float.IsInfinity(measured) ? "none" : measured.ToString("F3"))}");
                 if (Mathf.Abs(place.Offset) > 1e-4f || Mathf.Abs(place.Scale - 1f) > 1e-4f)
@@ -117,6 +124,33 @@ namespace StructureLib
                 if (template != null) UnityEngine.Object.Destroy(template);
                 return null;
             }
+        }
+
+        // StructureDefinition.Footprint with a Model: the donor's colliders would outlive its hidden mesh (a big donor's
+        // collision around a small box), so every Collider on the template goes and one BoxCollider covers the footprint
+        // and the model's height (template-local; the footprint in metres through the donor's scale). It sits on the
+        // template root, or on a child with the first donor collider's layer when that differs from the root's.
+        static void SwapColliders(StructureDefinition d, GameObject template, Vector2 footprint, float donorScale, float bottom, float top)
+        {
+            var colliders = template.GetComponentsInChildren<Collider>(true);
+            int layer = template.layer;
+            bool trigger = false;
+            if (colliders.Length > 0) { layer = colliders[0].gameObject.layer; trigger = colliders[0].isTrigger; }
+            foreach (var c in colliders) UnityEngine.Object.DestroyImmediate(c);
+            if (float.IsInfinity(bottom) || float.IsInfinity(top) || top - bottom < 0.01f) { bottom = 0f; top = 1f; }
+            float h = top - bottom, s = Math.Max(donorScale, 0.01f);
+            var host = template;
+            if (layer != template.layer)
+            {
+                host = new GameObject("StructureLibCollider");
+                host.transform.SetParent(template.transform, false);
+                host.layer = layer;
+            }
+            var box = host.AddComponent<BoxCollider>();
+            box.center = new Vector3(0f, bottom + h / 2f, 0f);
+            box.size = new Vector3(footprint.x / s, h, footprint.y / s);
+            box.isTrigger = trigger;
+            CoreLog.Info($"'{d.Id}': footprint {footprint.x:F2} x {footprint.y:F2} m: removed {colliders.Length} donor collider(s), added one BoxCollider on '{host.name}' (layer {layer}) centre (0.00, {box.center.y:F2}, 0.00) size ({box.size.x:F2}, {box.size.y:F2}, {box.size.z:F2})");
         }
 
         static float LowestCorner(Bounds b, Transform from, Transform root)
@@ -191,6 +225,8 @@ namespace StructureLib
         // freeze's port check names it and drops the structure.
         static Cargo CargoOf(StructureDefinition d, string port, string id)
         {
+            // A router's ports carry no cargo (PortResolver.Resolve writes the dust byte on each): no property needed.
+            if (d.Router != null) return Cargo.Dust;
             switch (id?.Trim().ToLowerInvariant())
             {
                 case "dust": return Cargo.Dust;

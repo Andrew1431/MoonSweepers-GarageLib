@@ -220,7 +220,7 @@ namespace StructureLib
         public string Owner;
     }
 
-    /// <summary>Payload of <c>MoonStructures.CargoRouted</c>.</summary>
+    /// <summary>Payload of <see cref="MoonStructures.CargoRouted"/>.</summary>
     public sealed class CargoRouted
     {
         public StructureDefinition Definition;

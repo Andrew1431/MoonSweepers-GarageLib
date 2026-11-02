@@ -68,8 +68,17 @@ namespace StructureLib
             return -1;
         }
 
-        /// <summary>The round-robin index after output <paramref name="used"/> took cargo: <c>(used + 1) % count</c>.</summary>
-        public static int Advance(int used, int count) => (used + 1) % count;
+        /// <summary>
+        /// The cargo id every router port carries: dust, which is what vanilla's own splitter ports answer to PortCargo.
+        /// The port is written into the clone as <c>sl:0:&lt;Name&gt;</c>; the hop passes any cargo and never reads it.
+        /// </summary>
+        public const string PortCargoId = "dust";
+
+        /// <summary>
+        /// The round-robin index after index <paramref name="used"/> was served: <c>(used + 1) % count</c>; 0 when
+        /// <paramref name="count"/> is not positive.
+        /// </summary>
+        public static int Advance(int used, int count) => count <= 0 ? 0 : (used + 1) % count;
 
         /// <summary>
         /// Whether a merger takes cargo from input <paramref name="input"/> now. False when the output is not clear;

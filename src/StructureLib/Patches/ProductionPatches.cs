@@ -213,7 +213,8 @@ namespace StructureLib.Patches
             try
             {
                 var e = BeltPatches.EmitterOf(__instance, outfeed);
-                if (e?.Definition == null) return;
+                // A router's hop emits onto its output belt too (RouterHop); it raises CargoRouted, not CargoEmitted.
+                if (e?.Definition == null || e.Definition.Router != null) return;
                 MoonStructures.RaiseCargoEmitted(new CargoEmitted
                 {
                     Definition = e.Definition, DepotId = e.Depot, Cargo = new Cargo((byte)cargo, BeltPatches.CargoId(cargo)), Kilograms = kg, BeltId = outfeed.id,
