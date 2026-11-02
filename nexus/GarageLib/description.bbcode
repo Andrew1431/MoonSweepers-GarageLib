@@ -1,0 +1,40 @@
+[size=5][b]GarageLib[/b][/size]
+
+A vehicle library for Moon Sweepers. On its own it adds no vehicles; it is what [b]Late Game Vehicles[/b] and other vehicle mods are built on. It also fixes ECO suction.
+
+[size=4][b]What it does[/b][/size]
+[list]
+[*][b]New vehicles in the garage.[/b] Vehicle mods register their vehicles with GarageLib, and they show up in every garage's buy list next to the vanilla ones, with their own picture, price and stats.
+[*][b]Safe saves.[/b] Modded vehicles are never written into your normal save. GarageLib keeps them in a separate [i]garagelib.json[/i] next to the save. Remove the mods and your save loads in the plain game; put them back and your modded vehicles are still there.
+[*][b]Data-driven stats.[/b] Vehicle numbers (price, width, speed, turning, hopper size) live in [i].vehicles.json[/i] files. Want a vehicle cheaper or faster for yourself? Drop a [i].vehicles.json[/i] with just that field into [i]BepInEx/config[/i].
+[*][b]ECO suction is worth using.[/b] In vanilla, ECO only narrows your sweep (0.8x width) at NORMAL speed. With GarageLib it also drives 1.3x faster, so it becomes a quick, narrow travelling mode. Change it with [i]EcoSuctionSpeed[/i] in the config.
+[/list]
+
+[size=4][b]Installation[/b][/size]
+[list=1]
+[*]Install [url=https://builds.bepinex.dev/projects/bepinex_be/791/BepInEx-Unity.IL2CPP-win-x64-6.0.0-be.791%2Bb782da4.zip]BepInEx 6.0.0-be.791 IL2CPP (win-x64)[/url] into the game folder. Use exactly this build.
+[*]Install the [url=https://www.nexusmods.com/moonsweepers/mods/9]MoonSweepers BepInEx Patcher[/url].
+[*]Unzip this file into the game folder (it contains [i]BepInEx/plugins/GarageLib[/i]).
+[*]Start the game. The first start with BepInEx takes a little longer.
+[/list]
+
+Prefer one click? The [url=https://github.com/Andrew1431/MoonSweepers-GarageLib/releases/latest]GitHub modpack installer[/url] sets up BepInEx and all our mods, keeps them updated, and leaves Steam starting the plain game while a desktop shortcut starts it modded.
+
+[size=4][b]Configuration[/b][/size]
+[i]BepInEx/config/com.andrew1431.garagelib.cfg[/i]
+[list]
+[*][b]Tweaks / EcoSuctionSpeed[/b] (default 1.3): top-speed multiplier while sweeping on ECO. 1.0 is vanilla.
+[*][b]Debug / VerboseLogging[/b] (default off): extra lines in [i]BepInEx/LogOutput.log[/i] for bug reports.
+[/list]
+
+[size=4][b]Uninstalling[/b][/size]
+Delete [i]BepInEx/plugins/GarageLib[/i]. Your save keeps working; modded vehicles wait in [i]garagelib.json[/i] until you reinstall.
+
+[size=4][b]Co-op[/b][/size]
+Not tested in multiplayer yet. Until it is, give everyone in the lobby the same mods.
+
+[size=4][b]For modders[/b][/size]
+Register a vehicle from your plugin's [i]Load()[/i] with [i]MoonVehicles.Register[/i], or make a DLL-free vehicle with just a [i].vehicles.json[/i] and a mesh file. API and examples: [url=https://github.com/Andrew1431/MoonSweepers-GarageLib]GitHub[/url].
+
+[size=4][b]Credits[/b][/size]
+By Andrew1431 and ryanhartwig. Thanks to the BepInEx team and to boverson777 for the MoonSweepers BepInEx Patcher, without which no Moon Sweepers mod would load.

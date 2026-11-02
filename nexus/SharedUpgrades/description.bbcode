@@ -1,0 +1,36 @@
+[size=5][b]Shared Upgrades[/b][/size]
+
+In vanilla, every upgrade is bought again for every vehicle, and it stops mattering the moment you buy the next one. With Shared Upgrades, the team buys each upgrade level once and every vehicle has it, including the ones you buy later.
+
+[size=4][b]How it works[/b][/size]
+[list]
+[*]There is one level per upgrade: Speed, Hopper, Turbo, Cruise, Suction, Unload and Lights. Every owned vehicle that can take an upgrade gets that level, up to the vanilla maximum. Hopper, Suction and Unload stay sweeper-only.
+[*][b]Adding it to an existing save:[/b] each upgrade becomes the highest level anyone has on any vehicle.
+[*][b]Buying:[/b] buy an upgrade on any vehicle in a garage's upgrade page. The shared level goes up and every vehicle gets it straight away.
+[*][b]Removing it:[/b] everyone keeps the levels their vehicles have. The mod writes nothing new into the save, so it loads in the plain game.
+[/list]
+
+[size=4][b]Price[/b][/size]
+A shared level costs the upgrade's base price times the [b]highest upgrade price scale among your team's vehicles that can take it[/b], so it stays meaningful as your fleet grows. Example: with a push sweeper and a lunar sweeper, Speed level 1 costs $630 once, instead of $130 + $630. Buy a Mega vacuum rover and the next levels cost a bit more. The price is the same on every vehicle's upgrade page.
+
+[size=4][b]Configuration[/b][/size]
+[i]BepInEx/config/com.andrew1431.sharedupgrades.cfg[/i]
+[list]
+[*][b]General / Enabled[/b] (true): false turns the mod off without uninstalling it.
+[*][b]Pricing / ScaleMode[/b] (Highest): Highest as above, Vehicle for vanilla pricing, Fixed to use FixedScale.
+[*][b]Pricing / FixedScale[/b] (2.5): the scale for Fixed mode.
+[*][b]Pricing / PriceMultiplier[/b] (1): multiplies every shared price, e.g. 2 to make sharing cost more.
+[/list]
+
+[size=4][b]Installation[/b][/size]
+[list=1]
+[*]Install [url=https://builds.bepinex.dev/projects/bepinex_be/791/BepInEx-Unity.IL2CPP-win-x64-6.0.0-be.791%2Bb782da4.zip]BepInEx 6.0.0-be.791 IL2CPP (win-x64)[/url] and the [url=https://www.nexusmods.com/moonsweepers/mods/9]MoonSweepers BepInEx Patcher[/url].
+[*]Unzip this file into the game folder (it contains [i]BepInEx/plugins/SharedUpgrades[/i]).
+[/list]
+Works on its own, and with GarageLib's modded vehicles. Or let the [url=https://github.com/Andrew1431/MoonSweepers-GarageLib/releases/latest]GitHub modpack installer[/url] set everything up and keep it updated.
+
+[size=4][b]Co-op[/b][/size]
+The host decides: with the mod on the host, every vehicle in the session shares levels. Clients with the mod use shared levels and prices only when the host has it too. Co-op hasn't been fully tested yet.
+
+[size=4][b]Credits[/b][/size]
+By Andrew1431 and ryanhartwig, on [url=https://github.com/Andrew1431/MoonSweepers-GarageLib]GitHub[/url].

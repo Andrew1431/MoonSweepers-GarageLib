@@ -1,0 +1,57 @@
+[size=5][b]Late Game Vehicles[/b][/size]
+
+You bought the Mega vacuum rover. Now what? Ten new sweepers, sold in the garage next to the vanilla vehicles, in the game's own white-and-orange style. Every step up a line sweeps more per minute than the one before it.
+
+[size=4][b]The wide line[/b][/size]
+Slower every step, but wider and wider. Great on open mare, a handful in tight spots.
+[list]
+[*][b]Titan sweeper[/b] ($15,000): a three-axle street sweeper with outrigger disc brushes. 5.4 m strip, 7,500 kg hopper.
+[*][b]Colossus vacuum[/b] ($37,500): a folding suction head and a drum tank the size of a house. 7.8 m strip, 18,750 kg.
+[*][b]Regolith leviathan[/b] ($94,000): a tracked crawler with brush wings and a conveyor into a container-sized hopper. 11.3 m strip, 47,000 kg.
+[*][b]Mare harvester[/b] ($235,000): a combine harvester for the Moon, with a cab on a pedestal and a towering silo. 16.4 m strip, 117,500 kg.
+[/list]
+
+[size=4][b]The fast line[/b][/size]
+A little wider than the Mega every step, and much quicker.
+[list]
+[*][b]Sprint vacuum[/b] ($15,000): the Mega, hot-rodded. 4 m strip, 6.1 m/s.
+[*][b]Streak sweeper[/b] ($37,500): a rally-raid sweeper with a rear wing. 4.3 m strip, 7.4 m/s.
+[*][b]Comet hoover[/b] ($94,000): a prototype racer whose jet-intake mouth is the vacuum head. 4.7 m strip, 9.1 m/s.
+[*][b]Orbital polisher[/b] ($235,000): a land-speed-record needle dragging a vacuum blade. 5 m strip, 11.1 m/s.
+[/list]
+
+[size=4][b]Buggies[/b][/size]
+Tiny hoppers, very fast. For fun more than profit.
+[list]
+[*][b]Lunar buggy[/b] ($3,500): an open-frame runabout with a roll cage and balloon tyres.
+[*][b]Dune jumper[/b] ($12,500): a long-travel trophy truck with huge tyres.
+[/list]
+
+[size=4][b]Details[/b][/size]
+[list]
+[*]Wheels roll and brushes spin while you sweep, and the cleaning strip matches each vehicle's brush bar.
+[*]The chase camera pulls back for the big ones.
+[*]Vehicle upgrades work like vanilla, priced for each vehicle's tier.
+[*]The giants keep their base vehicle's collision, so oversized brush bars pass through rocks and buildings. That's on purpose: the stations are built around vanilla-sized vehicles, and a solid 16 m header would get stuck everywhere.
+[/list]
+
+[size=4][b]Installation[/b][/size]
+[list=1]
+[*]Install [url=https://builds.bepinex.dev/projects/bepinex_be/791/BepInEx-Unity.IL2CPP-win-x64-6.0.0-be.791%2Bb782da4.zip]BepInEx 6.0.0-be.791 IL2CPP (win-x64)[/url] and the [url=https://www.nexusmods.com/moonsweepers/mods/9]MoonSweepers BepInEx Patcher[/url].
+[*]Install [b]GarageLib[/b].
+[*]Unzip this file into the game folder (it contains [i]BepInEx/plugins/LateGameVehicles[/i]).
+[/list]
+Or let the [url=https://github.com/Andrew1431/MoonSweepers-GarageLib/releases/latest]GitHub modpack installer[/url] do all of it and keep it updated.
+
+[size=4][b]Changing the numbers[/b][/size]
+All balance numbers are in [i]BepInEx/plugins/LateGameVehicles/lines.vehicles.json[/i]. To change one for yourself without editing the mod, put a [i]my.vehicles.json[/i] in [i]BepInEx/config[/i] with just that field, for example:
+[code]{ "vehicles": { "andrew1431.mare-harvester": { "price": 150000 } } }[/code]
+
+[size=4][b]Uninstalling[/b][/size]
+Delete [i]BepInEx/plugins/LateGameVehicles[/i]. Your save loads fine without it. Vehicles you bought wait in [i]garagelib.json[/i] next to the save and come back if you reinstall.
+
+[size=4][b]Co-op[/b][/size]
+Not tested in multiplayer yet. Until it is, give everyone in the lobby the same mods.
+
+[size=4][b]Credits[/b][/size]
+By Andrew1431 and ryanhartwig, on [url=https://github.com/Andrew1431/MoonSweepers-GarageLib]GitHub[/url].
