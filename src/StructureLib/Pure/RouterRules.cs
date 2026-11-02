@@ -81,6 +81,20 @@ namespace StructureLib
         public static int Advance(int used, int count) => count <= 0 ? 0 : (used + 1) % count;
 
         /// <summary>
+        /// The id of the canister one emit made, from the world's next-canister counter read before
+        /// (<paramref name="nextBefore"/>) and after (<paramref name="nextAfter"/>) it: the counter must have advanced by
+        /// exactly one, and of the two ids that can be the new one (<c>nextBefore</c> when ids are handed out before the
+        /// increment, <c>nextAfter</c> when after) exactly one must have appeared (absent before, present now). Else -1
+        /// (the caller falls back to another way of finding it).
+        /// </summary>
+        public static int EmittedId(int nextBefore, int nextAfter, Func<int, bool> wasPresent, Func<int, bool> isPresent)
+        {
+            if (wasPresent == null || isPresent == null || nextAfter != nextBefore + 1) return -1;
+            bool a = !wasPresent(nextBefore) && isPresent(nextBefore), b = !wasPresent(nextAfter) && isPresent(nextAfter);
+            return a == b ? -1 : a ? nextBefore : nextAfter;
+        }
+
+        /// <summary>
         /// Whether a merger takes cargo from input <paramref name="input"/> now. False when the output is not clear;
         /// otherwise inputs are walked round-robin from <paramref name="turn"/>: the first one reached that is
         /// <paramref name="input"/> wins, an earlier one with cargo waiting makes it yield. An out-of-range input is false.

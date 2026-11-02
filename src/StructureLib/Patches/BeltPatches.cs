@@ -18,7 +18,9 @@ namespace StructureLib.Patches
     // false (the canister keeps waiting, as vanilla leaves a refused one) and sets the machine's flow status in vanilla's
     // wording. Any belt whose end is not a modded machine runs vanilla untouched. A router's input port (a structure with
     // StructureDefinition.Router) goes to RouterHop instead: no slot, no cargo check, the canister moves onto a belt at one
-    // of its output ports or waits.
+    // of its output ports or waits. A belt ending at a router never runs vanilla: with its input port unresolved (no view
+    // yet with several inputs, none within tolerance) or a resolve that throws, the canister waits (vanilla's own routing
+    // would take it in, since Routes answers true for the router's clone).
     //
     // Belt -> (depot, port) is resolved once per belt and cached (HandOff runs every frame for a waiting canister): the
     // machine is MachineWithPort(end, false), the port is the resolved PortDefinition whose local position, placed by the
@@ -36,6 +38,8 @@ namespace StructureLib.Patches
         {
             internal Vector3 End;
             internal int Belt = -1, Depot = -1, Kind = -1;
+            // The canister HandOff last offered from this belt (while one waits at the end, that one).
+            internal int LastId = -1;
             internal StructureDefinition Definition;
             internal PortDefinition Port;
             internal string WaitingText;
@@ -54,12 +58,60 @@ namespace StructureLib.Patches
             try { j = Resolve(__instance, belt, path); }
             catch (Exception e)
             {
+                // A router never falls through: vanilla's own routing (Routes is true for any 3-4-port clone) would pull
+                // the canister into its internal route, past the round-robin and into a depot the save strips.
+                if (RouterAtEnd(__instance, belt, path))
+                {
+                    CoreLog.Once("handoff-resolve-router:" + belt, $"HandOff(belt {belt}, canister {id}): resolving the router at the belt's end threw; the canister waits: {e}", 1);
+                    __result = false;
+                    return false;
+                }
                 CoreLog.Once("handoff-resolve", $"HandOff(belt {belt}, canister {id}): resolving the belt's machine threw; running vanilla: {e}", 1);
                 return true;
             }
-            if (j?.Definition == null || j.Port == null) return true;
+            if (j?.Definition == null) return true;
+            j.LastId = id;
+            if (j.Port == null)
+            {
+                if (j.Definition.Router == null) return true;
+                // No input port resolved at a router (no view yet with several inputs, or none within tolerance): the
+                // canister waits. The no-view case is not cached, so it resolves on a later frame.
+                CoreLog.Once("handoff-router-noport:" + belt, $"Belt {belt} ends at router '{j.Definition.Id}' depot {j.Depot} but no input port is resolved (yet); canister {id} waits", 1);
+                __result = false;
+                return false;
+            }
             __result = Intake(__instance, j, id);
             return false;
+        }
+
+        // Whether the machine at the belt's end is a modded router (only asked after Resolve threw); false when this throws too.
+        static bool RouterAtEnd(MoonWorld world, int belt, MoonConveyorPath path)
+        {
+            try
+            {
+                Vector3 end;
+                if (path != null) end = path.end;
+                else if (world.conveyors != null && world.conveyors.ContainsKey(belt)) end = world.conveyors.get_Item(belt).end;
+                else return false;
+                int depot = world.MachineWithPort(end, false);
+                var rec = depot >= 0 && world.depots != null && world.depots.ContainsKey(depot) ? world.depots.get_Item(depot) : null;
+                return rec != null && Remap.Live(rec.kind)?.Router != null;
+            }
+            catch (Exception) { return false; }
+        }
+
+        /// <summary>
+        /// For the merger's waiting rule (RouterHop): whether the belt's cached entry resolves to <paramref name="port"/>
+        /// of <paramref name="depot"/> and the canister HandOff last offered from it is still there with more than 0 kg.
+        /// Intake refuses a 0 kg canister before the hop, and an unresolved port never reaches it: such an input must not
+        /// make the others yield.
+        /// </summary>
+        internal static bool OffersTo(MoonWorld world, int belt, int depot, PortDefinition port)
+        {
+            if (!cache.TryGetValue(belt, out var j) || j.Depot != depot || j.Port == null || port == null || j.LastId < 0) return false;
+            if (!ReferenceEquals(j.Port, port) && !string.Equals(j.Port.Name, port.Name, StringComparison.Ordinal)) return false;
+            var canisters = world.canisters;
+            return canisters != null && canisters.ContainsKey(j.LastId) && canisters.get_Item(j.LastId).kilograms > 0;
         }
 
         // The modded machine and port at the belt's end; an entry with no Definition for any other belt.

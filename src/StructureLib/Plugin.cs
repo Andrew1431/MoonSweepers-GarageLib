@@ -40,7 +40,7 @@ namespace StructureLib
             "MoonCleaners.MoonWorld:HandOff", "MoonCleaners.MoonWorld:MachineWithPort", "MoonCleaners.MoonWorld:canisters", "MoonCleaners.MoonProductionState:Flow",
             "MoonCleaners.MoonConveyorSnapshot:start", "MoonCleaners.MoonConveyorSnapshot:id",
             "MoonCleaners.MoonWorld:EntranceClear", "MoonCleaners.MoonWorld:WaitingAtEnd", "MoonCleaners.MoonWorld:BeltStartingAt", "MoonCleaners.MoonWorld:BeltEndingAt",
-            "MoonCleaners.MoonDepotBuildDefinition:halfFootprint",
+            "MoonCleaners.MoonDepotBuildDefinition:halfFootprint", "MoonCleaners.MoonWorld:nextCanisterId", "MoonCleaners.MoonWorld:riders",
         };
 
         public override void Load()
