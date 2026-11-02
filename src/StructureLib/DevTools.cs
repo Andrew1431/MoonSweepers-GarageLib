@@ -38,7 +38,7 @@ namespace StructureLib
             AllowSlot1 = cfg.Bind("Dev", "AllowSlot1", false, "Dev build: let AutoLoadSlot and SelfTest touch slot-1 (the real save). Leave false.");
             RunSelfTest = cfg.Bind("Dev", "SelfTest", false, "Dev build: run the in-game self-test 20 s after a world loads and log [selftest] lines.");
             AutoBuild = cfg.Bind("Dev", "AutoBuild", "", "Dev build: comma-separated structure ids or vanilla kind numbers to build once, 10 s after a world loads, 8 m apart behind (or beside) the walker. An entry whose kind already has a depot reuses it.");
-            AutoFeed = cfg.Bind("Dev", "AutoFeed", "", "Dev build: '<structureId>:<cargoId|Dust|Sand|Stone>:<kg>' to load into the first built structure of that id through the game's CrewProcessorLoad, 5 s after the AutoBuild step.");
+            AutoFeed = cfg.Bind("Dev", "AutoFeed", "", "Dev build: ';'-separated '<structureId>:<cargoId|Dust|Sand|Stone>:<kg>' entries, each loaded into the first built structure of that id through the game's CrewProcessorLoad, 5 s after the AutoBuild step.");
             AutoRemove = cfg.Bind("Dev", "AutoRemove", true, "Dev build: the self-test removes the example lamp it checked. false leaves it in place (the sidecar carries it into the next launch).");
             AutoSave = cfg.Bind("Dev", "AutoSave", false, "Dev build: request a save 10 s after the AutoBuild step (whether or not AutoBuild names anything). The self-test waits for that save and checks the structurelib.json sidecar.");
             ForcePower = cfg.Bind("Dev", "ForcePower", false, "Dev build: run every modded processor at full power (Power = 1) whatever its grid supplies. For isolating power problems; no self-test relies on it.");
@@ -265,16 +265,23 @@ namespace StructureLib
             internal float At;
         }
 
-        /// <summary>The last AutoFeed run; null when none ran.</summary>
-        internal static Result Last;
+        /// <summary>What the last AutoFeed step did, one result per ';'-separated entry.</summary>
+        internal static readonly List<Result> Results = new();
+
+        /// <summary>The last result for a structure id; null when no entry named it.</summary>
+        internal static Result For(string structureId) => Results.LastOrDefault(r => r.StructureId == structureId);
 
         internal static void Run(string spec)
         {
-            var r = new Result { At = Time.unscaledTime };
-            Last = r;
-            try { r.Error = Feed(spec.Trim(), r); }
-            catch (Exception e) { r.Error = "threw " + e.GetType().Name + ": " + e.Message; }
-            CoreLog.Info($"[dev] AutoFeed '{spec}': " + (r.Error ?? $"depot {r.Depot} slot 0 held {r.Before} kg, now {r.After} kg"));
+            Results.Clear();
+            foreach (var entry in spec.Split(';').Select(e => e.Trim()).Where(e => e.Length > 0))
+            {
+                var r = new Result { At = Time.unscaledTime, StructureId = entry.Split(':')[0].Trim() };
+                Results.Add(r);
+                try { r.Error = Feed(entry, r); }
+                catch (Exception e) { r.Error = "threw " + e.GetType().Name + ": " + e.Message; }
+                CoreLog.Info($"[dev] AutoFeed '{entry}': " + (r.Error ?? $"depot {r.Depot} slot 0 held {r.Before} kg, now {r.After} kg"));
+            }
         }
 
         static string Feed(string spec, Result r)
@@ -385,6 +392,7 @@ namespace StructureLib
             CargoChecks();
             CanisterRoundTrip();
             ProcessorChecks(lamp);
+            PowerChecks();
             int expected = KindAllocator.KindOf("ryanhartwig.example-lamp");
             Assert("example-kind-hashed", lamp != null && lamp.Kind == expected,
                 lamp == null ? "'ryanhartwig.example-lamp' is not registered (is ExampleStructure installed?)" : $"kind {lamp.Kind}, expected {expected}");
@@ -434,9 +442,10 @@ namespace StructureLib
         internal static void Tick()
         {
             if (cycleUntil >= 0f) TickCycle();
+            if (PowerPending) TickPower();
             if (artUntil >= 0f) { TickCardArt(); return; }
             if (renderUntil >= 0f) { TickRendered(); return; }
-            if (saveUntil >= 0f && cycleUntil < 0f) TickSaveWait();
+            if (saveUntil >= 0f && cycleUntil < 0f && !PowerPending) TickSaveWait();
         }
 
         // cardart-modded: CardArt answers something once nothing is pending, or after 5 s.
@@ -938,8 +947,8 @@ namespace StructureLib
                 int n = s.stores?.Length ?? -1;
                 return (n == 3, $"ProductionOf({grinderDepot}).stores.Length = {n}, expected 3");
             });
-            var feed = AutoFeeder.Last;
-            if (feed == null || feed.StructureId != GrinderId) return;
+            var feed = AutoFeeder.For(GrinderId);
+            if (feed == null) return;
             Check("feed-lands-in-slot0", feed.Error, () => (feed.After >= feed.Kg, $"Stored(0) {feed.Before} -> {feed.After} kg after loading {feed.Kg} kg into depot {feed.Depot}"));
             if (feed.Error == null) cycleUntil = feed.At + 30f;
         }
@@ -955,6 +964,111 @@ namespace StructureLib
             if (DevTools.ForcePower.Value) { Assert("cycle-produces-grit", false, "[Dev] ForcePower is on: the cycle ran on forced power, which proves nothing about the grid"); return; }
             Assert("cycle-produces-grit", grit && raised, $"within 30 s of the feed: Stored(2) = {Stored(s, 2)}, CycleFinished raised: {raised}; {StateText(s)}");
         }
+
+        // The example burner (a fuel generator) 8 m from the grinder, no vanilla node built: after a solve the burner is
+        // in world.powerNodes; within 20 s of the self-test both report the same non-zero grid; within 30 s the burner has
+        // stored charge, and the grinder runs at Power > 0.5 while the burner supplies it. 60 s after the burner's feed,
+        // with its battery full and the grinder idle, 2 kg more grit must not start a cycle within 10 s.
+        const string BurnerId = "ryanhartwig.example-burner";
+        static readonly Dictionary<string, float> powerOpen = new();
+        static int burnerDepot = -1, fullCycles;
+        static float fullAt = -1f, fullUntil = -1f;
+        static double fullGrit;
+
+        static bool PowerPending => powerOpen.Count > 0 || fullAt >= 0f || fullUntil >= 0f;
+
+        static void PowerChecks()
+        {
+            var world = CoreState.World ?? CoreState.FindWorld();
+            var burner = MoonStructures.Definition(BurnerId);
+            burnerDepot = burner != null && world != null ? DepotOfKind(world, burner.Kind) : -1;
+            if (!DevTools.AutoBuildNames(BurnerId))
+            {
+                CoreLog.Info($"[selftest] '{BurnerId}' was not built by AutoBuild this run: power checks not applicable" + (burnerDepot < 0 ? "" : $" (restored burner: {PowerText(world.ProductionOf(burnerDepot))})"));
+                return;
+            }
+            string[] names = { "power-node-registered", "power-grid-joined", "power-burner-supplies", "power-grinder-runs-on-burner", "power-no-burn-when-full" };
+            string skip = burner == null ? $"'{BurnerId}' is not registered" : burnerDepot < 0 ? "no example burner depot in world.depots" : null;
+            var feed = AutoFeeder.For(BurnerId);
+            skip ??= feed == null ? "no AutoFeed entry for the burner" : feed.Error;
+            if (skip != null) { foreach (var n in names) Assert(n, false, skip); return; }
+            float now = Time.unscaledTime;
+            powerOpen["power-node-registered"] = now + 20f;
+            powerOpen["power-grid-joined"] = now + 20f;
+            powerOpen["power-burner-supplies"] = now + 30f;
+            powerOpen["power-grinder-runs-on-burner"] = now + 30f;
+            fullAt = feed.At + 60f;
+            DonorReport(world);
+        }
+
+        // The donor ruling (battery bank, else the solar post): does the built burner's view carry a MoonProductionView,
+        // and does the game hold a power anchor for it?
+        static void DonorReport(MoonWorld world)
+        {
+            try
+            {
+                var construction = UnityEngine.Object.FindFirstObjectByType<MoonDepotConstruction>();
+                var view = construction?.ViewOf(burnerDepot);
+                var pv = view == null ? null : view.GetComponentInChildren<MoonProductionView>(true);
+                bool anchor = world.powerAnchors != null && world.powerAnchors.ContainsKey(burnerDepot);
+                string at = anchor ? world.powerAnchors.get_Item(burnerDepot).ToString() : "none";
+                CoreLog.Info($"[selftest] burner donor: view '{view?.name}', MoonProductionView {(pv == null ? "none" : pv.GetIl2CppType().Name)}, power anchor {at}");
+            }
+            catch (Exception e) { CoreLog.Warn("[selftest] burner donor report threw: " + e.Message); }
+        }
+
+        static void TickPower()
+        {
+            var world = CoreState.World ?? CoreState.FindWorld();
+            var burner = MoonStructures.Definition(BurnerId);
+            MoonProductionState b = null, g = null;
+            try { b = world?.ProductionOf(burnerDepot); g = grinderDepot >= 0 ? world?.ProductionOf(grinderDepot) : null; } catch (Exception) { }
+            string text = $"burner {PowerText(b)}; grinder {PowerText(g)}; powerNodes {world?.powerNodes?.Count}, nodePool {world?.nodePool?.Count}";
+            Poll("power-node-registered", () =>
+            {
+                var nodes = world?.powerNodes;
+                for (int i = 0; nodes != null && i < nodes.Count; i++)
+                    if (nodes.get_Item(i)?.record?.kind == burner.Kind) return (true, null);
+                return (false, $"no node of kind {burner.Kind} among {nodes?.Count ?? 0} powerNodes");
+            });
+            Poll("power-grid-joined", () => (b != null && g != null && b.Grid != 0 && b.Grid == g.Grid, text));
+            Poll("power-burner-supplies", () => (b != null && (b.SuppliedKw > 0f || b.ChargeKwh > 0), text));
+            Poll("power-grinder-runs-on-burner", () => (b != null && g != null && g.Running && g.Power > 0.5f && b.SuppliedKw > 0f, text));
+            float now = Time.unscaledTime;
+            if (fullAt >= 0f && now >= fullAt)
+            {
+                fullAt = -1f;
+                float battery = burner.Power?.BatteryKwh ?? 0f;
+                if (b == null || b.ChargeKwh < battery - 1e-6 || g == null || g.Running) { Assert("power-no-burn-when-full", false, $"60 s after the feed the battery is not full with the grinder idle: {text}"); return; }
+                var grit = MoonStructures.CargoDefinition(GritId);
+                world.CrewProcessorLoad(MoonWorld.LocalPlayer, burnerDepot, (MoonCargo)grit.Value, 2);
+                fullCycles = b.Cycles;
+                fullGrit = Stored(b, 0);
+                fullUntil = now + 10f;
+                CoreLog.Info($"[selftest] battery full: loaded 2 kg grit into the burner; {text}");
+            }
+            if (fullUntil >= 0f && now >= fullUntil)
+            {
+                fullUntil = -1f;
+                bool ok = b != null && b.Cycles == fullCycles && !b.Running && Stored(b, 0) >= fullGrit - 1e-6 && fullGrit >= 2 - 1e-6;
+                Assert("power-no-burn-when-full", ok, $"cycles {fullCycles} -> {b?.Cycles}, grit {fullGrit} -> {Stored(b, 0)} kg; {text}");
+            }
+
+            void Poll(string name, Func<(bool ok, string detail)> probe)
+            {
+                if (!powerOpen.TryGetValue(name, out float until)) return;
+                bool ok; string detail;
+                try { (ok, detail) = probe(); }
+                catch (Exception e) { ok = false; detail = "threw " + e.GetType().Name + ": " + e.Message; }
+                if (!ok && Time.unscaledTime < until) return;
+                powerOpen.Remove(name);
+                CoreLog.Info($"[selftest] {name}: {text}");
+                Assert(name, ok, detail);
+            }
+        }
+
+        static string PowerText(MoonProductionState s) => s == null ? "no state" :
+            $"depot {s.Id} grid {s.Grid} power {s.Power:F2} running {s.Running} cycles {s.Cycles} charge {s.ChargeKwh:F4} kWh supplied {s.SuppliedKw:F3} kW slot0 {Stored(s, 0):0.##} kg";
 
         // After the AutoSave save: the sidecar on disk holds the grinder's production record, slot 2 recorded as grit.
         static void ProductionSaveCheck()

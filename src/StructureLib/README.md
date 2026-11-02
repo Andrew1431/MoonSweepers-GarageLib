@@ -1,5 +1,27 @@
 # StructureLib
 
+## Power
+
+A modded machine (a `ProcessorDefinition`) and a modded fuel generator (a `ProcessorDefinition` with `ProducesPower`
+plus a `PowerDefinition` with `SupplyMode.Fuel`) are attached to the power grid after the game's own solve; the game's
+solve never sees modded kinds. Details and evidence: `research/STRUCTURES_RECON.md`, "Processors (Task 10)" and
+"Power sources (Task 11)".
+
+- **Grid id** (`MoonProductionState.Grid`): the vanilla grid of the nearest vanilla power node whose range reaches the
+  structure. Otherwise the id of its fuel network (every modded structure within a fuel generator's `Range`, chained
+  through other generators): the lowest vanilla grid id in the network, else `-(lowest depot id in the network)`.
+  Vanilla grid ids are positive, so a negative id is a StructureLib-owned grid. 0 means no grid.
+- **Supply order** for a machine's `RunningKw` while running: the vanilla grid's sun surplus, then the fuel generators
+  of its network, then the vanilla grid's batteries. `Power` is the share covered.
+- **A fuel generator** burns one batch per cycle into its battery: `ChargeKwh` rises by `BatteryKwh / 2` per cycle,
+  capped at `BatteryKwh`, and no cycle starts while the battery is full. It delivers at most `PeakKw`. Its `Power` is
+  always 1, `SuppliedKw` is what it gave in the last solve, and it is listed in `world.powerNodes` as a panel node
+  between solves. Its charge is saved with the production record.
+- **Not supported:** a fuel generator feeding vanilla machines (the vanilla grid's totals cannot be written from
+  managed code), power links drawn to modded structures, and supply from `SupplyMode.Solar` definitions.
+- The battery bank (kind 6) prefab has no production view; use `MoonWorld.SolarPostKind` (93) as a generator's
+  `BaseStructure`, as the example burner does.
+
 ## Cargo audit
 
 The game's `MoonCargo` is a byte enum (Dust 0, Sand 1, Stone 2), and vanilla code answers every value it does not

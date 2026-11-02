@@ -80,6 +80,31 @@ namespace StructureLib
             return clone;
         }
 
+        static readonly Dictionary<StructureDefinition, MoonWorld.PanelSpec> panels = new(ReferenceEqualityComparer.Instance);
+
+        /// <summary>
+        /// The PanelSpec a modded power source's node carries: the solar post's (tilt and tracker) with the definition's
+        /// name, peak, battery and range. A new struct, so the game's static PostPanel is never written.
+        /// </summary>
+        internal static MoonWorld.PanelSpec PanelSpecFor(StructureDefinition d)
+        {
+            lock (panels)
+            {
+                if (panels.TryGetValue(d, out var spec)) return spec;
+                var post = MoonWorld.PostPanel;
+                spec = new MoonWorld.PanelSpec();
+                spec.name = d.Name;
+                spec.peakKw = d.Power.PeakKw;
+                spec.batteryKwh = d.Power.BatteryKwh;
+                spec.range = d.Power.Range;
+                spec.tiltDeg = post.tiltDeg;
+                spec.maxTiltDeg = post.maxTiltDeg;
+                spec.tracker = post.tracker;
+                panels[d] = spec;
+                return spec;
+            }
+        }
+
         /// <summary>Index of the first Input slot that takes <paramref name="cargo"/>; -1 when none does (or no processor).</summary>
         internal static int InputSlot(StructureDefinition d, MoonCargo cargo) =>
             d?.Processor == null ? -1 : ProcessorLayout.InputSlot(d.Processor.Slots.Select(s => (s.Role, s.Cargo.Value)).ToList(), (byte)cargo);

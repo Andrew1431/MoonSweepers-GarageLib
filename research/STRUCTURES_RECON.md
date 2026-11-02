@@ -140,9 +140,8 @@ Everywhere (catalog, placement, built records, production, power, save), a struc
 - `PanelSpec`: `name`, `peakKw`, `batteryKwh`, `range`, `tiltDeg`, `maxTiltDeg`, `tracker`. Post 3 kW / 0 kWh /
   16 m; Twin 7.5 kW / 4 kWh / 24 m; Tracker 16 kW / 10 kWh / 34 m. Supply scales with `SunFactor` / `Daylight` from
   `MoonSolarSystem`.
-- A fuel-burning generator is a power node that supplies without sun: either a "panel" whose sun factor is replaced by
-  a fuel state, or a processor whose cycle produces kW instead of cargo. Which is cleaner depends on `SolvePower`'s
-  internals (world-time question).
+- A fuel-burning generator is a power node that supplies without sun. Answered in Task 11: a processor whose cycle
+  charges a battery, supplied to modded machines after the solve (see "Power sources (Task 11)" below).
 - `MoonPowerLinks` draws the arcs; `ShowPreview(kind, position, rotation, joined)` during placement.
 
 ## Interop hazards found
@@ -168,7 +167,7 @@ Everywhere (catalog, placement, built records, production, power, save), a struc
   in the detour or trampoline, before managed code runs. Its native body is a 15-byte leaf
   (`83 F9 60 75 03 B0 01 C3 83 F9 61 0F 94 C0 C3 CC`); no other Assembly-CSharp method shares its native address (all
   8592 `NativeMethodInfoPtr_*` scanned), so it is not identical-code folding. Cause unconfirmed (a caller on a
-  non-main thread is one guess). StructureLib deliberately leaves it unpatched (comment in `KindRules`,
+  non-main thread is one guess). StructureLib deliberately leaves it unpatched (comment on `ProductionPatches`,
   `Patches/ProductionPatches.cs`); a modded kind gets vanilla's answer for kinds above 192, false.
   - The crash is specific to `IsProcessor`. In the same build, prefixes on the static switches `IsSolarPanel`,
     `IsPowerNode`, `PowerRange`, `HexPieceKind`, `IsRobotDock` and `MapKindOf` (and on the instance methods
@@ -180,6 +179,11 @@ Everywhere (catalog, placement, built records, production, power, save), a struc
   - What Task 10 did instead: prefixes on the instance method `MoonWorld.IsProcessorId(int id)` and on
     `MoonWorld.Processor(int kind)` (both patch and run fine), plus prefixes on the specific callers that refuse a modded
     machine. See "Processors (Task 10)" below for which callers those are.
+- **A Harmony prefix on `MoonWorld.TryPanel(int, out PanelSpec)` kills the game natively** (Task 11, green1): the world
+  loaded, then the process vanished within seconds, before any modded structure was built, with no managed exception
+  and the crash report's "stopped without its crash handler". Removing only that prefix, the next run was clean (and
+  every run after it). One run each way. StructureLib leaves `TryPanel` unpatched; a modded kind is none of the three
+  panel kinds, so vanilla presumably answers false for it (not traced).
 - The static cargo switches `CargoName`, `CargoShortName`, `UnitKilograms` and the instance `CargoValue` (returning
   an `Il2CppSystem.Decimal` through `ref __result`) all take Harmony prefixes without trouble (Task 9, 4 runs).
 - `world.canisters` (`Dictionary<int, MoonDroppedCanister>`, value-type values): `set_Item` from managed code does not
@@ -275,6 +279,66 @@ chamber (96): Input dust 10 kg, Batch dust 2 kg, Output grit 10 kg, 1 kW, 4 s cy
     3.38 kW) and ran its cycles.
 - `[Dev] ForcePower` (default off) forces `Power = 1` on modded processors for isolating problems; with it on,
   `cycle-produces-grit` fails on purpose.
+
+## Power sources (Task 11, traced in game on slot-2, 2026-11-02)
+
+The example burner is a fuel generator: `Power = { PeakKw 5, BatteryKwh 2, Range 20, SupplyMode Fuel }` and a processor
+with `ProducesPower`, `RunningKw 0`, 5 s cycle, Input grit 10 kg → Batch "Burning" grit 1 kg. Logs are in
+`.superpowers/sdd/2026-11-01-structurelib/task-11-logs/` (red1, green1–3, reload1).
+
+- **Donor: the solar post (93), not the battery bank (6).** A burner built on the battery bank had no
+  `MoonProductionView` anywhere under its view (green2: `MoonProductionView none`), so per the pre-made ruling the example
+  burner uses `MoonWorld.SolarPostKind`; its view then carries a `MoonSolarPanelView` (green3). SandPower's generator
+  (Task 13) follows. `world.powerAnchors` had no entry for the burner with either donor: the game fills it only for
+  structures it powers itself, and nothing in StructureLib reads it.
+- **`SolvePower` ignores the burner's kind entirely.** Its node list comes from an inlined kind check (Task 10), so the
+  modded kind is never asked about: not through `IsPowerNode`, not through `IsSolarPanel`. The burner's production
+  state exists (the game's `NewProduction` sizes it from the `Processor(kind)` spec, output -1) and `StepProduction`
+  runs its cycle like the grinder's.
+- **Supply goes through the `SolvePower` postfix (`Patches/PowerPatches.cs`, pure rules in `Pure/FuelGrid.cs` and
+  `Pure/GridShare.cs`).** After the vanilla solve:
+  - every modded processor finds the nearest vanilla node in range (Task 10's rule);
+  - `FuelGrid.Assign` links every modded member within a fuel generator's `Range` (centre to centre) into one network;
+  - grid ids: a member a vanilla node reaches keeps that vanilla grid id. A member no vanilla node reaches takes its
+    network's id: the lowest vanilla grid id in the network, else, when the network holds a fuel generator,
+    **`-(lowest depot id in the network)`**. Vanilla grid ids are depot ids (grid 26 was the twin depot 26's), so
+    positive; a negative id cannot collide. 0 still means no grid. In game: burner depot 26 and grinder 27 both
+    reported grid -26;
+  - a machine draws its demand from, in order: the vanilla grid's sun surplus (with the charging take-back of Task 10),
+    the fuel generators of its network (each at most `PeakKw`, and at most what its `ChargeKwh` lasts over the solve:
+    `FuelGrid.AvailableKw`, split in network order by `FuelGrid.Split`), then the vanilla grid's batteries. Stored
+    charge per grid is now tracked across machines in one solve (it was read pre-drain for each machine before);
+  - a fuel generator gets `Grid`, `Power` 1 (it runs on its own fuel; with `RunningKw` 0 the Task 10 rule would have
+    given it 0 at an empty battery and it could never start), `SuppliedKw` = what its network drew, `BatteryKw` = minus
+    that, and the drawn kWh out of its `ChargeKwh`;
+  - it is then appended to `world.powerNodes` as a panel node (`panel = true`, `spec = SpecBuilder.PanelSpecFor(def)`, a
+    point footprint at its depot position, `parent` = its own index). The next solve rebuilds the list and drops it, so
+    it is re-added each solve, as a new object. `nodePool` stayed at 2 (the vanilla nodes) with it in place, so the
+    pool does not grow; no exception in any run.
+- **Charging.** The `FinishCycle` prefix burns the batch and sets `ChargeKwh = min(ChargeKwh + BatteryKwh / 2,
+  BatteryKwh)` (`ProcessorCycle.ChargeAfterBurn`: two cycles fill it). `CanStartCycle` / `TryStartCycle` refuse to
+  start a cycle while `ChargeKwh >= BatteryKwh` (`ProcessorCycle.CanBurn`). Done in the `FinishCycle` prefix rather
+  than a postfix so a charge is only added when the burn itself ran. In game: 4 kg grit gave 4 cycles while the grinder
+  drew (1 kW off 1.000 kWh after the first), the battery ended at 2.0000 kWh, and 2 kg more grit loaded with the battery
+  full started no cycle in 10 s.
+- **`EmitProduct` throws for a power producer.** `StepProduction` calls it on a timer even before a cycle, and vanilla
+  indexes `stores[spec.output]` with output -1: `IndexOutOfRangeException`, caught by `MoonWorld.Fault` (red1). A
+  prefix skips it for modded `ProducesPower` kinds.
+- **Charge persists.** The production snapshot's `charge` carries `ChargeKwh`: the sidecar recorded the burner with
+  `Charge 2`, and on reload the restored burner read 2.0000 kWh and joined grid -26 again (reload1).
+- **Limits.**
+  - A vanilla machine is never fed by a fuel generator: `powerGrids` holds structs that managed code cannot write back
+    (Task 10), so a vanilla grid's totals never see modded supply, and vanilla machines get their satisfaction from
+    vanilla's own solve. A possible later route: a vanilla machine's `MoonProductionState` fields are writable, so a
+    postfix could raise its `Power` from fuel after the solve. Not built.
+  - No power link is drawn to or from a modded structure (`powerLinks` is not touched).
+  - A machine reached by a vanilla grid only through the fuel generator's network still reports and draws from that
+    vanilla grid (the network's id), since it is on the same grid.
+  - Only `SupplyMode.Fuel` generators with a `ProducesPower` processor supply. A `SupplyMode.Solar` definition answers
+    `IsSolarPanel` true but supplies nothing yet; a `Power` definition without a processor has no production state to
+    carry charge.
+  - "Daylight" plays no part for a fuel generator: `SolvePower` recomputes `SunFactor` for its own panels only, and the
+    postfix never reads it.
 
 ## World-time findings (new game in slot-1, 2026-11-01)
 
