@@ -25,7 +25,7 @@ of `main`, **nothing pushed**. The plan is to raise one PR at the end.
 | 6 | Build-menu catalog, categories, card art | complete, reviewed | 2d5d0d8, 5ff01a3 |
 | 7 | Placement (dev `AutoBuild`), model hook, build/remove events | complete, reviewed | 9671fd4, 086faaa |
 | 8 | Depot sidecar (`structurelib.json`), save safety | complete, reviewed (2 fix rounds) | e316858, 534e25c, a32328b |
-| 9 | Cargo kinds + canister sidecar | **implemented, review pending** | 0eb9ed3 |
+| 9 | Cargo kinds + canister sidecar | **implemented, reviewed (5 Important), fix round 1 committed, scoped re-review pending** | 0eb9ed3, 97fb624 |
 | 10 | Processors (`ProcessorSpec` synthesis, production sidecar) | not started | |
 | 11 | Power sources (fuel supply on the vanilla grid) | not started | |
 | 12 | Co-op handshake (missing-mod detection) | not started | |
@@ -43,14 +43,20 @@ canisters are stripped and re-injected the same way. The game saves normally wit
 
 1. Open a session in the repo, `git checkout structurelib`, `git pull --rebase` is not needed (nothing remote).
 2. Invoke `superpowers:subagent-driven-development` with the plan file. It reads the ledger and resumes at the first
-   task without a `complete` line: **Task 9's review**. The review package already exists at
-   `.superpowers/sdd/2026-11-01-structurelib/review-a32328b..0eb9ed3.diff` (base a32328b, head 0eb9ed3); brief and
-   report are `task-9-brief.md` / `task-9-report.md`. Dispatch the task reviewer (opus; it is save-path code), then
-   the fix loop if needed, then Task 10.
-3. Points to hand the Task 9 reviewer (also in the ledger): the registry freeze moved from `RestoreDepots` to
+   task without a `complete` line: **Task 9, mid fix loop**. The task review (opus) found five Important findings on
+   the canister save path (canister claimed before its cargo was applied; sidecar commit gated on `MoonDepotSave.Write`
+   although the vanilla write is the whole of `MoonProgressStore.Serialize`; per-save record hand-off; a shared fixed
+   `.tmp` name across overlapping saves, which explains the stale-lamp flake; grit weight). Fix round 1 is committed as
+   `97fb624` (30 unit tests green; modes A and B 27/27; `Moon save failed` 0). **Next step:** run
+   `bash scripts/review-package PLAN 0eb9ed3 HEAD` from the skill's directory, dispatch the scoped re-review
+   (`re-review-prompt.md`) against the findings listed in the ledger's Task 9 review line, then close Task 9 and start
+   Task 10. The fix report is appended to `task-9-report.md`.
+3. Facts the re-reviewer and Task 10 need (also in the ledger): the registry freeze moved from `RestoreDepots` to
    `RestoreCanisters`; canister cargo is re-applied in a `RestoreProduction` postfix via `MoveCanisterRecord` because
    the game restores modded cargo as dust; the strip runs in a `MoonProgressStore.Serialize` prefix (there is no
-   canister saver); one unreproduced case of a stale lamp record coming back from the sidecar.
+   canister saver); the sidecar commit decision now lives in `Pure/CommitOrder.cs` with a unique ordered `.tmp` name per
+   save. The last self-test run in the log shows `21 passed, 2 failed`: that was a cleanup run with `AutoSave` on and
+   no lamp, where `save-strips-modded` and `sidecar-written` fail by design (harness limit, not a regression).
 
 ## Rulings made so far (what to re-check if you disagree)
 
