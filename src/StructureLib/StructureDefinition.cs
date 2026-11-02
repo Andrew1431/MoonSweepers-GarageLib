@@ -36,9 +36,10 @@ namespace StructureLib
         /// <summary>
         /// Optional model file (e.g. <c>"sand_compactor.bin"</c>, exported by shared/blender/export_mesh_model.py) next to the
         /// registering mod's DLL. When set and <see cref="BuildModel"/> is null, the library shows it on the base structure:
-        /// every base mesh is hidden (colliders and scripts stay) and the model stands under a child named
-        /// <c>"StructureLibModel"</c>, its lowest vertex on the base's lowest mesh point. Its <c>Port_&lt;name&gt;</c> nodes become
-        /// the ports (they win over <see cref="Ports"/>). A missing or unreadable file logs one error and keeps the base model.
+        /// every base renderer is hidden (colliders and scripts stay) and the model stands under a child named
+        /// <c>"StructureLibModel"</c>, its lowest vertex on template-local y = 0 (the game adds the definition's
+        /// <c>floorOffset</c> when it places the structure). Its <c>Port_&lt;name&gt;</c> nodes become the ports (they win over
+        /// <see cref="Ports"/>) and move with that floor offset and scale, so they stay on the geometry. A missing or unreadable file logs one error and keeps the base model.
         /// </summary>
         public string Model;
         /// <summary>Optional tweak applied after the model is built (tint, extra parts).</summary>

@@ -51,19 +51,19 @@ briquette canisters on them and both machines' contents came back after a save a
 
 ## The models
 
-Both machines have their own models (built with `shared/blender`, scripts in [`blender/`](blender)), shown in place of
+Both machines have their own models (built with `shared/blender`, scripts in [`blender/`](https://github.com/Andrew1431/MoonSweepers-GarageLib/tree/structurelib/mods/SandPower/blender)), shown in place of
 the stone press and the solar post; the base structure's colliders and footprint stay.
 
 - **Sand compactor** (`sand_compactor.bin`): a white press housing on a black skid, sand hopper at the input end,
   briquette chute at the output end.
-  ![Sand compactor](blender/preview_compactor_hero.png)
-  Views: [hero](blender/preview_compactor_hero.png), [side](blender/preview_compactor_side.png),
-  [front](blender/preview_compactor_front.png), [rear](blender/preview_compactor_rear.png).
+  ![Sand compactor](https://raw.githubusercontent.com/Andrew1431/MoonSweepers-GarageLib/structurelib/mods/SandPower/blender/preview_compactor_hero.png)
+  Views: [hero](https://raw.githubusercontent.com/Andrew1431/MoonSweepers-GarageLib/structurelib/mods/SandPower/blender/preview_compactor_hero.png), [side](https://raw.githubusercontent.com/Andrew1431/MoonSweepers-GarageLib/structurelib/mods/SandPower/blender/preview_compactor_side.png),
+  [front](https://raw.githubusercontent.com/Andrew1431/MoonSweepers-GarageLib/structurelib/mods/SandPower/blender/preview_compactor_front.png), [rear](https://raw.githubusercontent.com/Andrew1431/MoonSweepers-GarageLib/structurelib/mods/SandPower/blender/preview_compactor_rear.png).
 - **Briquette generator** (`briquette_generator.bin`): a briquette hopper over a firebox with glowing windows, a white
   boiler drum, a steel radiator stack and an exhaust stack with an orange heat band.
-  ![Briquette generator](blender/preview_generator_hero.png)
-  Views: [hero](blender/preview_generator_hero.png), [side](blender/preview_generator_side.png),
-  [front](blender/preview_generator_front.png), [rear](blender/preview_generator_rear.png).
+  ![Briquette generator](https://raw.githubusercontent.com/Andrew1431/MoonSweepers-GarageLib/structurelib/mods/SandPower/blender/preview_generator_hero.png)
+  Views: [hero](https://raw.githubusercontent.com/Andrew1431/MoonSweepers-GarageLib/structurelib/mods/SandPower/blender/preview_generator_hero.png), [side](https://raw.githubusercontent.com/Andrew1431/MoonSweepers-GarageLib/structurelib/mods/SandPower/blender/preview_generator_side.png),
+  [front](https://raw.githubusercontent.com/Andrew1431/MoonSweepers-GarageLib/structurelib/mods/SandPower/blender/preview_generator_front.png), [rear](https://raw.githubusercontent.com/Andrew1431/MoonSweepers-GarageLib/structurelib/mods/SandPower/blender/preview_generator_rear.png).
 
 The `.bin` files ship next to `SandPower.dll`; the belt ports are read from them.
 

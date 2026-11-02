@@ -43,7 +43,7 @@ MoonStructures.Register(new StructureDefinition
 - **Model files:** `Model = "my_machine.bin"` names a model exported with `shared/blender` (see
   [`shared/blender/STRUCTURES.md`](../../shared/blender/STRUCTURES.md)) that sits next to your DLL (the build copies
   every `*.bin` beside a project's csproj into its plugin folder). With `Model` set and no `BuildModel`, the library
-  builds the template from the donor's prefab: every donor `MeshRenderer`/`SkinnedMeshRenderer` is disabled (its
+  builds the template from the donor's prefab: every donor renderer (mesh, skinned, particle, line...) is disabled (its
   colliders, views and scripts stay), and the model goes under a child of the root named `StructureLibModel` (scaled by
   `1 / scale`, layer copied, its lowest vertex on the structure's floor, local y = 0, as the kit floors models;
   `Port_*` nodes move with it). Materials named after the kit's palette (`MS_BodyWhite`, ...) become the game's own;
@@ -54,6 +54,9 @@ MoonStructures.Register(new StructureDefinition
   fall back to the declared `Ports` first, then the donor's.
   Limitation: the donor's animated effects (fill planes, emission, the press's moving parts) are hidden with its
   renderers and not retargeted onto the model; model static status lights instead.
+  The `.bin` reader (`shared/MeshModel/MeshModel.cs`) is compiled into both GarageLib and StructureLib, so it is
+  `internal` on the StructureLib side (GarageLib's `GarageLib.MeshModel` stays public): a mod referencing both
+  assemblies sees one type and gets no CS0433; reference GarageLib if you need `MeshModel` yourself.
 - **Cargo** (`MoonStructures.RegisterCargo(CargoDefinition, ownerGuid)`): `Id`, `Value` (a byte 3..255 claimed in
   [`docs/cargo-registry.md`](../../docs/cargo-registry.md)), `Name`, `ShortName`, `UnitKilograms`, `Price` (dollars
   per unit). `CanisterTint` is not applied yet. It returns the `Cargo` handle for slots, or `Cargo.None` when
@@ -69,7 +72,9 @@ MoonStructures.Register(new StructureDefinition
   each empty is a port at its position, flowing along its Blender local +Y, with its `output` (0/1) and `cargo`
   (`Dust`, `Sand`, `Stone` or a cargo id) properties (`kit.port`). Null inherits the donor's ports, each given a cargo by name
   (`IN_SAND` sand, any other dust, kept when an Input slot holds it, else the first Input slot's; an output carries
-  the Output slot's cargo); an empty list removes them. When the registry freezes, an input port whose cargo no Input
+  the Output slot's cargo); an empty list removes them. If the donor's build definition cannot be read when the
+  registry freezes (and neither the model nor `Ports` gives any), the clone keeps the donor's ports untouched and a
+  warning names the structure. When the registry freezes, an input port whose cargo no Input
   slot holds, an output port whose cargo is not the Output slot's, a duplicate name or a second output port drops the
   structure (logged); a port outside the donor footprint plus 1.2 m is only a warning. The cloned definition's
   `conveyorPorts` are rebuilt from them, named `sl:<cargo byte>:<Name>` so `MoonWorld.PortCargo` (prefixed) answers the
@@ -179,7 +184,7 @@ lines and `[selftest] done: N passed, M failed`. Leave the switches at their def
 | Cargo | Names, unit mass, price, canister round trip, modded canisters riding belts (see [Cargo audit](#cargo-audit)) | Depositing modded cargo at the collector; co-op cargo events; `CanisterTint` (not applied) | |
 | Processors | Cycle, batch moved at the same mass, `CycleFinished`, loading through `CrewProcessorLoad`; belt input through a declared port (`HandOff` prefix, `CargoEntered`; a canister of another cargo, or one arriving while its slot is full, waits at the belt end); belt output (vanilla `EmitProduct`/`EmitCargo`, 1 kg canisters, `CargoEmitted`); machine-to-machine chains by belt (grinder to burner; SandPower's vanilla pressure chamber to compactor to generator, self-test `sandpower-chain`), saved and reloaded with canisters on the belts | Walker loading (`LoadProcessor` refuses: "Not a production machine"); a structure without a processor taking belt input | Belt input in co-op (the host decides; clients untested) |
 | Ports | Declared ports (and a port on a port-less donor) written into the cloned definition as `sl:<cargo>:<Name>`; `PortCargo` answers the declared cargo; the game shows "input"/"output" and "<name> input/output"; refusal at freeze for a port cargo no slot holds | | Belts placed by hand onto modded ports (dev `AutoBelt` builds through the game's `TryBuildConveyor`); ports inherited from a donor (no example uses them) |
-| Models | `Model` file on the donor template (donor meshes hidden, colliders kept), ports from its `Port_*` nodes, card picture rendered from it (the example burner and both SandPower models, stone press and solar post donors); a missing file falls back to the donor model and declared ports | The donor's animated effects on a custom model | Donors with a non-unit `scale` or a skinned mesh (none of the three checked has either) |
+| Models | `Model` file on the donor template (donor renderers hidden, colliders kept), ports from its `Port_*` nodes, card picture rendered from it (the example burner and both SandPower models, stone press and solar post donors); a missing file falls back to the donor model and declared ports | The donor's animated effects on a custom model | Donors with a non-unit `scale` or a skinned mesh (none of the three checked has either) |
 | Power | Machines on a vanilla grid's surplus and batteries; fuel generators charge, supply modded machines and keep their charge across saves; a modded-only group gets a negative grid id | Fuel generators feeding vanilla machines; power links drawn to modded structures; `SupplyMode.Solar`; `Power` without a `Processor`; a generator's `RunningKw` (ignored) | |
 | Co-op | Manifest built and compared with itself | Graceful degradation for a client missing a mod | Both two-player cases (identical mods; client missing a mod) |
 

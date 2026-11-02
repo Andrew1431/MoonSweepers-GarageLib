@@ -3,6 +3,8 @@
     <AssemblyName>StructureLib</AssemblyName>
     <RootNamespace>StructureLib</RootNamespace>
     <GenerateDocumentationFile>true</GenerateDocumentationFile>
+    <!-- Makes the shared MeshModel internal here (GarageLib ships it public): one public GarageLib.MeshModel across both. -->
+    <DefineConstants>$(DefineConstants);STRUCTURELIB</DefineConstants>
   </PropertyGroup>
 
   <ItemGroup>

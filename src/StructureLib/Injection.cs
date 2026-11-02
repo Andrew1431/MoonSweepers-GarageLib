@@ -151,7 +151,12 @@ namespace StructureLib
         static void ApplyPorts(StructureDefinition d, MoonDepotBuildDefinition clone)
         {
             var ports = d.ResolvedPorts;
-            if (ports == null) return;
+            if (ports == null)
+            {
+                // Unresolved (the base's ports could not be read at the freeze): never write an empty array over them.
+                CoreLog.Warn($"'{d.Id}': no resolved ports ({d.PortRule ?? "registry not frozen"}); the clone keeps the conveyorPorts of base kind {d.BaseStructure} unchanged");
+                return;
+            }
             try
             {
                 var arr = new Il2CppReferenceArray<MoonDepotBuildDefinition.ConveyorPort>(ports.Count);

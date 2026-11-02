@@ -28,7 +28,8 @@ namespace StructureLib
     // They wait for [Dev] DumpCards (30 s in game) so model-card can compare the card pictures; the built burner's view
     // is inspected at the same time, well after the game spawned it.
     //  model-swapped: the view has a StructureLibModel child of its root with enabled mesh renderers, every donor
-    //    renderer outside it is disabled, and it carries the solar post prefab's colliders.
+    //    mesh or skinned renderer outside it is disabled (the swap hides every donor renderer; only mesh and skinned ones
+    //    are counted here), and it carries the solar post prefab's colliders.
     //  model-ports: the clone's ports are the model's (rule "model Port_* nodes"): one 'sl:250:Grit in' at
     //    (-0.90, 0.85, 0.00) dir (1, 0, 0).
     //  model-card: the burner's card PNG differs from the solar post's.
@@ -104,9 +105,9 @@ namespace StructureLib
             var donorPrefab = world.BuildDefinition(donorKind)?.prefab;
             int donorColliders = donorPrefab == null ? -1 : donorPrefab.GetComponentsInChildren<Collider>(true).Length;
             bool rootParent = holder.parent != null && holder.parent.Pointer == root.Pointer;
-            CoreLog.Info($"[selftest] {what} view '{view.name}': {ModelSwap.HolderName} at local {AutoBelter.V(holder.localPosition)} scale {holder.localScale.x:F2}, parent is the view root {rootParent}; model renderers {modelOn}/{modelAll} enabled (materials {string.Join(", ", mats)}); donor renderers {donorOn}/{donorAll} enabled{(donorOnNames.Count > 0 ? " [" + string.Join(", ", donorOnNames) + "]" : "")}; colliders {colliders} outside the model (+{modelColliders} in it), donor {donorKind} prefab {donorColliders}");
+            CoreLog.Info($"[selftest] {what} view '{view.name}': {ModelSwap.HolderName} at local {AutoBelter.V(holder.localPosition)} scale {holder.localScale.x:F2}, parent is the view root {rootParent}; model renderers {modelOn}/{modelAll} enabled (materials {string.Join(", ", mats)}); donor mesh/skinned renderers {donorOn}/{donorAll} enabled{(donorOnNames.Count > 0 ? " [" + string.Join(", ", donorOnNames) + "]" : "")}; colliders {colliders} outside the model (+{modelColliders} in it), donor {donorKind} prefab {donorColliders}");
             bool ok = rootParent && modelOn >= 1 && donorAll >= 1 && donorOn == 0 && colliders == donorColliders && modelColliders == 0;
-            return (ok, $"parent is root {rootParent}, model renderers enabled {modelOn}, donor renderers enabled {donorOn}/{donorAll}, colliders {colliders} (+{modelColliders} in the model) vs prefab {donorColliders}");
+            return (ok, $"parent is root {rootParent}, model renderers enabled {modelOn}, donor mesh/skinned renderers enabled {donorOn}/{donorAll}, colliders {colliders} (+{modelColliders} in the model) vs prefab {donorColliders}");
         }
 
         static (bool, string) ModelPortsOk(MoonWorld world, StructureDefinition burner)
@@ -153,8 +154,8 @@ namespace StructureLib
 
         // SandPower's models (run from the chain and reload checks in DevBelts.cs, once the depots exist):
         //  sandpower-model-swapped: both views carry the StructureLibModel holder with enabled renderers, every donor
-        //    renderer disabled and the donor prefab's colliders (stone press 97 for the compactor, solar post 93 for the
-        //    generator).
+        //    mesh/skinned renderer disabled (the ones Swapped counts) and the donor prefab's colliders (stone press 97
+        //    for the compactor, solar post 93 for the generator).
         //  sandpower-model-ports: the clones' ports are the models' Port_* nodes: the compactor 'sl:<sand>:Sand in' in at
         //    (-4.10, 0.85, 0.00) and 'sl:3:Briquettes out' out at (3.90, 0.85, 0.00); the generator 'sl:3:Briquettes in' in
         //    at (-0.90, 0.85, 0.00); all flowing (1, 0, 0).

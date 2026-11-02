@@ -8,7 +8,7 @@ namespace StructureLib
 {
     // StructureDefinition.Model: a .bin from shared/blender/export_mesh_model.py next to the registering mod's DLL.
     // Build is the default BuildModel when Model is set (and BuildModel is not): the donor's prefab becomes the template
-    // with every donor mesh hidden (its colliders, views and scripts stay) and the model under a "StructureLibModel" child
+    // with every donor renderer hidden (its colliders, views and scripts stay) and the model under a "StructureLibModel" child
     // of the template root, standing where the donor's meshes stood. Ports reads the model's Port_* nodes.
     internal static class ModelSwap
     {
@@ -48,13 +48,16 @@ namespace StructureLib
                 template.name = prefab.name;
                 var root = template.transform;
 
-                // Hide every donor mesh; remember the lowest point of any of them in template-local space (mesh bounds
-                // taken through each renderer's transform: the template is inactive, so Renderer.bounds is not usable).
+                // Hide every donor renderer (mesh, skinned, particle, line, trail...). The lowest point and the fallback
+                // material come from the mesh and skinned ones only, in template-local space (mesh bounds taken through
+                // each renderer's transform: the template is inactive, so Renderer.bounds is not usable).
                 float donorBottom = float.PositiveInfinity;
-                int hidden = 0;
+                int hidden = 0, hiddenMeshes = 0;
                 Material firstMat = null;
                 foreach (var r in template.GetComponentsInChildren<Renderer>(true))
                 {
+                    r.enabled = false;
+                    hidden++;
                     Mesh mesh;
                     if (r.TryCast<MeshRenderer>() != null)
                     {
@@ -67,10 +70,9 @@ namespace StructureLib
                         if (smr == null) continue;
                         mesh = smr.sharedMesh;
                     }
+                    hiddenMeshes++;
                     if (mesh != null) donorBottom = Mathf.Min(donorBottom, LowestCorner(mesh.bounds, r.transform, root));
                     if (firstMat == null) firstMat = r.sharedMaterial;
-                    r.enabled = false;
-                    hidden++;
                 }
                 if (float.IsInfinity(donorBottom)) donorBottom = 0f;
                 if (StructureMaterials.FallbackBase == null) StructureMaterials.FallbackBase = firstMat;
@@ -104,7 +106,7 @@ namespace StructureLib
                 }
                 foreach (var t in holder.GetComponentsInChildren<Transform>(true)) t.gameObject.layer = template.layer;
 
-                CoreLog.Info($"'{d.Id}': model {d.Model} on base {d.BaseStructure} ('{prefab.name}'): hid {hidden} donor renderer(s), {meshes} model mesh(es); donor lowest bound {donorBottom:F3} (floorOffset {ctx.Donor.floorOffset:F3}, not added), model lowest vertex {place.Lowest:F3} -> holder offset {place.Offset:F3}, scale {place.Scale:F2}; built lowest vertex {(float.IsInfinity(measured) ? "none" : measured.ToString("F3"))}");
+                CoreLog.Info($"'{d.Id}': model {d.Model} on base {d.BaseStructure} ('{prefab.name}'): hid {hidden} donor renderer(s) ({hiddenMeshes} mesh/skinned), {meshes} model mesh(es); donor lowest bound {donorBottom:F3} (floorOffset {ctx.Donor.floorOffset:F3}, not added), model lowest vertex {place.Lowest:F3} -> holder offset {place.Offset:F3}, scale {place.Scale:F2}; built lowest vertex {(float.IsInfinity(measured) ? "none" : measured.ToString("F3"))}");
                 if (Mathf.Abs(place.Offset) > 1e-4f || Mathf.Abs(place.Scale - 1f) > 1e-4f)
                     CoreLog.Info($"'{d.Id}': model holder offset {place.Offset:F3} and scale {place.Scale:F3}; the model's ports move with it");
                 return template;

@@ -830,6 +830,10 @@ Belt output and save with belts (Task 4, 2026-11-02; logs `task-4-logs/`, run1 =
     after a kill (under 10 s vs 30 s or more); card rendering on vs off, or delayed a few frames after "Session in
     game"; the icon camera's MSAA (8x vs 1x); SandPower installed vs the example only. Read the native stack with
     WinDbg and Unity's symbol server.
+  - **Mitigation shipped, unproven (final fix wave).** `IconRenderer` now starts no render until 5 ticks after the
+    model materials change (the stand-in shader swap) or `QueueAll` runs, and creates the icon camera disabled,
+    enabling it a frame later, so no camera is created, first draws, or follows a shader swap in the same frame. The
+    crash has not been reproduced, so whether this helps is unknown; the reproduction arms above still stand.
 
 ## Still open
 

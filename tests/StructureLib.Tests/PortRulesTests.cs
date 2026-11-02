@@ -55,5 +55,18 @@ namespace StructureLib.Tests
             foreach (var n in new[] { "IN_SAND", "OUT", null, "sl:", "sl::x", "sl:256:x", "sl:-1:x", "sl:12" })
                 Assert.False(PortRules.TryDecodeCargo(n, out _), n ?? "null");
         }
+
+        [Theory]
+        [InlineData(true, true, true, PortSource.Model)]
+        [InlineData(true, false, false, PortSource.Model)]
+        [InlineData(false, true, true, PortSource.Declared)]
+        [InlineData(false, true, false, PortSource.Declared)]
+        [InlineData(false, false, true, PortSource.Donor)]
+        public void ChooseSource_ModelThenDeclaredThenDonor(bool model, bool declared, bool donor, PortSource expected) =>
+            Assert.Equal(expected, PortRules.ChooseSource(model, declared, donor));
+
+        [Fact]
+        public void ChooseSource_UnreadableDonorWithNothingElseLeavesTheCloneUntouched() =>
+            Assert.Equal(PortSource.LeaveUntouched, PortRules.ChooseSource(false, false, false));
     }
 }

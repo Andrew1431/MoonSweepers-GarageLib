@@ -11,7 +11,8 @@ namespace StructureLib
     // prefab (from the structure's cloned definition) with DecorateModel applied, on a stage at the moon's centre, shot
     // orthographically from the front-left and above onto a transparent background. A PNG from the definition wins;
     // otherwise a CardImageKey means vanilla art, so nothing is rendered. Under URP a manual Camera.Render may draw nothing, so the
-    // camera is enabled for one frame and read the next.
+    // camera is created disabled, enabled the next frame, and read two frames after that. No render starts until
+    // SettleTicks ticks after the model materials changed or QueueAll ran.
     //
     // The prefab is instantiated under an inactive parent so none of its game scripts wake up (Awake would run even on
     // disabled behaviours), and the stage gets a script-free copy of it: the same transform tree with only its mesh
@@ -34,6 +35,13 @@ namespace StructureLib
         static float waited;
         static float modelWait;
         static readonly List<StructureDefinition> standIn = new();
+        // Ticks since the model materials last changed state (StructureMaterials.Waiting flipped: the stand-ins' shaders
+        // were swapped for the game's) or QueueAll ran. A render starts only once this reaches SettleTicks, so a shader
+        // swap and a camera's first draw never share a frame (a mitigation for the load-time crash, see the recon).
+        const int SettleTicks = 5;
+        static int calm;
+        static bool lastWaiting;
+        static int changeFrame = -1;
 
         sealed class Job
         {
@@ -59,6 +67,8 @@ namespace StructureLib
         {
             if (queued || !MoonStructures.Frozen || MoonStructures.Disabled) return;
             queued = true;
+            calm = 0;
+            changeFrame = Time.frameCount;
             foreach (var d in MoonStructures.All)
             {
                 if (d.Kind <= 0 || !MoonStructures.IsModded(d.Kind)) continue;
@@ -74,6 +84,16 @@ namespace StructureLib
         {
             try
             {
+                bool waiting = StructureMaterials.Waiting;
+                if (waiting != lastWaiting)
+                {
+                    lastWaiting = waiting;
+                    calm = 0;
+                    changeFrame = Time.frameCount;
+                    CoreLog.Info($"Card art: model materials {(waiting ? "now wait for the player's equipment" : "changed to the game's")} at frame {changeFrame}; renders hold for {SettleTicks} ticks");
+                }
+                else if (calm < int.MaxValue) calm++;
+
                 // A card taken while the model still wore tinted stand-ins is taken again once they are the game's own.
                 if (standIn.Count > 0 && !StructureMaterials.Waiting)
                 {
@@ -109,9 +129,21 @@ namespace StructureLib
                             return;
                         }
                     }
+                    // Building the template above may itself have created stand-ins (Waiting flips next tick): check again.
+                    if (calm < SettleTicks || StructureMaterials.Waiting != lastWaiting) return;
                     modelWait = 0f;
                     if (next.ModelPath != null && StructureMaterials.Waiting) standIn.Add(next);
+                    CoreLog.Info($"Card art for '{next.Id}': render starts at frame {Time.frameCount}, {calm} tick(s) after the last material/queue change (frame {changeFrame})");
                     Start(queue.Dequeue(), world);
+                    return;
+                }
+                // The camera is created disabled (Start) and enabled here, a frame later, so creation and its first
+                // draw happen in different frames; Finish reads two frames after that first draw.
+                if (job.Cam != null && !job.Cam.enabled)
+                {
+                    job.Cam.enabled = true;
+                    Unhide(job.Holder);
+                    CoreLog.Info($"Card art for '{job.Def.Id}': camera enabled at frame {Time.frameCount}");
                     return;
                 }
                 job.Frames++;
@@ -188,6 +220,7 @@ namespace StructureLib
             job.Rt.Create();
             var camGo = new GameObject("StructureLib Icon Camera");
             var cam = job.Cam = camGo.AddComponent<Camera>();
+            cam.enabled = false; // Tick enables it next frame: no first draw in the frame it is created
             cam.cullingMask = ~0; // nothing else is within reach of the moon's centre
             cam.clearFlags = CameraClearFlags.SolidColor;
             cam.backgroundColor = new Color(0f, 0f, 0f, 1f / 255f); // invisible, but shows the camera ran
@@ -288,7 +321,7 @@ namespace StructureLib
                 job.Frames = 0;
                 return;
             }
-            CoreLog.Info($"Card art for '{d.Id}' rendered: {opaque} opaque, {background} background, {untouched} untouched of {Size * Size} pixels" +
+            CoreLog.Info($"Card art for '{d.Id}' rendered (read at frame {Time.frameCount}): {opaque} opaque, {background} background, {untouched} untouched of {Size * Size} pixels" +
                          (untouched == px.Length ? " (camera never drew)" : opaque == 0 ? " (camera drew but the model is invisible)" : ""));
             var sprite = sprites[d.Kind] = MakeSprite(tex, d);
 #if DEVBUILD

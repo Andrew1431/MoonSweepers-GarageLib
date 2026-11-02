@@ -76,5 +76,26 @@ namespace StructureLib
 
         /// <summary>The cargo vanilla's PortCargo answers for a donor port name: IN_SAND is sand, every other port dust.</summary>
         public static string VanillaCargoId(string donorPortName) => donorPortName == "IN_SAND" ? "sand" : "dust";
+
+        /// <summary>
+        /// Which ports a structure gets: the model's Port_* nodes when it has any, else the declared Ports (an empty list
+        /// included), else the donor's ports when its build definition was read. When that read failed nothing is known
+        /// about the donor's ports, so the clone's conveyorPorts are left as the donor's own (never emptied).
+        /// </summary>
+        public static PortSource ChooseSource(bool modelHasPorts, bool declared, bool donorShapeAvailable) =>
+            modelHasPorts ? PortSource.Model : declared ? PortSource.Declared : donorShapeAvailable ? PortSource.Donor : PortSource.LeaveUntouched;
+    }
+
+    /// <summary>The outcome of <see cref="PortRules.ChooseSource"/>.</summary>
+    public enum PortSource
+    {
+        /// <summary>The model's Port_* nodes.</summary>
+        Model,
+        /// <summary>StructureDefinition.Ports.</summary>
+        Declared,
+        /// <summary>The donor's ports, each given a cargo by name.</summary>
+        Donor,
+        /// <summary>The donor's ports could not be read: the clone keeps them as they are.</summary>
+        LeaveUntouched,
     }
 }

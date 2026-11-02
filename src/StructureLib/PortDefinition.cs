@@ -39,20 +39,30 @@ namespace StructureLib
     }
 
     // Which ports a modded structure gets (resolved once, when the registry freezes): the model's Port_* nodes
-    // (MoonStructures.ModelPortsProvider), else the declared Ports, else the donor's ports with a cargo each.
+    // (MoonStructures.ModelPortsProvider), else the declared Ports, else the donor's ports with a cargo each. When the
+    // donor's build definition could not be read (null or a throw) and neither the model nor the definition gives ports,
+    // Ports is null: the clone's conveyorPorts stay the donor's own instead of being emptied (PortRules.ChooseSource).
     internal static class PortResolver
     {
+        internal const string UntouchedRule = "no rule (base ports unreadable, clone left untouched)";
+
         internal static (List<PortDefinition> Ports, string Rule) Resolve(StructureDefinition d, DonorShape donor, Func<StructureDefinition, DonorShape, List<PortDefinition>> modelPorts)
         {
+            List<PortDefinition> fromModel = null;
             if (modelPorts != null)
             {
-                List<PortDefinition> fromModel = null;
                 try { fromModel = modelPorts(d, donor); }
                 catch (Exception e) { CoreLog.Error($"'{d.Id}': reading ports from the model threw; using the declared or donor ports: {e.Message}"); }
-                if (fromModel != null && fromModel.Count > 0) return (Copy(fromModel), "model Port_* nodes");
             }
-            if (d.Ports != null) return (Copy(d.Ports), "declared Ports");
-            return (FromDonor(d, donor), $"donor {d.BaseStructure} ports by name");
+            switch (PortRules.ChooseSource(fromModel != null && fromModel.Count > 0, d.Ports != null, donor != null))
+            {
+                case PortSource.Model: return (Copy(fromModel), "model Port_* nodes");
+                case PortSource.Declared: return (Copy(d.Ports), "declared Ports");
+                case PortSource.Donor: return (FromDonor(d, donor), $"donor {d.BaseStructure} ports by name");
+                default:
+                    CoreLog.Warn($"'{d.Id}': the ports of base kind {d.BaseStructure} could not be read and the structure declares none; its clone keeps the base's ports unchanged");
+                    return (null, UntouchedRule);
+            }
         }
 
         static List<PortDefinition> Copy(List<PortDefinition> ports) =>
@@ -65,7 +75,6 @@ namespace StructureLib
         static List<PortDefinition> FromDonor(StructureDefinition d, DonorShape donor)
         {
             var result = new List<PortDefinition>();
-            if (donor == null) return result;
             var slots = d.Processor?.Slots;
             foreach (var p in donor.Ports)
             {

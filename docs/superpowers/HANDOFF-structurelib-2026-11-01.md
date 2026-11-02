@@ -52,7 +52,7 @@ nothing pushed. Design and plan commits 0a5b32d, 529374d, 8f490dc.
 | Belts and models | 3 | Belt input (`HandOff` prefix, `CargoEntered`) | complete, reviewed (1 fix round) | e64d016, 0bdd5ff |
 | Belts and models | 4 | Belt output (vanilla emits; `CargoEmitted`), belts and modded canisters survive save/reload | complete, reviewed | 4a96222 |
 | Belts and models | 5 | `Model = "<file>.bin"` on the donor template, ports from `Port_*` nodes, stand-in materials | complete, reviewed (1 fix round) | 7d04434, a17c066 |
-| Belts and models | 6 | SandPower wired to its models and model ports; the chamber → compactor → generator belt chain in the self-test; `AutoBuildLayout = line`; `package.ps1` ships `.bin` files; docs | this commit (see `git log`) | |
+| Belts and models | 6 | SandPower wired to its models and model ports; the chamber → compactor → generator belt chain in the self-test; `AutoBuildLayout = line`; `package.ps1` ships `.bin` files; docs | complete, reviewed (+ final fix wave) | 2d72352, a4bf6fb + final fix wave |
 | SandPower models | 1 | Blender kit structure helpers (`kit.port`, hopper, chute, footprint guide), `STRUCTURES.md`, `check_bin.py` | complete | c931dff |
 | SandPower models | 2 | Sand compactor model with `Sand in` / `Briquettes out` ports | complete | cb99d7b |
 | SandPower models | 3 | Briquette generator model with a `Briquettes in` port | complete | c5f7b4b |
@@ -60,13 +60,15 @@ nothing pushed. Design and plan commits 0a5b32d, 529374d, 8f490dc.
 Unit tests: 130 green. In game (slot-2, Task 6): the chain run 34/0 (`sandpower-chain`, `sandpower-save-clean`,
 `sandpower-model-swapped`, `sandpower-model-ports` and every earlier SandPower check PASS; first generator charge 47.7 s
 after the chamber's dust load) and the reload run 28/0 (`sandpower-reload`: both belts, the briquette canister on the
-sand belt and both production states back). `Moon save failed` 0 in both.
+sand belt and both production states back). `Moon save failed` 0 in both. After the final fix wave: 136 unit tests
+green and the chain run 34/0 again, the first card render 5 ticks after the stand-in material swap.
 
 **By hand for this plan** (not covered by any self-test):
 - The belt tool onto modded ports: lay belts by hand from a pressure chamber's output to the compactor's sand hopper
   and from its chute to the generator's hopper. The self-test builds belts through `TryBuildConveyor`, never the tool.
 - Both models at player scale, and their glow and steel look in the real lighting.
 - The stand-in → game material switch a few seconds after a world loads (watch the models and the cards change).
+- Uninstall SandPower with belts and briquettes attached, load, reinstall.
 - Co-op: belts into and out of modded machines with two players (the host runs the machines; clients untested).
 
 Deferred minor findings of this plan: the `Minor deferred:` lines in the ledger
@@ -120,7 +122,9 @@ Deferred minor findings of this plan: the `Minor deferred:` lines in the ledger
   suspect, not the SandPower models. Reproduce with about 20 launches per arm, varying one thing at a time: relaunch
   delay (under 10 s vs 30 s or more), card rendering on vs off or delayed a few frames after "Session in game", the
   icon camera's MSAA (8x vs 1x), SandPower vs the example only; read the native stack with WinDbg and Unity's symbol
-  server. Evidence: `research/STRUCTURES_RECON.md`, the Task 6 chain paragraph.
+  server. Evidence: `research/STRUCTURES_RECON.md`, the Task 6 chain paragraph. A mitigation is in (final fix wave:
+  no card render until 5 ticks after the stand-in shader swap or `QueueAll`, and the icon camera enabled a frame after
+  it is created); it is unproven against the crash, so the reproduction arms above remain.
 - Optional: install .NET SDK 9.0.200+ so `GarageLib.slnx` builds in one command (not buildable here, SDK 8.0.421).
 
 ## Known limitations shipped as documented (both READMEs say so)

@@ -169,8 +169,9 @@ namespace StructureLib
 
         /// <summary>
         /// The ports a structure's cloned definition carries, resolved when the registry froze (model Port_* nodes, else
-        /// <see cref="StructureDefinition.Ports"/>, else the base structure's ports). Null before the freeze or for a
-        /// dropped structure.
+        /// <see cref="StructureDefinition.Ports"/>, else the base structure's ports). Null before the freeze, for a
+        /// dropped structure, and when the base structure's ports could not be read and none were given (the clone then
+        /// keeps the base's ports unchanged).
         /// </summary>
         public static IReadOnlyList<PortDefinition> PortsOf(StructureDefinition def) => def?.ResolvedPorts;
 
@@ -258,8 +259,9 @@ namespace StructureLib
                     var shape = shapeLookup?.Invoke(def.BaseStructure);
                     var r = PortResolver.Resolve(def, shape, ModelPortsProvider);
                     var slots = (def.Processor?.Slots ?? new List<Slot>()).Select(s => (s.Role, s.Cargo.Id)).ToList();
-                    var portErrors = def.Processor == null && def.Ports == null && r.Rule.StartsWith("donor", StringComparison.Ordinal)
-                        ? new List<string>() // a plain structure keeps its donor's ports and vanilla cargo
+                    // A plain structure keeps its donor's ports and vanilla cargo; null ports leave the clone's untouched.
+                    var portErrors = r.Ports == null || (def.Processor == null && def.Ports == null && r.Rule.StartsWith("donor", StringComparison.Ordinal))
+                        ? new List<string>()
                         : PortRules.CheckPorts(def.Id, r.Ports.Select(p => (p.Name, p.Output, p.Cargo.Id)).ToList(), slots);
                     if (portErrors.Count > 0)
                     {
@@ -269,7 +271,7 @@ namespace StructureLib
                         dropped++;
                         continue;
                     }
-                    if (shape != null)
+                    if (shape != null && r.Ports != null)
                         foreach (var p in r.Ports)
                         {
                             string warn = PortRules.WarnOutsideFootprint(def.Id, p.Name, (p.Position.x, p.Position.y, p.Position.z), (shape.HalfFootprint.x, shape.HalfFootprint.y), PortReach);

@@ -97,7 +97,7 @@ namespace StructureLib
                 n++;
             }
             tinted.Clear();
-            CoreLog.Info($"Model materials: {n} tinted stand-in(s) became the game's prototype materials");
+            CoreLog.Info($"Model materials: {n} tinted stand-in(s) became the game's prototype materials (frame {Time.frameCount})");
         }
 
         // As GarageLib's IconRenderer.FindModels: the first player equipment whose models are set up.

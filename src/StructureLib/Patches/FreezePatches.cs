@@ -35,8 +35,9 @@ namespace StructureLib.Patches
             catch (Exception e) { CoreLog.Error("Freezing the structure registry failed: " + e); }
         }
 
-        // The donor's ports and footprint (port resolution and the footprint warning). A read that throws gives no shape:
-        // the structure then inherits no donor ports.
+        // The donor's ports and footprint (port resolution and the footprint warning). A read that throws (or a null
+        // definition) gives no shape: a structure with no model or declared ports then leaves its clone's conveyorPorts
+        // untouched (PortResolver.Resolve) instead of emptying them.
         internal static DonorShape Shape(MoonWorld world, int kind)
         {
             try { return PortResolver.ReadDonor(world.BuildDefinition(kind)); }
