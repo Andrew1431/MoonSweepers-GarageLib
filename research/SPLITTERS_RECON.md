@@ -428,3 +428,14 @@ From the BeltBoxes self-test runs (`.superpowers/sdd/2026-11-02-belt-boxes/task-
 - A sand canister at the end of the merger's output belt holds the merger (the burner refuses sand). Every input belt
   then fills, and once the sand is removed the next six hops came Right, Back, Left, Right, Back, Left (turn order
   from wherever the turn stood).
+- Fix round 1:
+  - A canister at d 0.00 on the removed belt (the 3 kg one, just hopped onto it) did not drop. It stayed in
+    `world.riders` and rode the rebuilt belt (it was at the end of belt 7 in the reload). Only the canister further
+    along (d 5.00) lay on the ground. The grit balance over the whole run stayed exact (62 kg in, 62 kg accounted).
+  - The chain moves between the load and the self-test (about 20 s). In the two-box reload, one saved canister had
+    already hopped through the splitter before the self-test began (`canister 148 -> ...`). Its "back" count must be
+    taken from the load (the sidecar's "39 of 39 restored canisters" line), not from the self-test's start.
+  - The 0.536 kg canister from the first reload was not seen again. With the feeder logging every canister (47, all
+    1 kg / capacity 1) and every non-whole `CargoEmitted` logged (none), no fractional canister appeared. The likely
+    source is a remainder in the grinder's output slot, filled by `belt-in-waits-when-full`'s `10 - Stored` top-ups.
+    That is not proven.

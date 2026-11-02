@@ -1135,13 +1135,17 @@ namespace StructureLib
             string[] names = { "power-node-registered", "power-grid-joined", "power-burner-supplies", "power-grinder-runs-on-burner", "power-no-burn-when-full" };
             string skip = burner == null ? $"'{BurnerId}' is not registered" : burnerDepot < 0 ? "no example burner depot in world.depots" : null;
             var feed = AutoFeeder.For(BurnerId);
-            // The checks time themselves from the burner's AutoFeed. A burner with no AutoFeed entry that AutoBelt feeds
-            // (straight from the grinder, or through belt boxes) runs on whatever the belt brings: nothing here applies.
-            if (skip == null && feed == null && BeltedInto(burnerDepot))
+            // Three of the checks time themselves from the burner's AutoFeed. A burner with no AutoFeed entry fed through a
+            // belt box (a router) runs on whatever the chain brings, so those three do not apply; the node and grid
+            // checks need no feed and still run. A burner fed straight by a machine's belt with no AutoFeed still fails.
+            var into = skip == null && feed == null ? AutoBelter.Results.FirstOrDefault(r => r.Ok && r.To == burnerDepot) : null;
+            var router = into != null ? RouterAt(world, into.From) : null;
+            if (router != null)
             {
-                var into = AutoBelter.Results.First(r => r.Ok && r.To == burnerDepot);
-                var router = RouterAt(world, into.From);
-                CoreLog.Info($"[selftest] '{BurnerId}' has no AutoFeed entry and is belt-fed (belt {into.Belt} from depot {into.From}{(router != null ? $", router '{router.Id}'" : "")}): power checks not applicable; {PowerText(world.ProductionOf(burnerDepot))}");
+                CoreLog.Info($"[selftest] '{BurnerId}' has no AutoFeed entry and is fed through router '{router.Id}' (belt {into.Belt} from depot {into.From}): power-burner-supplies, power-grinder-runs-on-burner and power-no-burn-when-full not applicable; power-node-registered and power-grid-joined run; {PowerText(world.ProductionOf(burnerDepot))}");
+                powerOpen["power-node-registered"] = Time.unscaledTime + 20f;
+                powerOpen["power-grid-joined"] = Time.unscaledTime + 20f;
+                DonorReport(world);
                 return;
             }
             skip ??= feed == null ? "no AutoFeed entry for the burner" : feed.Error;
