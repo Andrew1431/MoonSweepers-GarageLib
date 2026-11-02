@@ -234,6 +234,15 @@ decks and foundations are refused as donors.
   an `Il2CppSystem.Decimal` through `ref __result`) all take Harmony prefixes without trouble (Task 9, 4 runs).
 - `world.canisters` (`Dictionary<int, MoonDroppedCanister>`, value-type values): `set_Item` from managed code does not
   change the stored canister. Write through `MoveCanisterRecord` instead (see "Built records and save").
+- **A Harmony prefix on the static `MoonWorld.PortCargo(port)` is safe** (M1 spike, 2026-11-02): a log-only prefix that
+  returns true patched, ran (20 logged calls per run) and the world loaded cleanly in two runs, self-test 23/23 each.
+  Unlike `IsProcessor`, nothing went wrong. Note its argument is the *definition's*
+  `MoonDepotBuildDefinition/ConveyorPort { name, position, direction, output }`, not the runtime `MoonWorld/ConveyorPort`
+  (see "Belts and ports" fact (d)).
+- `CheckConveyor(builder, plan, out reason, out path, out price)` has an `out Il2CppSystem.Decimal` (a struct), so it was
+  not called. `ConveyorRouteValid(plan, kit, builderPosition, out path, out reason, out routable)` (a class and two
+  primitives out) is the route check the dev `AutoBelt` uses, and `TryBuildConveyor(builder, plan, out reason, out id)`
+  builds; both ran without trouble.
 
 ## Processors (Task 10, traced in game on slot-2, 2026-11-01)
 
@@ -562,9 +571,138 @@ Hook chosen (Task 12): **Steam lobby data at two levels** under the key `structu
     every file in it is written into the client's world folder.
 - Calls used take and return strings, primitives and `CSteamID` by value (a one-`ulong` struct; no `out`/`ref`).
 
+## Belts and ports (M1, 2026-11-02)
+
+Traced in game on slot-2 with the dev `AutoBuild` (ring layout), `AutoBelt`, `AutoFeed` and temporary trace postfixes
+(20 lines per key, removed afterwards) on `EnterMachine`, `FeedProcessor`, `PortCargo`, `MachineJoins`,
+`MachineOutfeed`, `EmitProduct`, `EmitCargo`, `BeltsAtPorts`, `MachinePortSnaps`, `HandOff`, `Enter`, `MachineInputAt`
+and `FindMachineInput`, plus direct probe calls. Logs: `.superpowers/sdd/2026-11-02-structurelib-belts-and-models/
+task-1-logs/` (run1 = chamber → grinder, run2 = grinder → chamber, run3/run4 = `PortCargo` prefix and donor facts). Ids
+in the excerpts are depot / belt / canister numbers; the only player id is the single-player `local`.
+
+Ports and belts, as the game reports them:
+- A built depot's runtime ports come from `ConveyorPorts(near, radius, list)` (filter `structure == depot id`); their
+  `label` is `PortLabel(def, port)` ("Pressure chamber input"), and `PortName(def, port)` is "input" / "output". The
+  definition's own names are `IN`, `OUT`, `IN_DUST`, `IN_SAND`, `OUT_A`, …. `PortPoints(record)` returns
+  `List<Vector3>` (positions only, no directions).
+- **A port's `direction` is the belt's flow direction at that port, for inputs and outputs alike** (the chamber's `IN`
+  and `OUT` both point local +X). The plan that built is `ConveyorPlan { start = output port position, startDirection =
+  its direction, end = input port position, endDirection = its direction, startUp/endUp = position.normalized,
+  startStructure/endStructure = the depot ids, startBelt = endBelt = replaces = -1 }`:
+  `[dev] AutoBelt '96:output->ryanhartwig.example-grinder:input': route +start,+end (unset ids -1) valid=True routable=True length=15.37`
+  then `[dev] belt 96:output -> ryanhartwig.example-grinder:input id=1 ok=True reason='Belt built.'` The belt's
+  snapshot end lands exactly on the port (`end-to-port 0.000 m`). Refusals seen: `'Turn too tight: give it more room.'`
+  (an output facing away from the input) and `'Blocked by a structure.'` (reversed directions).
+- Belt numbers: `MoonConveyorKit` `minLength 0.75 maxLength 30.00 minRadius 0.49 maxSlope 45.00 minHeight 0.35
+  maxHeight 6.00 pricePerMetre 0.50 deckHeight 0.85`; `PortTolerance 0.05`, `PortReach 1.20`, `ConveyorReach 40.00`,
+  `BeltSpeed 1.10` m/s, `BeltSpacing 0.75` m, `BeltRideHeight 0.03`, `ProductEmitSeconds 0.35`.
+
+Facts:
+- **(a) Belt input goes through `HandOff(belt, path, id)`; `EnterMachine` and `FeedProcessor` were never called** (0
+  trace lines in all seven runs, including canisters the chamber accepted). When a canister reaches the end of a belt
+  joined to an input port, the game asks `FindMachineInput(point)` / `MachineInputAt(point)` (both True for the
+  chamber's and the grinder's input point) and then calls `HandOff` every frame:
+  - Vanilla chamber, dust: `HandOff(belt 1, id 10) -> True; after: canister 10 gone`, and the chamber's slot 0 went
+    0 → 1 kg (run2). `PortCargo` was not called on this path (its only trace lines were the probe's own calls).
+  - Vanilla chamber, wrong cargo (grit): `HandOff(belt 1, id 9) -> False` every frame; the canister stays a rider at
+    the belt end (`d 15.37` of `15.37`, `moving False`, `WaitingAtEnd True`), and the chamber's status reads
+    `'A example grit capsule is waiting at the dust input'`.
+  - **Example grinder (modded, clone of the chamber's ports), dust: refused.** `MachineInputAt((28.62,1992.83,-25.84))
+    -> True`, then `HandOff(belt 1, id 8) -> False; after: canister 8 cargo 0 … riding True … rider belt 1 d 15.37
+    moving False` every frame (run1). The canister is not dropped: it sits on the belt at the end, and every later
+    canister queues behind it at `BeltSpacing` (`[9 d 14.62 …] [10 d 13.87 …] …`). The grinder's status stays `''`
+    (no "waiting" text). Since the cargo was right and `PortCargo` was not consulted, the refusal is inside `HandOff`,
+    by kind (native, not observable further). The belt-input bridge of spec call 1 is needed, and its hook point is
+    `HandOff` (instance method; a canister refused there stays riding at the end, so "nearest rider at the input port
+    point with `WaitingAtEnd`" finds it).
+- **(b) Vanilla emits 1 kg per `EmitCargo` call, one canister per call, about every 0.7 s.** `EmitProduct` runs every
+  `ProductEmitSeconds` (0.35 s) and calls `EmitCargo(belt, owner, cargo, 1 kg)`, which alternates True / False while
+  the belt entrance is not clear (`BeltSpacing` 0.75 m at 1.1 m/s): `EmitCargo(belt 1, owner local, cargo 1, kg 1) ->
+  True at t=41.1`, `-> False at t=41.5`, `-> True at t=41.8`, … Each sand canister holds `1.0 kg` (capacity 1). The
+  chamber's two 5 kg cycles became ten 1 kg canisters (run1). With the belt blocked at its far end the canisters fill it
+  (11 riders on a 15.37 m belt); a full belt makes `EmitCargo` return False and the output slot then fills (S0 fact (d)).
+  The example grinder emits the same way: `EmitCargo(belt 1, owner local, cargo 250, kg 1) -> True` (run2): 1 kg per
+  canister even though grit's `UnitKilograms` is 3.
+- **(c) A modded cargo (grit, 250) canister rides a belt end to end and keeps its cargo.** Created with
+  `DevSetCarriedDust(player, kg)` + `PackDustCanister(player, point, up, out id)` (a 1 kg / capacity 1 dust canister),
+  cargo set by rewriting the record through `MoveCanisterRecord(new MoonDroppedCanister(… cargo 250), …)` (as the
+  sidecar does), and put on the belt by `MoveCanisterRecord` to a point on the belt (`BeltPath(belt).Point(d)` + up ×
+  `BeltRideHeight`): the game boarded it within 2 s (`riding True rider belt 1`). Setting the cargo while it rode also
+  held (`set cargo 250 while riding -> ok; … rider belt 1 d 6.18 moving True`). Both rode 15.37 m to the chamber's
+  input end and stopped there with `cargo 250`. `CarryDustCanister(player, id, walkerPosition)` returned False (walker
+  ~10 m away), so `PlaceCarriedOnBelt` was never reached: **not tested**. The grinder's own emitted grit canisters
+  (fact b) rode the same way.
+- **(d) `PortCargo(MoonDepotBuildDefinition/ConveyorPort port)` takes the definition's port, not the runtime one**
+  (signature checked against the interop assembly; the spec assumed `MoonWorld/ConveyorPort`). So a prefix sees only
+  `{ name, position, direction, output }`: no depot id, no label. Its answer looks name-based: `IN_SAND` → Sand, every
+  other port (`IN`, `IN_DUST`, `IN_A`, `IN_B`, and all outputs `OUT`, `OUT_A`, `OUT_B`) → Dust; seen for the chamber
+  (`IN` Dust, `OUT` Dust), the stone press (`IN_DUST` Dust, `IN_SAND` Sand, `OUT` Dust), packager 10, splitter 11,
+  merger 12, robot vacuums 91/92, garage 98 and capsule catcher 100. Vanilla code never called it in these runs (only
+  the probe did), so what reads it (the belt tool's port labels or snapping, most likely) is not seen. A log-only
+  prefix is safe: two clean world loads (`[spike] PortCargo PREFIX ran: port 'IN_SAND' output False`, self-test 23/23
+  both runs); see "Interop hazards found".
+- **(e) Donor facts** (from `BuildDefinition(kind)`; renderer bounds from the prefab instantiated under an inactive
+  holder: every renderer's mesh bounds taken into root space; all renderers are enabled and active, so "all" and
+  "enabled" agree; prefab root scale 1 in all three):
+
+  | | Pressure chamber (96) | Stone press (97) | Solar post (93) |
+  |---|---|---|---|
+  | `halfFootprint` | (4.11, 2.63) | (4.63, 3.22) | (0.91, 0.64) |
+  | `height` | 6.16 | 6.14 | 1.44 |
+  | `floorOffset` | 0.02 | 0.02 | 0.02 |
+  | `scale` | 1.00 | 1.00 | 1.00 |
+  | `reach` | 22.00 | 22.00 | 16.00 |
+  | prefab | `pressure_chamber` (29 renderers) | `stone_press` (56) | `solar_post` (10) |
+  | renderer bounds min | (-4.08, -0.00, -2.60) | (-4.60, -0.49, -3.19) | (-0.89, -0.00, -0.61) |
+  | renderer bounds max | (4.08, 6.17, 2.60) | (4.60, 6.16, 3.19) | (0.89, 1.46, 0.61) |
+  | `conveyorPorts` | `IN` input (-2.95, 0.85, 0.00) dir (1, 0, 0); `OUT` output (2.95, 0.85, 0.00) dir (1, 0, 0) | `IN_DUST` input (-4.10, 0.85, -1.25) dir (1, 0, 0); `IN_SAND` input (-4.10, 0.85, 1.25) dir (1, 0, 0); `OUT` output (3.90, 0.85, 0.00) dir (1, 0, 0) | none |
+
+  Port positions are structure-local, as the definition stores them (y 0.85 = the kit's `deckHeight`). The production
+  views sit on the prefab root (`MoonPressureChamberView`, `MoonStonePressView`, `MoonSolarPanelView`).
+  **The solar post rotates nothing.** Its `MoonSolarPanelView` is on the root, and its `head`, `array`,
+  `actuatorBarrel` and `actuatorRod` are all null, both on the prefab and on a built post (`[spike] post 26 view:
+  MoonSolarPanelView on '<root>' head 'null' array 'null' barrel 'null' rod 'null' yaw 0.00 tilt 35.00 … rested True`).
+  Over 2 s and 30 s, `0 of 15 transforms rotated` (runs 3 and 4). The post's hierarchy is flat: ten material meshes
+  (`MC _ Cyan frosted diffuser`, `Solar _ PV module glass`, …) and `Colliders/Plinth` directly under the root, all at
+  identity; the 35° panel tilt is in the mesh. So a holder parented to the template root is under no animated transform.
+  The grinder's clone carries the chamber's two ports unchanged (`'Example grinder input'` / `'Example grinder
+  output'`); the burner's and the lamp's clones have none. Card pictures of every catalog entry (101, vanilla and
+  modded) were written by `[Dev] DumpCards` to `<game>\BepInEx\cache\structurelib\cards\<kind>-<name>.png` and copied
+  to `task-1-logs/cards/` (`96-pressure-chamber.png` 338×373, `97-stone-press.png` 370×357, `93-solar-post--s.png`
+  378×382, cut from 512×512 atlases).
+- **(f) The definition-driven belt path reads the clone's ports; only input is refused, inside `HandOff`.**
+  - Belt building: `TryBuildConveyor` built belts both to the grinder's input (run1) and from its output (run2), with
+    the grinder as `startStructure` / `endStructure`. `MachineWithPort(point, output)` → 27 (the grinder),
+    `MachinePortAt` → True, `PortTaken` / `FreeMachinePort` flip once a belt is joined, `BeltEndingAt(input port)` → 1.
+  - `MachineOutfeed`: called only by the probe (vanilla's emit path did not go through the patched method; it is
+    inlined or cached). Probe: `MachineOutfeed(26/kind 529738499) -> belt 1` with a belt on the grinder's output (run2),
+    `-> null` without one; the chamber the same (`MachineOutfeed(26/kind 96) -> belt 1`).
+  - `EmitProduct`: runs for the grinder (vanilla body; StructureLib's prefix only skips power producers) and emits:
+    `EmitProduct(depot 26 kind 529738499) after: stores [8.0 2.0 0.0]` with `EmitCargo(belt 1, owner local, cargo 250,
+    kg 1) -> True` — **belt output from a modded machine works with no library code**; 10 kg dust became ten 1 kg grit
+    canisters on the belt.
+  - `BeltsAtPorts(def, position, rotation)`: called only by the probe; for the grinder's clone at its view pose it
+    returned `1 [1]` once the belt existed (the chamber's: `1 [1]`), 0 before.
+  - `MachineJoins(kind, runtime port)`: called only by the probe. Raw answers: with no belts, chamber `IN`/`OUT` False
+    and grinder `IN`/`OUT` True (run0); with the belt on the grinder's input, grinder input False and output True,
+    chamber input False and output False (run1). Its meaning is unclear (not "accepts a belt": the vanilla chamber
+    answers False for free ports that do take belts).
+  - `MachinePortSnaps(def, kind, aim, MachineSnapReach, held)`: called only by the probe, aiming 3 m out from each
+    port. Chamber: 0 snaps for both ports. Grinder: input 0, output `1 snaps [belt 0 port 0 machine 27 machinePort 1
+    beltEnd False score 0.05]`. Not a belt-tool session, so this is a weak signal only.
+  - None of `MachineJoins`, `MachinePortSnaps`, `BeltsAtPorts` was called by `TryBuildDepot` or `TryBuildConveyor`;
+    they belong to interactive placement, which the spike did not drive.
+  - No refusal by kind before the ports are read, except the input transfer in `HandOff`.
+
+Side observations:
+- `world.machineInputAt` was empty when read 1 s after the belt was built (filled lazily, or keyed elsewhere), yet
+  `MachineInputAt` answered True.
+- In a world whose chamber had sand in its output and no belt (slot-2's own depot 2), `EmitProduct` keeps setting
+  `'Connect a belt to the sand output'` (S0 fact (d) again).
+
 ## Still open
 
-- How belt input reaches a processor (catcher / garage outfeed belt into a port, `EnterMachine`, `FeedProcessor`).
-- What `EmitProduct` → `EmitCargo` does with a belt attached.
+- `PlaceCarriedOnBelt` with a carried canister (needs a walker in reach). What vanilla code calls `PortCargo`,
+  `MachineJoins`, `MachinePortSnaps` and `BeltsAtPorts` (the interactive belt tool and machine placement).
 - `SolvePower` with satisfaction between 0 and 1 (battery drained under load). Whether the press, other batch sizes
   and several owners follow the chamber's pattern. A build through a completed (`Valid=True`) placement check.
