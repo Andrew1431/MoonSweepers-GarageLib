@@ -48,7 +48,7 @@ namespace StructureLib
             if (def.Processor != null)
             {
                 var slots = (def.Processor.Slots ?? new List<Slot>()).Select(s => (s.Role, s.Capacity)).ToList();
-                var errors = Rules.CheckProcessor(def.Id, slots, def.Processor.ProducesPower);
+                var errors = Rules.CheckProcessor(def.Id, slots, def.Processor.ProducesPower, MoonProductionSave.MaxSlots);
                 if (errors.Count > 0)
                 {
                     foreach (var e in errors) CoreLog.Error(e);
@@ -68,7 +68,7 @@ namespace StructureLib
         }
 
         /// <summary>
-        /// Register a cargo kind. Returns its handle for use in slots, or <c>default</c> if it was rejected.
+        /// Register a cargo kind. Returns its handle for use in slots, or <see cref="Cargo.None"/> if it was rejected.
         /// Value clashes between different cargo are only detected when the registry freezes.
         /// </summary>
         public static Cargo RegisterCargo(CargoDefinition def, string ownerGuid = null)
@@ -78,7 +78,7 @@ namespace StructureLib
             if (Frozen)
             {
                 CoreLog.Error($"RegisterCargo('{def.Id}') called after the registry froze; register from your plugin's Load(). Ignored.");
-                return default;
+                return Cargo.None;
             }
             if (cargoById.TryGetValue(def.Id, out var first))
             {
@@ -88,7 +88,7 @@ namespace StructureLib
             if (def.Value < Rules.FirstModdedCargoValue)
             {
                 CoreLog.Error($"RegisterCargo: cargo '{def.Id}' uses value {def.Value}; modded cargo values must be in the range 3..255. Ignored.");
-                return default;
+                return Cargo.None;
             }
             def.Name ??= def.Id;
             def.ShortName ??= def.Name;
@@ -135,24 +135,40 @@ namespace StructureLib
                     CoreLog.Error(error + " Structure dropped.");
                     byId.Remove(def.Id);
                     dropped++;
-                    continue;
                 }
-                def.Kind = kinds[def.Id];
-                byIndex[def.Kind] = def;
             }
 
-            var cargoErrors = Rules.CheckCargo(cargoById.Values.Select(c => (c.Id, c.Value)));
-            foreach (var e in cargoErrors) CoreLog.Error(e);
-            // The rules put every offending id in single quotes, so a cargo is dropped if any error names it.
+            var cargoPairs = cargoById.Values.Select(c => (c.Id, c.Value)).ToList();
+            foreach (var e in Rules.CheckCargo(cargoPairs)) CoreLog.Error(e);
+            var offenders = Rules.CargoOffenders(cargoPairs);
             foreach (var c in cargoById.Values.ToList())
             {
-                string quoted = "'" + c.Id + "'";
-                if (cargoErrors.Any(e => e.Contains(quoted)))
+                if (offenders.Contains(c.Id))
                 {
-                    CoreLog.Error("Cargo " + quoted + " dropped.");
+                    CoreLog.Error($"Cargo '{c.Id}' dropped.");
                     cargoById.Remove(c.Id);
                 }
                 else byCargoValue[c.Value] = c;
+            }
+
+            // Slots must point at cargo that survived (or is vanilla); otherwise the structure would run on the wrong cargo.
+            foreach (var def in byId.Values.OrderBy(d => d.Id, StringComparer.Ordinal).ToList())
+            {
+                if (def.Processor == null) continue;
+                var slotErrors = Rules.CheckSlotCargo(def.Id,
+                    def.Processor.Slots.Select(s => (s.Name, s.Cargo.Id, s.Cargo.IsValid)),
+                    cargoById.ContainsKey);
+                if (slotErrors.Count == 0) continue;
+                foreach (var e in slotErrors) CoreLog.Error(e);
+                CoreLog.Error($"Structure '{def.Id}' dropped.");
+                byId.Remove(def.Id);
+                dropped++;
+            }
+
+            foreach (var def in byId.Values)
+            {
+                def.Kind = kinds[def.Id];
+                byIndex[def.Kind] = def;
             }
 
             CoreLog.Info($"Registry frozen: structures={byIndex.Count}" + (dropped > 0 ? $" ({dropped} dropped)" : "") +

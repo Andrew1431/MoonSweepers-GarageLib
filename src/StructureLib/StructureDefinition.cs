@@ -115,9 +115,18 @@ namespace StructureLib
         public static Cargo Sand => new Cargo(1, "sand");
         public static Cargo Stone => new Cargo(2, "stone");
 
+        /// <summary>
+        /// The "no cargo" handle <see cref="MoonStructures.RegisterCargo"/> returns when it rejects a registration.
+        /// It is never Dust and must not be used: a slot holding it makes the whole structure get dropped at freeze.
+        /// </summary>
+        public static readonly Cargo None = new Cargo(0, null);
+
+        /// <summary>False for <see cref="None"/> and for an unset (default) handle.</summary>
+        public bool IsValid => Id != null;
+
         public MoonCargo ToMoon() => (MoonCargo)Value;
 
-        public override string ToString() => Id ?? Value.ToString();
+        public override string ToString() => Id ?? "none";
     }
 
     /// <summary>Passed to <see cref="StructureDefinition.BuildModel"/> and <see cref="StructureDefinition.DecorateModel"/>.</summary>

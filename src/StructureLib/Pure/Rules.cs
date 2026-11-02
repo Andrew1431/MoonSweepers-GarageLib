@@ -39,6 +39,45 @@ namespace StructureLib
             return errors;
         }
 
+        /// <summary>
+        /// The cargo ids named by <see cref="CheckCargo"/> errors (bad value, duplicate id, shared value), so callers can
+        /// drop them without parsing the error text.
+        /// </summary>
+        public static ISet<string> CargoOffenders(IEnumerable<(string Id, byte Value)> cargo)
+        {
+            var items = cargo.ToList();
+            var offenders = new HashSet<string>(StringComparer.Ordinal);
+            foreach (var (id, value) in items)
+                if (value < FirstModdedCargoValue) offenders.Add(id);
+            foreach (var group in items.GroupBy(c => c.Id, StringComparer.Ordinal).Where(g => g.Count() > 1))
+                offenders.Add(group.Key);
+            foreach (var group in items.Where(c => c.Value >= FirstModdedCargoValue).GroupBy(c => c.Value))
+            {
+                var ids = group.Select(c => c.Id).Distinct(StringComparer.Ordinal).ToList();
+                if (ids.Count > 1) offenders.UnionWith(ids);
+            }
+            return offenders;
+        }
+
+        /// <summary>
+        /// Checks the cargo of a structure's slots. A slot is bad when its handle is invalid (a rejected registration),
+        /// or when its cargo id is neither vanilla (dust, sand, stone) nor accepted by <paramref name="cargoRegistered"/>.
+        /// </summary>
+        public static IReadOnlyList<string> CheckSlotCargo(string id, IEnumerable<(string SlotName, string CargoId, bool CargoValid)> slots, Func<string, bool> cargoRegistered)
+        {
+            var errors = new List<string>();
+            foreach (var (slotName, cargoId, valid) in slots)
+            {
+                if (!valid)
+                    errors.Add($"Structure '{id}': slot '{slotName}' has no valid cargo (Cargo.None, from a rejected RegisterCargo?).");
+                else if (!IsVanillaCargo(cargoId) && !cargoRegistered(cargoId))
+                    errors.Add($"Structure '{id}': slot '{slotName}' uses cargo '{cargoId}', which is not registered.");
+            }
+            return errors;
+        }
+
+        static bool IsVanillaCargo(string cargoId) => cargoId == "dust" || cargoId == "sand" || cargoId == "stone";
+
         public static IReadOnlyList<string> CheckProcessor(string id, IReadOnlyList<(SlotRole Role, double Capacity)> slots, bool producesPower, int maxSlots = 8)
         {
             var errors = new List<string>();
