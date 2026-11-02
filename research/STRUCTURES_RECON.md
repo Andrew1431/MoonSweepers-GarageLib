@@ -593,6 +593,23 @@ Ports and belts, as the game reports them:
   then `[dev] belt 96:output -> ryanhartwig.example-grinder:input id=1 ok=True reason='Belt built.'` The belt's
   snapshot end lands exactly on the port (`end-to-port 0.000 m`). Refusals seen: `'Turn too tight: give it more room.'`
   (an output facing away from the input) and `'Blocked by a structure.'` (reversed directions).
+- **Layout rule for scripted belts: each output port must face its input port.** Every donor seen has its ports along
+  local +X (inputs at −X, outputs at +X, flow +X), and `AutoBuild` builds at yaw 0, so on slot-2 the downstream machine
+  must stand on the +X side of the upstream one. The dev ring layout places entry i at 10 m from the walker at 0°, 90°,
+  180°, 270° (then 45°, 135°, …) from its facing; on slot-2 90° is always blocked, so the entry whose heading it is
+  falls through to the next free heading, and 0° → 180° runs along +X. Working orders on slot-2:
+  - **`96,ryanhartwig.example-grinder,94`**: chamber at 0°, grinder at 180° (90° blocked), twin at 270°; belt
+    `96:output -> grinder:input` builds (15.37 m). Likewise `grinder,96,94` for `grinder:output -> 96:input`, and
+    `96,97,94` for `96:OUT -> 97:IN_SAND` (15.38 m).
+  - **The brief's `94,96,ryanhartwig.example-grinder` does not work**: twin at 0°, chamber at 180° (90° blocked),
+    grinder at 270°, so the chamber's +X output faces away from the grinder's input and every route is refused
+    (`'Turn too tight: give it more room.'` / `'Blocked by a structure.'`). Another layout needs a yaw for AutoBuild.
+- `PortName` and `PortLabel` are not unique per structure: the stone press's `IN_DUST` and `IN_SAND` are both `input` /
+  `'Stone press input'`, and their runtime ports both carry that label. A port is identified by its definition `name`
+  (or index) and found at runtime by position: the definition's local position placed by the depot's view pose lands
+  exactly on the runtime port (`port 'IN_SAND' local (-4.10,0.85,1.25) -> expected (27.47,1992.83,-24.59), matched
+  runtime 'Stone press input' at (27.47,1992.83,-24.59) (0.000 m)`; the belt then ends there, `end
+  (27.47,1992.83,-24.59) (0.000 m from depot 27 …)`, the press centre being at z −25.84).
 - Belt numbers: `MoonConveyorKit` `minLength 0.75 maxLength 30.00 minRadius 0.49 maxSlope 45.00 minHeight 0.35
   maxHeight 6.00 pricePerMetre 0.50 deckHeight 0.85`; `PortTolerance 0.05`, `PortReach 1.20`, `ConveyorReach 40.00`,
   `BeltSpeed 1.10` m/s, `BeltSpacing 0.75` m, `BeltRideHeight 0.03`, `ProductEmitSeconds 0.35`.

@@ -20,7 +20,7 @@ namespace StructureLib
 
         static void BindBelts(ConfigFile cfg)
         {
-            AutoBelt = cfg.Bind("Dev", "AutoBelt", "", "Dev build: ';'-separated '<from>:<port>-><to>:<port>' belts to build 3 s after the AutoBuild step (before AutoFeed). <from>/<to> is a structure id or vanilla kind number, resolved to the depot AutoBuild built for that entry; <port> is a port name (PortName or PortLabel, as the '[dev] ports of' lines print) or a 0-based index into the definition's conveyorPorts. Each belt goes through the game's TryBuildConveyor.");
+            AutoBelt = cfg.Bind("Dev", "AutoBelt", "", "Dev build: ';'-separated '<from>:<port>-><to>:<port>' belts to build 3 s after the AutoBuild step (before AutoFeed). <from>/<to> is a structure id or vanilla kind number, resolved to the depot AutoBuild built for that entry; <port> is the definition's port name (IN_SAND), a PortName or PortLabel when only one port has it, or a 0-based index into the definition's conveyorPorts (the '[dev] ports of' lines print all three); the runtime port is the one at that definition port's position. Each belt goes through the game's TryBuildConveyor.");
             DumpCards = cfg.Bind("Dev", "DumpCards", false, "Dev build: once in game (30 s after load, so modded pictures are rendered), write every build-menu card picture (vanilla and modded) to BepInEx/cache/structurelib/cards/<kind>-<name>.png.");
         }
 
@@ -120,6 +120,11 @@ namespace StructureLib
             r.Ok = world.TryBuildConveyor(walker, chosen, out string reason, out int id);
             r.Reason = reason;
             r.Belt = r.Ok ? id : -1;
+            if (r.Ok && world.conveyors != null && world.conveyors.ContainsKey(id))
+            {
+                var c = world.conveyors.get_Item(id);
+                CoreLog.Info($"[dev] AutoBelt: belt {id} start {V(c.start)} ({Vector3.Distance(c.start, r.FromPort.position):F3} m from depot {r.From} '{r.FromPort.label}'), end {V(c.end)} ({Vector3.Distance(c.end, r.ToPort.position):F3} m from depot {r.To} '{r.ToPort.label}' at {V(r.ToPort.position)})");
+            }
             if (!r.Ok && firstReason != null) r.Reason = $"{reason} (route check: {firstReason})";
         }
 
@@ -157,32 +162,56 @@ namespace StructureLib
             int index = -1;
             if (int.TryParse(which, out int i)) index = i;
             else
-                for (int k = 0; k < n; k++)
-                {
-                    var p = ports[k];
-                    if (p == null) continue;
-                    if (Eq(MoonWorld.PortName(def, p), which) || Eq(MoonWorld.PortLabel(def, p), which) || Eq(p.name, which)) { index = k; break; }
-                }
-            if (index < 0)
             {
-                // The runtime label, in case it differs from both definition names.
-                var byLabel = runtime.FirstOrDefault(p => Eq(p.label, which));
-                if (byLabel != null) { port = byLabel; return null; }
-                return $"depot {depot} (kind {rec.kind}) has no port '{which}' ({n} definition ports)";
+                // The definition's own name is unique per structure; PortName / PortLabel are not (the stone press's
+                // IN_DUST and IN_SAND are both "input" / "Stone press input"), so those only match when unambiguous.
+                for (int k = 0; k < n && index < 0; k++)
+                    if (ports[k] != null && Eq(ports[k].name, which)) index = k;
+                if (index < 0)
+                {
+                    var hits = Enumerable.Range(0, n).Where(k => ports[k] != null && (Eq(MoonWorld.PortName(def, ports[k]), which) || Eq(MoonWorld.PortLabel(def, ports[k]), which))).ToList();
+                    if (hits.Count > 1) return $"port '{which}' is ambiguous on depot {depot} (definition ports {string.Join(", ", hits.Select(k => ports[k].name))}); use the definition name or an index";
+                    if (hits.Count == 1) index = hits[0];
+                }
             }
+            if (index < 0) return $"depot {depot} (kind {rec.kind}) has no port '{which}' ({n} definition ports)";
             if (index >= n) return $"port index {index} out of range ({n} definition ports)";
-            port = Match(def, ports[index], index, runtime);
-            return port == null ? $"definition port {index} of depot {depot} has no runtime port near the depot ({runtime.Count} found)" : null;
+            port = Match(rec, def, ports[index], runtime);
+            return port == null ? $"definition port {index} ('{ports[index].name}') of depot {depot} has no runtime port at its position ({runtime.Count} runtime ports)" : null;
         }
 
         static bool Eq(string a, string b) => a != null && string.Equals(a.Trim(), b, StringComparison.OrdinalIgnoreCase);
 
-        // The definition port's runtime counterpart: same label, else the same index among this depot's runtime ports.
-        static MoonWorld.ConveyorPort Match(MoonDepotBuildDefinition def, MoonDepotBuildDefinition.ConveyorPort p, int index, List<MoonWorld.ConveyorPort> runtime)
+        // The definition port's runtime counterpart: the runtime port of the same direction (in/out) within PortTolerance of
+        // the definition's local position placed by the depot's pose (its spawned view's position and rotation; definition
+        // scale 1 for every donor seen). Only when there is no view, or nothing lies within tolerance, does it fall back to
+        // a unique label match, with a warning.
+        static MoonWorld.ConveyorPort Match(MoonDepotSnapshot rec, MoonDepotBuildDefinition def, MoonDepotBuildDefinition.ConveyorPort p, List<MoonWorld.ConveyorPort> runtime)
         {
-            string label = MoonWorld.PortLabel(def, p), name = MoonWorld.PortName(def, p);
-            var hit = runtime.FirstOrDefault(r => r.output == p.output && (Eq(r.label, label) || Eq(r.label, name) || Eq(r.label, p.name)));
-            return hit ?? (index < runtime.Count ? runtime[index] : null);
+            var view = UnityEngine.Object.FindFirstObjectByType<MoonDepotConstruction>()?.ViewOf(rec.id);
+            if (view != null)
+            {
+                var expected = view.transform.position + view.transform.rotation * p.position;
+                MoonWorld.ConveyorPort best = null;
+                float bestD = float.MaxValue;
+                foreach (var r in runtime)
+                {
+                    if (r.output != p.output) continue;
+                    float d = Vector3.Distance(r.position, expected);
+                    if (d < bestD) { bestD = d; best = r; }
+                }
+                if (best != null && bestD <= MoonWorld.PortTolerance)
+                {
+                    CoreLog.Info($"[dev] AutoBelt: depot {rec.id} port '{p.name}' local {V(p.position)} -> expected {V(expected)}, matched runtime '{best.label}' at {V(best.position)} ({bestD:F3} m)");
+                    return best;
+                }
+                CoreLog.Warn($"[dev] AutoBelt: depot {rec.id} port '{p.name}': no runtime {(p.output ? "output" : "input")} within {MoonWorld.PortTolerance:F2} m of {V(expected)} (nearest {(best == null ? "none" : bestD.ToString("F3") + " m")}); falling back to the label");
+            }
+            else CoreLog.Warn($"[dev] AutoBelt: depot {rec.id} has no view; matching port '{p.name}' by label");
+            string label = MoonWorld.PortLabel(def, p);
+            var byLabel = runtime.Where(r => r.output == p.output && Eq(r.label, label)).ToList();
+            if (byLabel.Count == 1) { CoreLog.Warn($"[dev] AutoBelt: depot {rec.id} port '{p.name}' matched by label '{label}' only"); return byLabel[0]; }
+            return null;
         }
 
         /// <summary>The runtime ports the game reports near a depot that belong to it (ConveyorPorts, filtered by structure).</summary>
