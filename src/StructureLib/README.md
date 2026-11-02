@@ -33,16 +33,23 @@ On a join, the client refuses to enter a crew whose host has different Structure
 side) and `Pure/HandshakePayload.cs` (the registry-agnostic payload). Why this hook: `research/STRUCTURES_RECON.md`,
 "Co-op session (Task 12)".
 
-- **Channel:** Steam lobby member data, key `structurelib.manifest`, value the base64 of `HandshakePayload.Encode`
-  (magic `SLH`, then a deflated body: protocol, structures, cargo). Every StructureLib player in a lobby publishes its
-  own (`SteamMatchmaking.SetLobbyMemberData`, checked every 2 s while `MoonSteamLobby.InLobby`). The game's own session
+- **Channel, two levels:** key `structurelib.manifest`, value the base64 of `HandshakePayload.Encode` (magic `SLH`,
+  then a deflated body: protocol, structures, cargo). Every StructureLib player in a lobby writes it as its lobby
+  member data (`SetLobbyMemberData`); the host also writes it as lobby data (`SetLobbyData`), which a client can read
+  before it is a member, as vanilla's listing version is. Every 2 s while `MoonSteamLobby.InLobby` each value is read
+  back and written again if Steam does not hold it (a dropped write is retried). A manifest of 8192 characters or more
+  is published as the marker `too-big` instead, so a client can tell "too big" from "absent". The game's own session
   messages and its `MoonCrewSession.Protocol` byte are untouched. Outside a lobby nothing runs.
 - **Manifest:** one entry per registered structure (id, kind from the id hash, owning plugin GUID, that plugin's
   version from its BepInEx metadata) and per registered cargo (id, byte value, owner, version).
 - **Client check:** a prefix on `MoonCrewSession.Offered` (the host's world offer, before any world byte is
-  downloaded) compares the host's manifest with its own. On any problem it calls the session's own
-  `EndJoin(join, line, leave: true)` and skips the offer. A host with no manifest counts as an empty one (no
-  StructureLib), so a client with mods is refused there too. Any exception is logged and the join goes ahead unchecked.
+  downloaded) reads the host's lobby data, then its member data, and compares that manifest with its own. On any problem
+  it calls the session's own `EndJoin(join, line, leave: true)` and skips the offer.
+- **Admit on uncertainty** (`HandshakePayload.ReadHost`): nothing published counts as a host without StructureLib
+  (an empty manifest, so a client with mods is refused) only when the client is verifiably in the host's lobby
+  (`MoonSteamLobby.InLobby && MoonSteamLobby.LobbyId == join.lobby`); Steam returns member data only to members.
+  Outside the lobby, for the `too-big` marker, or for an unreadable value, the client logs a warning naming the cause
+  and the join goes ahead unchecked. Any exception is logged and the join goes ahead unchecked too.
 - **Host check:** the host compares each crewmate's manifest once per change, logs the problems and shows them with
   `MoonCrewSession.Notify`. It does not kick: the crewmate's game refuses itself on the same messages. A crewmate
   without StructureLib publishes nothing; the host logs that once and lets them in.

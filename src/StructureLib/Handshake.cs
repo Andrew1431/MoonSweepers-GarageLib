@@ -9,22 +9,24 @@ using UnityEngine;
 namespace StructureLib
 {
     // Co-op handshake. Every StructureLib player in a Steam lobby publishes its manifest (registered structures and cargo,
-    // owning mod and version) as Steam lobby member data under Key. A joining client compares the host's manifest with
-    // its own when the host offers the world (MoonCrewSession.Offered) and, on any problem, ends the join through the
-    // session's own EndJoin with a line naming the problems. The host compares each crewmate's manifest too, and logs and
+    // owning mod and version) as Steam lobby member data under Key; the host also publishes it as lobby data. A joining
+    // client compares the host's manifest with its own when the host offers the world (MoonCrewSession.Offered) and, on
+    // any problem, ends the join through the session's own EndJoin with a line naming the problems. When it cannot tell
+    // what the host has (HandshakePayload.ReadHost is uncertain), it logs why and lets the join through. The host compares each crewmate's manifest too, and logs and
     // shows what differs. The vanilla session protocol is untouched. See research/STRUCTURES_RECON.md, "Co-op session
     // (Task 12)", for why this channel.
     internal static class Handshake
     {
         internal const string Key = "structurelib.manifest";
         const float Every = 2f;
-        // Steam's limit for one lobby data value (k_cubChatMetadataMax).
-        const int MaxValueLength = 8192;
         // Problems shown in the refusal line; the log has all of them.
         const int ShownProblems = 3;
 
         static float next;
-        static ulong publishedLobby;
+        // The value this player publishes, for which lobby, and whether the registry had frozen when it was built.
+        static string value;
+        static ulong valueLobby;
+        static bool valueFrozen;
         // Host: the member data last compared, per crewmate.
         static readonly Dictionary<ulong, string> heard = new();
 
@@ -51,12 +53,12 @@ namespace StructureLib
             {
                 if (!MoonSteamLobby.InLobby)
                 {
-                    publishedLobby = 0;
+                    value = null;
                     heard.Clear();
                     return;
                 }
                 ulong lobby = MoonSteamLobby.LobbyId;
-                if (lobby != publishedLobby) Publish(lobby);
+                Publish(lobby);
                 if (MoonSteamLobby.IsHost) CheckCrew(lobby);
             }
             catch (Exception e)
@@ -66,18 +68,33 @@ namespace StructureLib
             }
         }
 
+        // Every tick in a lobby: whatever Steam does not hold yet (a dropped write, a new lobby, a registry that froze
+        // since) is written again. Everyone writes member data; the host also writes lobby data, which a client can read
+        // before it is a member.
         static void Publish(ulong lobby)
         {
-            publishedLobby = lobby;
-            var m = Manifest();
-            string value = Convert.ToBase64String(HandshakePayload.Encode(m));
-            if (value.Length >= MaxValueLength)
+            if (value == null || valueLobby != lobby || valueFrozen != MoonStructures.Frozen)
             {
-                CoreLog.Error($"Handshake: the manifest ({m.Structures.Count} structures, {m.Cargo.Count} cargo) encodes to {value.Length} characters, over Steam's {MaxValueLength}; not published, so crewmates see this player as having no StructureLib.");
-                return;
+                var m = Manifest();
+                value = HandshakePayload.PublishedValue(m);
+                valueLobby = lobby;
+                valueFrozen = MoonStructures.Frozen;
+                if (value == HandshakePayload.TooBigMarker)
+                    CoreLog.Error($"Handshake: the manifest ({m.Structures.Count} structures, {m.Cargo.Count} cargo) is over Steam's {HandshakePayload.MaxValueLength}-character limit; publishing the '{HandshakePayload.TooBigMarker}' marker, so crewmates' games admit joins unchecked.");
+                else
+                    CoreLog.Info($"Handshake: this player's manifest: {m.Structures.Count} structures, {m.Cargo.Count} cargo, {value.Length} characters.");
             }
-            SteamMatchmaking.SetLobbyMemberData(new CSteamID(lobby), Key, value);
-            CoreLog.Info($"Handshake: published this player's manifest to the lobby as {(MoonSteamLobby.IsHost ? "host" : "crewmate")} ({m.Structures.Count} structures, {m.Cargo.Count} cargo, {value.Length} characters)");
+            var id = new CSteamID(lobby);
+            if (SteamMatchmaking.GetLobbyMemberData(id, new CSteamID(MoonSteam.SteamId), Key) != value)
+            {
+                SteamMatchmaking.SetLobbyMemberData(id, Key, value);
+                CoreLog.Once("handshake-member", $"Handshake: wrote the manifest as lobby member data ({(MoonSteamLobby.IsHost ? "host" : "crewmate")}).");
+            }
+            if (MoonSteamLobby.IsHost && SteamMatchmaking.GetLobbyData(id, Key) != value)
+            {
+                bool ok = SteamMatchmaking.SetLobbyData(id, Key, value);
+                CoreLog.Once("handshake-lobby", ok ? "Handshake: wrote the manifest as lobby data." : "Handshake: Steam refused the lobby data write; retrying in 2 s.");
+            }
         }
 
         // Host side: compare each crewmate's manifest once per change. The crewmate's own game refuses the join on the
@@ -99,15 +116,17 @@ namespace StructureLib
                     CoreLog.Info($"Handshake: crewmate '{member.name}' has published no StructureLib manifest (yet); without StructureLib they will not see modded structures.");
                     continue;
                 }
-                try
+                var read = HandshakePayload.ReadHost(data, null, clientInLobby: true);
+                if (read.Uncertain != null)
                 {
-                    own ??= Manifest();
-                    var problems = HandshakePayload.Compare(own, HandshakePayload.Decode(Convert.FromBase64String(data)));
-                    if (problems.Count == 0) { CoreLog.Info($"Handshake: crewmate '{member.name}' has the same mods."); continue; }
-                    CoreLog.Warn($"Handshake: crewmate '{member.name}' has different mods; their game refuses the join: {string.Join("; ", problems)}");
-                    MoonCrewSession.Instance?.Notify($"{member.name}: {Summary(problems)}");
+                    CoreLog.Warn($"Handshake: cannot check crewmate '{member.name}' (read as a host would be: {read.Uncertain}).");
+                    continue;
                 }
-                catch (Exception e) { CoreLog.Warn($"Handshake: could not read the manifest of crewmate '{member.name}': {e.Message}"); }
+                own ??= Manifest();
+                var problems = HandshakePayload.Compare(own, read.Host);
+                if (problems.Count == 0) { CoreLog.Info($"Handshake: crewmate '{member.name}' has the same mods."); continue; }
+                CoreLog.Warn($"Handshake: crewmate '{member.name}' has different mods; their game refuses the join: {string.Join("; ", problems)}");
+                MoonCrewSession.Instance?.Notify($"{member.name}: {Summary(problems)}");
             }
         }
 
@@ -116,14 +135,20 @@ namespace StructureLib
         {
             if (j == null || j.lobby == 0) return true;
             ulong hostId = j.host != 0 ? j.host : MoonSteamLobby.HostId;
-            string data = SteamMatchmaking.GetLobbyMemberData(new CSteamID(j.lobby), new CSteamID(hostId), Key) ?? "";
-            RegistryManifest host;
-            if (data.Length == 0)
+            var lobby = new CSteamID(j.lobby);
+            // Steam answers member data only to members, so "nothing published" means something only from inside the lobby.
+            bool inLobby = MoonSteamLobby.InLobby && MoonSteamLobby.LobbyId == j.lobby;
+            string lobbyData = SteamMatchmaking.GetLobbyData(lobby, Key);
+            string memberData = inLobby ? SteamMatchmaking.GetLobbyMemberData(lobby, new CSteamID(hostId), Key) : null;
+            var read = HandshakePayload.ReadHost(lobbyData, memberData, inLobby);
+            if (read.Uncertain != null)
             {
-                CoreLog.Info("Handshake: the host published no StructureLib manifest; comparing with an empty one.");
-                host = new RegistryManifest();
+                CoreLog.Warn($"Handshake: cannot check the host's mods, so the join goes ahead unchecked: {read.Uncertain}.");
+                return true;
             }
-            else host = HandshakePayload.Decode(Convert.FromBase64String(data));
+            var host = read.Host;
+            if (string.IsNullOrEmpty(lobbyData) && string.IsNullOrEmpty(memberData))
+                CoreLog.Info("Handshake: the host published no StructureLib manifest (this client is in its lobby); comparing with an empty one.");
             var problems = HandshakePayload.Compare(host, Manifest());
             if (problems.Count == 0)
             {

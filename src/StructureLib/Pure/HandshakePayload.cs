@@ -28,10 +28,55 @@ namespace StructureLib
         public string Version { get; set; }
     }
 
+    /// <summary>
+    /// The host manifest a joining client compares against, or why there is none to trust. Exactly one of the two is set.
+    /// </summary>
+    public sealed class HostManifestRead
+    {
+        public RegistryManifest Host { get; init; }
+        /// <summary>Set when the client cannot tell what the host has: the join goes ahead unchecked.</summary>
+        public string Uncertain { get; init; }
+    }
+
     /// <summary>Encodes, decodes and compares manifests.</summary>
     public static class HandshakePayload
     {
         static readonly byte[] Magic = { (byte)'S', (byte)'L', (byte)'H' };
+
+        /// <summary>Steam's limit for one lobby data value (k_cubChatMetadataMax).</summary>
+        public const int MaxValueLength = 8192;
+
+        /// <summary>Published instead of a manifest that would not fit in one lobby data value.</summary>
+        public const string TooBigMarker = "too-big";
+
+        /// <summary>What a player publishes under the handshake key: the manifest in base64, or <see cref="TooBigMarker"/>.</summary>
+        public static string PublishedValue(RegistryManifest m)
+        {
+            string value = Convert.ToBase64String(Encode(m));
+            return value.Length >= MaxValueLength ? TooBigMarker : value;
+        }
+
+        /// <summary>
+        /// Reads the host's published value: its lobby data first (readable before the client is a member), then its
+        /// member data. Nothing published means "host without StructureLib" only when the client is verifiably in the
+        /// host's lobby (Steam returns member data only to members); otherwise, and for the too-big marker or an unreadable
+        /// value, the answer is uncertain.
+        /// </summary>
+        public static HostManifestRead ReadHost(string lobbyData, string memberData, bool clientInLobby)
+        {
+            string value = !string.IsNullOrEmpty(lobbyData) ? lobbyData : memberData;
+            if (string.IsNullOrEmpty(value))
+                return clientInLobby
+                    ? new HostManifestRead { Host = new RegistryManifest() }
+                    : new HostManifestRead { Uncertain = "nothing published that this client can read: it is not in the host's lobby (yet)" };
+            if (value == TooBigMarker)
+                return new HostManifestRead { Uncertain = "the host's manifest is too big for a Steam lobby value" };
+            try { return new HostManifestRead { Host = Decode(Convert.FromBase64String(value)) }; }
+            catch (Exception e) when (e is FormatException || e is InvalidDataException)
+            {
+                return new HostManifestRead { Uncertain = "the host's manifest is unreadable (" + e.Message + ")" };
+            }
+        }
 
         /// <summary>Magic bytes, then the deflated body (protocol, structures, cargo).</summary>
         public static byte[] Encode(RegistryManifest m)

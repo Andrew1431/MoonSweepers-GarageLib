@@ -486,15 +486,20 @@ The join flow, client side first:
 - Host-side display: `MoonCrewSession.Notify(string)` (an on-screen notice, `notice` / `noticeUntil`, drawn in
   `OnGUI`).
 
-Hook chosen (Task 12): **Steam lobby member data** under the key `structurelib.manifest`, plus a prefix on
+Hook chosen (Task 12): **Steam lobby data at two levels** under the key `structurelib.manifest`, plus a prefix on
 `MoonCrewSession.Offered`.
 - Every StructureLib player in a lobby publishes its manifest (`HandshakePayload.Encode`, base64) with
-  `SteamMatchmaking.SetLobbyMemberData`. Steam relays member data to every member and delivers it with the lobby on
-  entry, before any P2P traffic, so the host's manifest is on the client when the host's `WorldOffer` arrives.
+  `SteamMatchmaking.SetLobbyMemberData`; the host also publishes it with `SetLobbyData`. Steam returns member data
+  only to lobby members, and nothing shows that a `JoinListedShift` client is a member before the offer; lobby data is
+  readable from a listing too (vanilla's `Listing.version` comes from there). Each value is read back every 2 s and
+  written again if missing (a dropped write is retried). A manifest over Steam's 8192-character value limit is
+  published as the marker `too-big`.
 - The client compares in a prefix on `Offered`, the first point where the join is known to be talking to this host
-  and before any world byte is downloaded. On any problem it calls `EndJoin(j, why, true)` with a line built from
-  `Compare`'s messages and skips `Offered`. A host with no member data under the key is treated as a host without
-  StructureLib (empty manifest).
+  and before any world byte is downloaded. It reads lobby data first, member data second. On any problem it calls
+  `EndJoin(j, why, true)` with a line built from `Compare`'s messages and skips `Offered`.
+- Admit on uncertainty (`HandshakePayload.ReadHost`): an empty value means "host without StructureLib" (empty
+  manifest) only when the client is verifiably in that lobby (`MoonSteamLobby.InLobby && LobbyId == j.lobby`).
+  Otherwise, and for the `too-big` marker or an unreadable value, the client logs why and lets the join through.
 - The host reads each crewmate's member data and logs (and `Notify`s) problems; it does not kick. The comparison is
   symmetric, so the client already refuses on the same messages.
 - Why not the alternatives:
