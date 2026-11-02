@@ -12,20 +12,42 @@
    <Project><PropertyGroup><GameDir>D:\SteamLibrary\steamapps\common\Moon Sweepers</GameDir></PropertyGroup></Project>
    ```
 
-4. Build everything once: `dotnet build GarageLib.slnx -c Release`. Each build copies the DLLs into
+4. Build everything once: `dotnet build GarageLib.slnx -c Release` (the `.slnx` needs .NET SDK 9.0.200 or newer; on an
+   older SDK build per project, `dotnet build src\GarageLib -c Release`, or use `dev.ps1`). Each build copies the DLLs into
    `BepInEx/plugins/<Name>/`, so you only need to launch the game afterwards (close it first: Windows locks the DLLs).
 
-The `.slnx` solution needs the .NET SDK 9.0.200 or newer. With an older SDK (8 works for every project), build
-one project at a time instead: `dotnet build mods\SandPower\SandPower.csproj -c Release`.
-
-## New vehicle
+## Dev loop
 
 ```powershell
-.\new-vehicle.ps1 -Name RoverX -Author yourname -Title "Rover X"
+.\dev.ps1 -Only GarageLib -Tail
 ```
 
-That creates `vehicles/RoverX/` with a `Plugin.cs` that registers a vehicle, and adds it to the solution.
-Things to know:
+That closes the game if a build or launch needs it closed, builds the named projects (all of them without `-Only`), installs them into the game, launches `MoonSweepers.exe` and tails the log for your projects (by plugin name and folder name) and BepInEx. The game folder is `MOONSWEEPERS_DIR`, else `GameDir` from `Directory.Build.local.props`, else the default Steam folder. Switches:
+
+- `-Only A,B`: build just those projects.
+- `-Release`: build without the `[Dev]` helpers.
+- `-NoBuild`: skip the build (relaunch or tail only).
+- `-NoLaunch`: stop after the build; with `-NoBuild -Tail` it follows the running game's log and leaves the game running.
+- `-Tail`: follow the log for your projects and BepInEx.
+- `-TailTimeoutSeconds N`: how long to wait for the log file to appear (default 60).
+- `-WhatIf`: print the plan and do nothing.
+
+## New package
+
+```powershell
+.\new-package.ps1 -Kind vehicle|mod|lib -Name RoverX -Author yourname [-Title "Rover X"]
+```
+
+The kind decides where it lands, and every kind is added to the solution:
+
+- `vehicle`: `vehicles/RoverX/`, a `Plugin.cs` that registers a vehicle with GarageLib.
+- `mod`: `mods/RoverX/`, a plain plugin with no library references (the csproj has commented lines for GarageLib and StructureLib).
+- `lib`: `src/RoverX/`, a library other mods depend on, with a public `Guid` and a `Version` (libraries are released packages).
+
+A name can't be reused across kinds, because every project installs to `BepInEx/plugins/<Name>/`.
+`.\new-vehicle.ps1 -Name RoverX -Author yourname` still works for one release; it just calls `new-package.ps1 -Kind vehicle`.
+
+For vehicles, things to know:
 
 - **Ids are forever.** `Guid` (`com.yourname.roverx`) and `VehicleId` (`yourname.rover-x`) can't change after a
   release: players' configs and saves refer to them.

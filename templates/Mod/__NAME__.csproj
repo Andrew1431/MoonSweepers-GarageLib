@@ -1,0 +1,13 @@
+<Project Sdk="Microsoft.NET.Sdk">
+  <PropertyGroup>
+    <AssemblyName>__NAME__</AssemblyName>
+    <RootNamespace>__NAME__</RootNamespace>
+  </PropertyGroup>
+
+  <!-- Uncomment the libraries this mod builds on (and add [BepInDependency] to Plugin):
+  <ItemGroup>
+    <ProjectReference Include="$(RepoRoot)src\GarageLib\GarageLib.csproj" Private="false" />
+    <ProjectReference Include="$(RepoRoot)src\StructureLib\StructureLib.csproj" Private="false" />
+  </ItemGroup>
+  -->
+</Project>
