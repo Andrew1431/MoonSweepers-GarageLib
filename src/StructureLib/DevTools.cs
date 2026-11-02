@@ -16,13 +16,21 @@ namespace StructureLib
     internal static class DevTools
     {
         internal static ConfigEntry<int> AutoLoadSlot;
-        internal static ConfigEntry<bool> AllowSlot1, RunSelfTest, ScreenshotMenu, AutoRemove;
+        internal static ConfigEntry<bool> AllowSlot1, RunSelfTest, ScreenshotMenu, AutoRemove, AutoSave;
         internal static ConfigEntry<string> AutoBuild, AutoFeed;
-        static float menuT, gameT;
+        static float menuT, gameT, saveAt = -1f;
         static bool loadRequested, selfTestRan, menuShot, autoBuilt;
 
         /// <summary>What AutoBuild did per entry (id or kind number as written in the config): ok, depot id, reason.</summary>
         internal static readonly Dictionary<string, (bool ok, int depot, string reason)> BuildResults = new(StringComparer.Ordinal);
+
+        /// <summary>True once AutoSave asked the world to save; SaveSeqAtRequest is the sidecar's write count then.</summary>
+        internal static bool SaveRequested;
+        internal static int SaveSeqAtRequest;
+
+        /// <summary>True when [Dev] AutoBuild names the given structure id.</summary>
+        internal static bool AutoBuildNames(string id) =>
+            (AutoBuild?.Value ?? "").Split(',').Any(s => s.Trim() == id);
 
         internal static void Bind(ConfigFile cfg)
         {
@@ -31,10 +39,11 @@ namespace StructureLib
             RunSelfTest = cfg.Bind("Dev", "SelfTest", false, "Dev build: run the in-game self-test 20 s after a world loads and log [selftest] lines.");
             AutoBuild = cfg.Bind("Dev", "AutoBuild", "", "Dev build: comma-separated structure ids or vanilla kind numbers to build once, 10 s after a world loads, 8 m apart behind (or beside) the walker. An entry whose kind already has a depot reuses it.");
             AutoFeed = cfg.Bind("Dev", "AutoFeed", "", "Dev build: '<structureId>:<cargoId|Dust|Sand|Stone>:<kg>' to load into a built structure. (Not used yet.)");
-            AutoRemove = cfg.Bind("Dev", "AutoRemove", true, "Dev build: the self-test removes the example lamp it checked. false leaves it in place (it survives a reload only once the game can save modded structures).");
+            AutoRemove = cfg.Bind("Dev", "AutoRemove", true, "Dev build: the self-test removes the example lamp it checked. false leaves it in place (the sidecar carries it into the next launch).");
+            AutoSave = cfg.Bind("Dev", "AutoSave", false, "Dev build: request a save 10 s after the AutoBuild step (whether or not AutoBuild names anything). The self-test waits for that save and checks the structurelib.json sidecar.");
             SelfTest.Subscribe();
             ScreenshotMenu = cfg.Bind("Dev", "ScreenshotMenu", false, "Dev build: 5 s after the self-test, open the build menu on the example lamp and save a screenshot to BepInEx/cache/structurelib/menu.png.");
-            CoreLog.Info($"[dev] AutoLoadSlot={AutoLoadSlot.Value} AllowSlot1={AllowSlot1.Value} SelfTest={RunSelfTest.Value} ScreenshotMenu={ScreenshotMenu.Value} AutoRemove={AutoRemove.Value} AutoBuild='{AutoBuild.Value}' AutoFeed='{AutoFeed.Value}'");
+            CoreLog.Info($"[dev] AutoLoadSlot={AutoLoadSlot.Value} AllowSlot1={AllowSlot1.Value} SelfTest={RunSelfTest.Value} ScreenshotMenu={ScreenshotMenu.Value} AutoRemove={AutoRemove.Value} AutoSave={AutoSave.Value} AutoBuild='{AutoBuild.Value}' AutoFeed='{AutoFeed.Value}'");
             // MoonStructures.Register reads this static at plugin Load time; prove the interop read works that early.
             try { CoreLog.Info($"[dev] MoonProductionSave.MaxSlots at Load = {MoonProductionSave.MaxSlots}"); }
             catch (Exception e) { CoreLog.Error("[dev] reading MoonProductionSave.MaxSlots at Load threw: " + e); }
@@ -53,13 +62,22 @@ namespace StructureLib
             if (!autoBuilt && gameT > 10f)
             {
                 autoBuilt = true;
+                string refusal = SlotRefusal();
+                // The self-test's exception watch starts here, before any build or save of this run, so a save the
+                // game refuses (it logs "Moon save failed") fails the run.
+                if (RunSelfTest.Value && refusal == null) SelfTest.StartWatch();
                 if (!string.IsNullOrWhiteSpace(AutoBuild.Value))
                 {
-                    string refusal = SlotRefusal();
                     if (refusal != null) CoreLog.Warn("[dev] AutoBuild skipped: " + refusal);
                     else AutoBuilder.Run(AutoBuild.Value);
                 }
+                if (AutoSave.Value)
+                {
+                    if (refusal != null) CoreLog.Warn("[dev] AutoSave skipped: " + refusal);
+                    else saveAt = gameT + 10f;
+                }
             }
+            if (saveAt > 0f && gameT > saveAt) { saveAt = -1f; RequestSave(); }
             if (RunSelfTest.Value && !selfTestRan && gameT > 20f)
             {
                 selfTestRan = true;
@@ -69,6 +87,19 @@ namespace StructureLib
             }
             SelfTest.Tick();
             if (ScreenshotMenu.Value && !menuShot && SelfTest.FinishedAt > 0f && Time.unscaledTime > SelfTest.FinishedAt + 5f) { menuShot = true; MenuShot.Start(); }
+        }
+
+        // The same call GarageLib's AutoSave uses. The save itself runs later (and possibly off the main thread).
+        static void RequestSave()
+        {
+            var w = CoreState.World ?? CoreState.FindWorld();
+            if (w == null) { CoreLog.Warn("[dev] AutoSave: no MoonWorld"); return; }
+            SaveSeqAtRequest = Sidecar.WriteSeq;
+            SaveRequested = true;
+            CoreLog.Info($"[dev] RequestSave() (sidecar writes so far: {SaveSeqAtRequest})");
+            w.RequestSave();
+            try { CoreLog.Info($"[dev] after RequestSave: progressDirty={w.progressDirty} nextSave={w.nextSave:F1} t={Time.time:F1} unscaled={Time.unscaledTime:F1} SoonSaveSeconds={MoonWorld.SoonSaveSeconds} ReleaseSaveSeconds={MoonWorld.ReleaseSaveSeconds} SaveRetrySeconds={MoonWorld.SaveRetrySeconds}"); }
+            catch (Exception e) { CoreLog.Warn("[dev] reading save timers: " + e.Message); }
         }
 
         static string ActiveFolder() => (MoonSaveSlots.SlotFolder(MoonSaveSlots.Active) ?? "").Replace('\\', '/').TrimEnd('/');
@@ -263,6 +294,14 @@ namespace StructureLib
             Begin();
             Assert("registry-frozen", MoonStructures.Frozen, "MoonStructures.Frozen is false after the world loaded");
             var lamp = MoonStructures.Definition("ryanhartwig.example-lamp");
+            orphanMode = lamp == null && Sidecar.Orphans.Contains(LampId);
+            if (orphanMode)
+            {
+                // ExampleStructure is not installed, and the save's sidecar holds its lamp: only the orphan checks apply.
+                CoreLog.Info("[selftest] the example lamp is not registered and the sidecar keeps it as an orphan: orphan checks only");
+                WaitForSave();
+                return;
+            }
             int expected = KindAllocator.KindOf("ryanhartwig.example-lamp");
             Assert("example-kind-hashed", lamp != null && lamp.Kind == expected,
                 lamp == null ? "'ryanhartwig.example-lamp' is not registered (is ExampleStructure installed?)" : $"kind {lamp.Kind}, expected {expected}");
@@ -312,7 +351,8 @@ namespace StructureLib
         internal static void Tick()
         {
             if (artUntil >= 0f) { TickCardArt(); return; }
-            if (renderUntil >= 0f) TickRendered();
+            if (renderUntil >= 0f) { TickRendered(); return; }
+            if (saveUntil >= 0f) TickSaveWait();
         }
 
         // cardart-modded: CardArt answers something once nothing is pending, or after 5 s.
@@ -372,7 +412,13 @@ namespace StructureLib
             var world = CoreState.World ?? CoreState.FindWorld();
             string noLamp = lamp == null ? "example lamp not registered" : null;
             string noWorld = world == null ? "no MoonWorld found" : noLamp;
-            Check("build-modded-ok", noLamp, () =>
+            bool autoBuilt = DevTools.AutoBuildNames(LampId);
+            if (!autoBuilt && lamp != null && world != null && DepotOfKind(world, lamp.Kind) < 0)
+            {
+                CoreLog.Info($"[selftest] '{LampId}' was neither built (AutoBuild) nor restored this run: build checks not applicable");
+                return;
+            }
+            if (autoBuilt) Check("build-modded-ok", noLamp, () =>
             {
                 if (!DevTools.BuildResults.TryGetValue(LampId, out var r))
                     return (false, $"no [dev] built line for '{LampId}' (AutoBuild='{DevTools.AutoBuild.Value}')");
@@ -411,7 +457,7 @@ namespace StructureLib
             });
         }
 
-        static readonly HashSet<int> builtEvents = new(), removedEvents = new();
+        static readonly HashSet<int> builtEvents = new(), builtViews = new(), removedEvents = new();
 
         // Called when AutoBuild starts: forget every event id except Built for modded depots that exist in this world now
         // (raised when the save restored them), so an id from an earlier build cannot satisfy a later assertion.
@@ -422,13 +468,19 @@ namespace StructureLib
                 foreach (var kv in world.depots)
                     if (kv.Value != null && MoonStructures.IsModded(kv.Value.kind)) live.Add(kv.Key);
             builtEvents.IntersectWith(live);
+            builtViews.IntersectWith(live);
             removedEvents.Clear();
         }
 
         // Records the library's events so the checks can see they fired. Called once from DevTools.Bind.
         internal static void Subscribe()
         {
-            MoonStructures.Built += b => { if (b != null) builtEvents.Add(b.DepotId); };
+            MoonStructures.Built += b =>
+            {
+                if (b == null) return;
+                builtEvents.Add(b.DepotId);
+                if (b.View != null) builtViews.Add(b.DepotId);
+            };
             MoonStructures.Removed += id => removedEvents.Add(id);
         }
 
@@ -449,11 +501,158 @@ namespace StructureLib
         // True once nothing more is coming for this structure's card art (no render pending).
         static bool ArtSettled(StructureDefinition d) => !IconRenderer.Pending(d);
 
-        static void Finish()
+        static void Finish() => WaitForSave();
+
+        // With [Dev] AutoSave, the checks wait (up to 180 s) for the requested save: a MoonDepotSave.Write after the
+        // request, the world's pending save completed, then 3 s for the game to report a failed save.
+        static bool orphanMode;
+        static float saveUntil = -1f, saveGraceUntil = -1f, saveWaitFrom;
+
+        static void WaitForSave()
         {
-            BuildChecks(MoonStructures.Definition(LampId));
+            saveGraceUntil = -1f;
+            saveUntil = DevTools.AutoSave.Value ? Time.unscaledTime + 180f : Time.unscaledTime;
+            saveWaitFrom = Time.unscaledTime;
+            if (DevTools.AutoSave.Value) CoreLog.Info($"[selftest] waiting up to 180 s for the AutoSave save (t={saveWaitFrom:F1})");
+        }
+
+        static void TickSaveWait()
+        {
+            float now = Time.unscaledTime;
+            if (now < saveUntil && saveGraceUntil < 0f)
+            {
+                if (!DevTools.SaveRequested || Sidecar.WriteSeq <= DevTools.SaveSeqAtRequest) return;
+                Il2CppSystem.Threading.Tasks.Task pending = null;
+                try { pending = (CoreState.World ?? CoreState.FindWorld())?.PendingSave; } catch (Exception) { }
+                if (pending != null && !pending.IsCompleted) return;
+                saveGraceUntil = now + 3f;
+                return;
+            }
+            if (saveGraceUntil >= 0f && now < saveGraceUntil) return;
+            if (DevTools.AutoSave.Value) CoreLog.Info($"[selftest] save wait over after {now - saveWaitFrom:F1} s ({(saveGraceUntil >= 0f ? "save finished" : "timed out")}, t={now:F1})");
+            saveUntil = saveGraceUntil = -1f;
+            Complete();
+        }
+
+        static void Complete()
+        {
+            var lamp = MoonStructures.Definition(LampId);
+            if (orphanMode) OrphanChecks();
+            else
+            {
+                // Before BuildChecks, which may remove the lamp.
+                if (DevTools.AutoSave.Value) SaveChecks(lamp);
+                ReloadChecks(lamp);
+                BuildChecks(lamp);
+            }
             Done();
             FinishedAt = Time.unscaledTime;
+        }
+
+        static string SidecarPath() => Sidecar.PathFor(CoreState.SaveRoot);
+
+        // Structure records with the given id in the sidecar on disk; -1 (and why) when it cannot be read.
+        static int SidecarCount(string id, out string why)
+        {
+            why = null;
+            string path = SidecarPath();
+            if (path == null) { why = "CoreState.SaveRoot is unknown"; return -1; }
+            if (!File.Exists(path)) { why = $"no {Sidecar.FileName} in the save root"; return -1; }
+            try { return SidecarCodec.Deserialize(File.ReadAllText(path)).Structures.Count(s => s.Id == id); }
+            catch (Exception e) { why = "reading it threw " + e.GetType().Name + ": " + e.Message; return -1; }
+        }
+
+        static Sidecar.WriteStats WriteAfterRequest(out string why)
+        {
+            why = null;
+            if (!DevTools.SaveRequested) { why = "AutoSave never requested a save"; return null; }
+            var w = Sidecar.LastWrite;
+            if (w == null || w.Seq <= DevTools.SaveSeqAtRequest)
+            {
+                why = $"no MoonDepotSave.Write after the save request (writes: {Sidecar.WriteSeq}, at request {DevTools.SaveSeqAtRequest})";
+                return null;
+            }
+            return w;
+        }
+
+        // [Dev] AutoSave with the lamp in the world: the Write prefix took it out of the vanilla save, the finalizer
+        // put it back, the sidecar on disk has it, and the game accepted the save (no "Moon save failed").
+        static void SaveChecks(StructureDefinition lamp)
+        {
+            var world = CoreState.World ?? CoreState.FindWorld();
+            string skip = lamp == null ? "example lamp not registered" : world == null ? "no MoonWorld found" : null;
+            Check("save-strips-modded", skip, () =>
+            {
+                var w = WriteAfterRequest(out string why);
+                if (w == null) return (false, why);
+                int lampIdx = w.StrippedKinds.IndexOf(lamp.Kind);
+                if (lampIdx < 0) return (false, $"write #{w.Seq} stripped kinds [{string.Join(",", w.StrippedKinds)}], none is {lamp.Kind}");
+                if (w.PutBack != w.Stripped) return (false, $"write #{w.Seq}: the finalizer put back {w.PutBack} of {w.Stripped}");
+                int depot = w.StrippedIds[lampIdx];
+                bool inWorld = world.depots != null && world.depots.ContainsKey(depot) && world.depots.get_Item(depot)?.kind == lamp.Kind;
+                return (inWorld, $"depot {depot} is not in world.depots after the save");
+            });
+            Check("sidecar-written", skip ?? (SidecarPath() == null ? "CoreState.SaveRoot is unknown" : null), () =>
+            {
+                int n = SidecarCount(LampId, out string why);
+                if (n < 0) return (false, why);
+                CoreLog.Info($"[selftest] sidecar {CoreLog.Redact(SidecarPath())} holds {n} '{LampId}' record(s)");
+                return (n > 0, $"{Sidecar.FileName} has no structure with Id '{LampId}'");
+            });
+            Check("vanilla-save-clean", skip, () =>
+            {
+                var w = WriteAfterRequest(out string why);
+                if (w == null) return (false, why);
+                int worldTotal = world.depots?.Count ?? 0, worldModded = 0;
+                if (world.depots != null)
+                    foreach (var kv in world.depots) if (kv.Value != null && kv.Value.kind >= KindAllocator.FirstModdedKind) worldModded++;
+                string failedNote = "";
+                try { failedNote = MoonWorld.saveFailed ?? ""; } catch (Exception) { }
+                CoreLog.Info($"[selftest] save write #{w.Seq}: snapshot {w.Before} depots, {w.Modded} modded, {w.Stripped} stripped, {w.VanillaAfter} written to the vanilla save, {w.PutBack} put back ({(w.MainThread ? "main thread" : "worker thread")}); world {worldTotal} depots, {worldModded} modded; 'Moon save failed' seen {saveFailures}x; MoonWorld.saveFailed='{Trim(CoreLog.Redact(failedNote), 200)}'");
+                if (w.Stripped != w.Modded) return (false, $"stripped {w.Stripped} of {w.Modded} modded records");
+                if (w.VanillaAfter != worldTotal - worldModded) return (false, $"vanilla save got {w.VanillaAfter} depots, world has {worldTotal} - {worldModded} modded");
+                if (saveFailures > 0) return (false, $"the game logged 'Moon save failed' {saveFailures}x: {Trim(CoreLog.Redact(firstSaveFailure ?? ""), 300)}");
+                return (true, null);
+            });
+        }
+
+        // A launch that did not build the lamp, after one that saved it: the sidecar brought it back into the world and
+        // its view was spawned (Built with a view).
+        static void ReloadChecks(StructureDefinition lamp)
+        {
+            if (lamp == null || DevTools.AutoBuildNames(LampId) || !Sidecar.LoadedIds().Contains(LampId)) return;
+            var world = CoreState.World ?? CoreState.FindWorld();
+            Check("reload-restores", world == null ? "no MoonWorld found" : null, () =>
+            {
+                int depot = DepotOfKind(world, lamp.Kind);
+                if (depot < 0) return (false, $"the sidecar held '{LampId}' but world.depots ({world.depots?.Count}) has no record of kind {lamp.Kind}");
+                if (!builtViews.Contains(depot)) return (false, $"MoonStructures.Built was not raised with a view for restored depot {depot}");
+                CoreLog.Info($"[selftest] restored '{LampId}' is depot {depot}, Built fired with its view");
+                return (true, null);
+            });
+        }
+
+        // ExampleStructure removed: its lamp was logged as kept, the vanilla save loaded, and the sidecar on disk (rewritten
+        // by the AutoSave write, if on) still holds the record.
+        static void OrphanChecks()
+        {
+            var world = CoreState.World ?? CoreState.FindWorld();
+            Check("orphan-kept", null, () =>
+            {
+                if (world == null || world.depots == null || world.depots.Count == 0) return (false, "the vanilla save did not load (no world or no depots)");
+                if (!Sidecar.Orphans.Contains(LampId)) return (false, $"'{LampId}' was not kept as an orphan at load");
+                string rewritten = "not rewritten (AutoSave off)";
+                if (DevTools.AutoSave.Value)
+                {
+                    var w = WriteAfterRequest(out string why);
+                    if (w == null) return (false, why);
+                    rewritten = $"rewritten by write #{w.Seq}";
+                }
+                int n = SidecarCount(LampId, out string err);
+                if (n < 0) return (false, err);
+                CoreLog.Info($"[selftest] orphan '{LampId}': sidecar {rewritten}, holds {n} record(s); world loaded with {world.depots.Count} depots");
+                return (n > 0, $"the sidecar no longer holds '{LampId}'");
+            });
         }
 
         // A modded kind answers BuildDefinition with its own clone, the build menu answers for it, and an unregistered
@@ -503,16 +702,30 @@ namespace StructureLib
             catch (Exception e) { Assert(name, false, "threw " + e.GetType().Name + ": " + e.Message); }
         }
 
-        internal static void Begin()
+        static bool watching;
+
+        // The exception watch (disk log scan from here, Unity log hook). Started at the AutoBuild step, before any build
+        // or save; Begin starts it if that step did not.
+        internal static void StartWatch()
         {
-            passed = failed = 0;
+            if (watching) return;
+            watching = true;
             unityErrors = 0;
             firstUnityError = null;
+            saveFailures = 0;
+            firstSaveFailure = null;
             logPath = Path.Combine(BepInEx.Paths.BepInExRootPath, "LogOutput.log");
             FlushDiskLog();
             try { logStart = File.Exists(logPath) ? new FileInfo(logPath).Length : -1; }
             catch (Exception) { logStart = -1; }
             HookUnityLog();
+            CoreLog.Info("[selftest] watch started (log scan and Unity log hook)");
+        }
+
+        internal static void Begin()
+        {
+            passed = failed = 0;
+            StartWatch();
             CoreLog.Info("[selftest] begin");
         }
 
@@ -525,6 +738,7 @@ namespace StructureLib
         internal static void Done()
         {
             UnhookUnityLog();
+            watching = false;
             ScanLog();
             CoreLog.Info($"[selftest] done: {passed} passed, {failed} failed");
         }
@@ -558,8 +772,8 @@ namespace StructureLib
         }
 
         // Unity log hook. The converted delegate stays in a static field so the GC does not collect it while hooked.
-        static int unityErrors;
-        static string firstUnityError;
+        static int unityErrors, saveFailures;
+        static string firstUnityError, firstSaveFailure;
         static bool unityHooked;
         static Application.LogCallback unityHook;
 
@@ -587,6 +801,7 @@ namespace StructureLib
         {
             if (type != LogType.Exception && type != LogType.Error) return;
             if (condition != null && condition.StartsWith("[selftest]", StringComparison.Ordinal)) return;
+            if (condition != null && condition.Contains("Moon save failed")) { saveFailures++; firstSaveFailure ??= condition; }
             unityErrors++;
             firstUnityError ??= $"{type}: {condition}";
         }

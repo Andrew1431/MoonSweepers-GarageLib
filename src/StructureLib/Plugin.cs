@@ -50,7 +50,7 @@ namespace StructureLib
             ClassInjector.RegisterTypeInIl2Cpp<CoreDriver>();
             var h = new Harmony(Guid);
             int ok = 0, failed = 0;
-            foreach (var t in new[] { typeof(FreezePatches), typeof(DefinitionPatches), typeof(KindRules), typeof(CatalogPatches), typeof(ModelPatches), typeof(BuildPatches) })
+            foreach (var t in new[] { typeof(FreezePatches), typeof(DefinitionPatches), typeof(KindRules), typeof(CatalogPatches), typeof(ModelPatches), typeof(BuildPatches), typeof(SavePatches) })
             {
                 try { h.CreateClassProcessor(t).Patch(); ok++; CoreLog.Debug($"Patched {t.Name}"); }
                 catch (Exception e) { failed++; CoreLog.Error($"Patching {t.Name} failed: {e}"); }
@@ -81,6 +81,7 @@ namespace StructureLib
         {
             try
             {
+                Sidecar.NoteMainThread();
                 if (Time.unscaledTime >= nextEnsure)
                 {
                     nextEnsure = Time.unscaledTime + 3f;
