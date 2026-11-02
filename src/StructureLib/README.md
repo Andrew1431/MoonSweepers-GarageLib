@@ -45,9 +45,13 @@ MoonStructures.Register(new StructureDefinition
   every `*.bin` beside a project's csproj into its plugin folder). With `Model` set and no `BuildModel`, the library
   builds the template from the donor's prefab: every donor `MeshRenderer`/`SkinnedMeshRenderer` is disabled (its
   colliders, views and scripts stay), and the model goes under a child of the root named `StructureLibModel` (scaled by
-  `1 / scale`, layer copied, its lowest vertex on the donor's lowest mesh point). Materials named after the kit's
-  palette (`MS_BodyWhite`, ...) become the game's own; any other name gets a material of its colour. The card picture
-  is rendered from that template. A missing or unreadable file logs one error and keeps the donor's model and ports.
+  `1 / scale`, layer copied, its lowest vertex on the structure's floor, local y = 0, as the kit floors models;
+  `Port_*` nodes move with it). Materials named after the kit's palette (`MS_BodyWhite`, ...) become the game's own;
+  any other name gets a material of its colour. The game's materials come from the player's equipment, which does not
+  exist yet when a world loads: until it does, the model wears tinted stand-ins, which then become the game's own in
+  place (on every copy already built), and the card picture is taken, or taken again, once they have. The card picture
+  is rendered from that template. A missing or unreadable file logs one error and keeps the donor's model; the ports
+  fall back to the declared `Ports` first, then the donor's.
   Limitation: the donor's animated effects (fill planes, emission, the press's moving parts) are hidden with its
   renderers and not retargeted onto the model; model static status lights instead.
 - **Cargo** (`MoonStructures.RegisterCargo(CargoDefinition, ownerGuid)`): `Id`, `Value` (a byte 3..255 claimed in

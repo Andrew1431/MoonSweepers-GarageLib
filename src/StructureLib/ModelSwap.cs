@@ -75,16 +75,23 @@ namespace StructureLib
                 if (float.IsInfinity(donorBottom)) donorBottom = 0f;
                 if (StructureMaterials.FallbackBase == null) StructureMaterials.FallbackBase = firstMat;
 
-                float scale = ctx.Donor.scale;
+                // Floor: the model's lowest vertex goes on template-local y = 0, where the donors' own meshes start (the
+                // pressure chamber and solar post: lowest bound 0.00) and where the kit floors every model. The definition's
+                // floorOffset (0.02) is not added: the game applies it when it places the root, the donor meshes do not
+                // carry it either. The donor's lowest bound is logged for information only (the stone press reaches
+                // y -0.49 with its foundation below ground).
+                var place = Placement(model, ctx.Donor.scale);
                 var holder = new GameObject(HolderName).transform;
                 holder.SetParent(root, false);
-                holder.localScale = Vector3.one / Mathf.Max(scale, 0.01f);
+                holder.localScale = Vector3.one * place.Scale;
+                holder.localPosition = new Vector3(0f, place.Offset, 0f);
                 // Fact (e): the donors' views rotate nothing, and the holder hangs off the template root itself, so no
                 // animated donor transform is its ancestor.
                 if (holder.parent == null || holder.parent.Pointer != root.Pointer) throw new InvalidOperationException("model holder is not a child of the template root");
-                model.Instantiate(holder, n => n.Name.StartsWith(ModelPorts.Prefix, StringComparison.Ordinal), StructureMaterials.For);
+                model.Instantiate(holder, IsPort, StructureMaterials.For);
 
-                float modelBottom = float.PositiveInfinity;
+                // Check the placement against the built transforms: the lowest vertex must sit at y 0.
+                float measured = float.PositiveInfinity;
                 int meshes = 0;
                 foreach (var mf in holder.GetComponentsInChildren<MeshFilter>(true))
                 {
@@ -93,12 +100,13 @@ namespace StructureLib
                     meshes++;
                     var t = mf.transform;
                     var verts = mesh.vertices;
-                    for (int i = 0; i < verts.Length; i++) modelBottom = Mathf.Min(modelBottom, root.InverseTransformPoint(t.TransformPoint(verts[i])).y);
+                    for (int i = 0; i < verts.Length; i++) measured = Mathf.Min(measured, root.InverseTransformPoint(t.TransformPoint(verts[i])).y);
                 }
-                if (!float.IsInfinity(modelBottom)) holder.localPosition = new Vector3(0f, donorBottom - modelBottom, 0f);
                 foreach (var t in holder.GetComponentsInChildren<Transform>(true)) t.gameObject.layer = template.layer;
 
-                CoreLog.Info($"'{d.Id}': model {d.Model} on base {d.BaseStructure} ('{prefab.name}'): hid {hidden} donor renderer(s), {meshes} model mesh(es); donor bottom {donorBottom:F3}, model bottom {(float.IsInfinity(modelBottom) ? "none" : modelBottom.ToString("F3"))}, holder y {holder.localPosition.y:F3}, scale {holder.localScale.x:F2}");
+                CoreLog.Info($"'{d.Id}': model {d.Model} on base {d.BaseStructure} ('{prefab.name}'): hid {hidden} donor renderer(s), {meshes} model mesh(es); donor lowest bound {donorBottom:F3} (floorOffset {ctx.Donor.floorOffset:F3}, not added), model lowest vertex {place.Lowest:F3} -> holder offset {place.Offset:F3}, scale {place.Scale:F2}; built lowest vertex {(float.IsInfinity(measured) ? "none" : measured.ToString("F3"))}");
+                if (Mathf.Abs(place.Offset) > 1e-4f || Mathf.Abs(place.Scale - 1f) > 1e-4f)
+                    CoreLog.Info($"'{d.Id}': model holder offset {place.Offset:F3} and scale {place.Scale:F3}; the model's ports move with it");
                 return template;
             }
             catch (Exception e)
@@ -120,22 +128,60 @@ namespace StructureLib
             return low;
         }
 
-        /// <summary>MoonStructures.ModelPortsProvider: the model's Port_* nodes as ports; null without a readable model.</summary>
-        internal static List<PortDefinition> Ports(StructureDefinition d)
+        static bool IsPort(MeshModel.Node n) => n.Name.StartsWith(ModelPorts.Prefix, StringComparison.Ordinal);
+
+        // Every node in model-root space (MeshModel's transforms are parent-relative).
+        static ((float x, float y, float z) Pos, (float x, float y, float z, float w) Rot, (float x, float y, float z) Scale)[] Composed(MeshModel model) =>
+            ModelPorts.Compose(model.Nodes.Select(n => (n.Parent, (n.Pos.x, n.Pos.y, n.Pos.z), (n.Rot.x, n.Rot.y, n.Rot.z, n.Rot.w), (n.Scale.x, n.Scale.y, n.Scale.z))).ToList());
+
+        /// <summary>
+        /// The holder's transform for a model on a donor of this scale: uniform scale 1 / max(scale, 0.01), and the Y offset
+        /// that puts the lowest vertex of every mesh Instantiate builds (not under a Port_* node) on structure y = 0. The
+        /// swap and the ports both use it, so geometry and ports stay together.
+        /// </summary>
+        internal static (float Scale, float Offset, float Lowest) Placement(MeshModel model, float donorScale)
+        {
+            float scale = 1f / Math.Max(donorScale, 0.01f);
+            var c = Composed(model);
+            var skipped = new bool[model.Nodes.Length];
+            float lowest = float.PositiveInfinity;
+            for (int i = 1; i < model.Nodes.Length; i++)
+            {
+                var n = model.Nodes[i];
+                skipped[i] = IsPort(n) || (n.Parent > 0 && n.Parent < i && skipped[n.Parent]);
+                if (skipped[i] || !n.HasMesh) continue;
+                foreach (var v in n.Vertices) lowest = Math.Min(lowest, ModelPorts.Point(c[i], (v.x, v.y, v.z)).y);
+            }
+            if (float.IsInfinity(lowest)) lowest = 0f;
+            return (scale, ModelPorts.HolderOffset(lowest, scale), lowest);
+        }
+
+        /// <summary>
+        /// MoonStructures.ModelPortsProvider: the model's Port_* nodes as ports in structure space (parent chain composed,
+        /// then through the holder's scale and floor offset, as the swap builds the geometry); null without a readable model.
+        /// </summary>
+        internal static List<PortDefinition> Ports(StructureDefinition d, DonorShape donor)
         {
             var model = Load(d);
             if (model == null) return null;
-            var nodes = model.Nodes.Select(n => (n.Name, (n.Pos.x, n.Pos.y, n.Pos.z), (n.Rot.x, n.Rot.y, n.Rot.z, n.Rot.w), (IReadOnlyDictionary<string, object>)n.Props));
+            var place = Placement(model, donor?.Scale ?? 1f);
+            var c = Composed(model);
+            var nodes = model.Nodes.Select((n, i) => (n.Name, c[i].Pos, c[i].Rot, (IReadOnlyDictionary<string, object>)n.Props));
             var result = new List<PortDefinition>();
             foreach (var p in ModelPorts.FromNodes(nodes))
+            {
+                var at = ModelPorts.ApplyHolder(p.Pos, place.Scale, place.Offset);
                 result.Add(new PortDefinition
                 {
                     Name = p.Name,
-                    Position = new Vector3(p.Pos.x, p.Pos.y, p.Pos.z),
+                    Position = new Vector3(at.x, at.y, at.z),
                     Direction = new Vector3(p.Dir.x, p.Dir.y, p.Dir.z),
                     Output = p.Output,
                     Cargo = CargoOf(d, p.Name, p.CargoId),
                 });
+            }
+            if (result.Count > 0 && (Math.Abs(place.Offset) > 1e-4f || Math.Abs(place.Scale - 1f) > 1e-4f))
+                CoreLog.Info($"'{d.Id}': model ports moved by the holder (offset {place.Offset:F3}, scale {place.Scale:F3}) to stay on the geometry");
             return result;
         }
 

@@ -34,6 +34,7 @@ namespace StructureLib
     internal sealed class DonorShape
     {
         internal Vector2 HalfFootprint;
+        internal float Scale = 1f;
         internal List<(string Name, Vector3 Position, Vector3 Direction, bool Output)> Ports = new();
     }
 
@@ -41,12 +42,12 @@ namespace StructureLib
     // (MoonStructures.ModelPortsProvider), else the declared Ports, else the donor's ports with a cargo each.
     internal static class PortResolver
     {
-        internal static (List<PortDefinition> Ports, string Rule) Resolve(StructureDefinition d, DonorShape donor, Func<StructureDefinition, List<PortDefinition>> modelPorts)
+        internal static (List<PortDefinition> Ports, string Rule) Resolve(StructureDefinition d, DonorShape donor, Func<StructureDefinition, DonorShape, List<PortDefinition>> modelPorts)
         {
             if (modelPorts != null)
             {
                 List<PortDefinition> fromModel = null;
-                try { fromModel = modelPorts(d); }
+                try { fromModel = modelPorts(d, donor); }
                 catch (Exception e) { CoreLog.Error($"'{d.Id}': reading ports from the model threw; using the declared or donor ports: {e.Message}"); }
                 if (fromModel != null && fromModel.Count > 0) return (Copy(fromModel), "model Port_* nodes");
             }
@@ -89,7 +90,7 @@ namespace StructureLib
         internal static DonorShape ReadDonor(MoonDepotBuildDefinition def)
         {
             if (def == null) return null;
-            var shape = new DonorShape { HalfFootprint = def.halfFootprint };
+            var shape = new DonorShape { HalfFootprint = def.halfFootprint, Scale = def.scale };
             var ports = def.conveyorPorts;
             for (int i = 0; i < (ports?.Length ?? 0); i++)
             {

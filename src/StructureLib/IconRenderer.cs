@@ -33,6 +33,7 @@ namespace StructureLib
         static bool queued, gaveUp;
         static float waited;
         static float modelWait;
+        static readonly List<StructureDefinition> standIn = new();
 
         sealed class Job
         {
@@ -73,7 +74,18 @@ namespace StructureLib
         {
             try
             {
-                StructureMaterials.Upgrade();
+                // A card taken while the model still wore tinted stand-ins is taken again once they are the game's own.
+                if (standIn.Count > 0 && !StructureMaterials.Waiting)
+                {
+                    // One still being rendered waits for its job to finish (pending), then goes back in the queue.
+                    standIn.RemoveAll(s =>
+                    {
+                        if (!pending.Add(s.Kind)) return false;
+                        queue.Enqueue(s);
+                        CoreLog.Info($"Card art for '{s.Id}': re-rendering, its model now has the game's materials");
+                        return true;
+                    });
+                }
                 if (job == null)
                 {
                     if (queue.Count == 0) return;
@@ -97,6 +109,8 @@ namespace StructureLib
                             return;
                         }
                     }
+                    modelWait = 0f;
+                    if (next.ModelPath != null && StructureMaterials.Waiting) standIn.Add(next);
                     Start(queue.Dequeue(), world);
                     return;
                 }

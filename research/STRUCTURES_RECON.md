@@ -782,7 +782,10 @@ Belt output and save with belts (Task 4, 2026-11-02; logs `task-4-logs/`, run1 =
   stand-ins copied from the donor's first material; the first run used them for the card (all cyan). They are now
   turned into the game's prototype materials in place once the equipment exists (`StructureMaterials.Upgrade`, within
   seconds of load), and the card waits for that. A missing file logs one error and keeps the post's model and the
-  declared port.
+  declared port. Fix round 1: the model's lowest vertex now goes on template-local y = 0, where the chamber's and the
+  post's meshes start, and not on the donor's lowest bound. The press's bound is at −0.49 with its foundation under
+  ground. `floorOffset` (0.02) is not added, because the game applies it to the placed root. `Port_*` nodes are
+  composed through their parent chain and moved by the holder's scale and offset, so the ports stay on the geometry.
 
 ## Still open
 

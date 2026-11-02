@@ -176,7 +176,7 @@ namespace StructureLib
 
         // Ports from the structure's model file (Port_* nodes); a null or empty answer (no Model, no readable file, no
         // Port_* node) falls through to the declared ports.
-        internal static Func<StructureDefinition, List<PortDefinition>> ModelPortsProvider = ModelSwap.Ports;
+        internal static Func<StructureDefinition, DonorShape, List<PortDefinition>> ModelPortsProvider = ModelSwap.Ports;
 
         // The belt-side allowance for a port outside the footprint (MoonWorld.PortReach, 1.20 m in this build).
         static float PortReach
