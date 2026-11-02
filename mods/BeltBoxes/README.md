@@ -57,8 +57,9 @@ serves its inputs Back, Left, Right. The table is in that order.
   +X join with short straight belts (1.3 m between boxes worked in game).
 - Side belts need room to swing. A U-turn from a side output to the next box's side input, with 1.3 m between the
   boxes, is refused by the game as "Turn too tight: give it more room." (StructureLib's spike planned belts of 6.86 m
-  and 5.56 m there; both were routable but never valid). Give a side belt several metres to turn, or turn the box it
-  feeds so the belt runs straight out of the side port.
+  and 5.56 m there; both were routable but never valid). With 5 m between the boxes, both side U-belts (splitter
+  `Left` → merger `Left`, `Right` → `Right`) built, 9.81 m each. Otherwise turn the box a side belt feeds so the belt
+  runs straight out of the side port.
 - Unported faces take nothing.
 - The turn is kept in memory only: it starts again from the first port after a load. Building or removing belts and
   structures elsewhere keeps it.
@@ -70,24 +71,46 @@ join when the two players' mods differ, so both players need Belt Boxes.
 
 ## What works, and what does not yet
 
-Checked in game (StructureLib's dev self-test with its example grinder and burner, single player):
-- both boxes register and build with their own models, and the four ports of each come from the model at the
-  positions in the table;
-- both build-menu cards show the box;
-- belts were joined at the splitter's `In` and `Forward` and at the merger's `Back` and `Out`;
-- grit was routed through both boxes, from a grinder into a burner (12 canisters reached the burner in the run);
-- any cargo passes: a sand canister was routed through both boxes too, and then waited at the burner, which takes only
-  grit.
+### What the self-test proved
 
-Not checked yet, worth a look before a release:
+StructureLib's dev self-test (`beltboxes-*` checks, single player, slot-2) built a chain from its example grinder
+through both boxes into its example burner: grinder → splitter `In`; splitter `Forward`, `Left`, `Right` → merger
+`Back`, `Left`, `Right`; merger `Out` → burner. The run ended `45 passed, 0 failed`, with no exception and no failed
+save. It showed:
+- **Registration.** Both boxes register as routers (a splitter with 1 input and 3 outputs, a merger with 3 inputs and
+  1 output), with four ports each and a 1.4 × 1.4 m footprint.
+- **Models.** Each placed box shows its own model, the floodlight's meshes are hidden, and one box collider covers the
+  footprint. Every port sits at its model node.
+- **Even split.** Of the first 12 hops through the splitter, each output took 4, in the order Forward, Left, Right,
+  repeated.
+- **Fair merge.** With all three merger inputs backed up, the next six hops came from each input twice, in turn
+  (Right, Back, Left, Right, Back, Left).
+- **Nothing lost.** Grit in (the grinder's 12 kg plus 11 kg the test added) equalled grit out: 13 kg into the burner
+  and 10 kg riding the belts.
+- **Heavy canisters.** A 3 kg grit canister went through whole: it came out as 3 kg, capacity 3.
+- **Skipping.** With the `Forward` belt removed, the splitter sent the next six canisters to `Left` and `Right` only,
+  and as many left the input belt as hopped.
+- **Saving a full chain.** A save with canisters waiting at the splitter's input and on all three middle belts wrote
+  cleanly. It recorded both boxes and all 37 grit canisters on the belts.
+- **Removing a box.** The merger was removed while a canister waited at its `Back` input. Nothing threw, every belt
+  stayed, and the canister stayed waiting at the open end of its belt.
+- **Reload.** In the next launch the splitter came back with its model, along with all five belts and all 38 grit
+  canisters from the save. The merger was not saved, because the game saved again right after it was removed. Once the
+  canister at each open belt end was taken off, the splitter routed again at once.
 
-- **The side ports** (`Left`, `Right` on both boxes): no belt was joined to them in game.
-- **Belts placed by hand** with the belt tool onto each port at the 0.7 m port spacing. That includes whether a belt
-  can leave or enter every ported face straight.
-- **What the game does with a placed box.** The game decides whether a structure is a router (`MoonWorld.Routes`) from
-  its definition's ports, so it treats any clone with three or four ports, these boxes included, as a router. The belt
-  tool may offer cut-in on a placed box, and the other `Routes`-gated paths in the game are untested. StructureLib's
-  own hop answers first for a box's input belts, which is what the run above exercised.
+### Not checked yet, by hand, worth a look before a release
+
+- **Belts placed by hand** with the belt tool onto each port at the 0.7 m port spacing, side ports included. That
+  includes whether a belt can leave or enter every ported face straight. The self-test builds belts through the game's
+  `TryBuildConveyor`, never the tool.
+- **Cut-in offers.** The game decides whether a structure is a router (`MoonWorld.Routes`) from its definition's ports,
+  so it treats any clone with three or four ports, these boxes included, as a router. The belt tool may offer cut-in
+  on a placed box, and the other `Routes`-gated paths in the game are untested. StructureLib's own hop answers first
+  for a box's input belts, which is what the self-test exercised.
+- **The models in real lighting**, at player scale.
+- **Removing a box or a belt by hand mid-traffic** with the remove tool. The self-test removed them through the game's
+  own calls. A removed belt drops its canisters on the ground in its path, and a new belt there is refused ("Blocked by
+  an object.") until they are picked up.
 - **Building from the build menu by hand** (the real ghost and the remove tool).
 - **Co-op** with two players.
 
