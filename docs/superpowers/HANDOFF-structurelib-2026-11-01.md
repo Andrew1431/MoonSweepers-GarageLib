@@ -1,125 +1,137 @@
-# StructureLib handoff — paused 2026-11-01 after Task 9
+# StructureLib handoff — all 13 tasks complete, final review clean (2026-11-02)
 
-Written for whoever picks this up next (Ryan in a new Claude session, or Andrew's agent). Everything below is on
-branch `structurelib` in Ryan's clone (`C:\Users\ryguy\projects\moonsweep\MoonSweepers-GarageLib`), 19 commits ahead
-of `main`, **nothing pushed**. The plan is to raise one PR at the end.
+Written for Ryan and Andrew. Everything below is on branch `structurelib` in Ryan's clone
+(`C:\Users\ryguy\projects\moonsweep\MoonSweepers-GarageLib`), 34 commits ahead of the branch point `e700a21`,
+**nothing pushed, nothing merged**. The dev-tooling plan (`new-package.ps1`, `dev.ps1`) landed separately on branch
+`worktree-dev-tooling` (worktree `.claude/worktrees/dev-tooling`, 4 commits off `origin/main`), also unpushed.
 
-- Spec: `docs/superpowers/specs/2026-11-01-structurelib-design.md`
-- Plan (13 tasks): `docs/superpowers/plans/2026-11-01-structurelib.md`; tooling plan (2 tasks, not started):
-  `docs/superpowers/plans/2026-11-01-dev-tooling.md`
-- Recon: `research/STRUCTURES_RECON.md` (game facts; read "Interop hazards found" and "Answered by S0" first)
-- Decisions: `docs/DECISIONS.md`
-- Execution ledger (git-ignored, local to Ryan's clone): `.superpowers/sdd/2026-11-01-structurelib/progress.md`, with
-  per-task briefs, implementer reports and review packages beside it. The ledger is the authoritative record of every
-  review finding and ruling; this document summarises it.
+- Spec: `docs/superpowers/specs/2026-11-01-structurelib-design.md` (binding authority)
+- Plan: `docs/superpowers/plans/2026-11-01-structurelib.md`; tooling plan `docs/superpowers/plans/2026-11-01-dev-tooling.md`
+- Recon (game facts, hazards, saver audit): `research/STRUCTURES_RECON.md`
+- Decisions: `docs/DECISIONS.md`; cargo bytes: `docs/cargo-registry.md`
+- Execution ledger (git-ignored, Ryan's clone only): `.superpowers/sdd/2026-11-01-structurelib/progress.md` — every
+  review finding, every controller ruling (`grep "Ruling:"`), the deferred-findings index
+  (`final-review-deferred-index.txt`), per-task briefs, reports, review packages and game logs. Kept on purpose.
 
 ## Status
 
 | Task | What | Status | Commits |
 |---|---|---|---|
-| 1 | S0 behaviour spike (research) | complete, reviewed | 21d79f7, 7302e6b |
-| 2 | Scaffolding + `KindAllocator` (FNV-1a kinds) | complete, reviewed | 319be24, c581e33 |
-| 3 | Definitions, registry, validation rules | complete, reviewed | 450df63, 43ffbde |
-| 4 | Plugin skeleton, member check, freeze at world load, self-test harness, example mod | complete, reviewed | 247e06e, e2f7407 |
-| 5 | Cloned definitions, `BuildDefinition` prefix, per-kind remaps | complete, reviewed | 8696aa6, 6e3d596 |
-| 6 | Build-menu catalog, categories, card art | complete, reviewed | 2d5d0d8, 5ff01a3 |
-| 7 | Placement (dev `AutoBuild`), model hook, build/remove events | complete, reviewed | 9671fd4, 086faaa |
-| 8 | Depot sidecar (`structurelib.json`), save safety | complete, reviewed (2 fix rounds) | e316858, 534e25c, a32328b |
-| 9 | Cargo kinds + canister sidecar | **implemented, reviewed (5 Important), fix round 1 committed, scoped re-review pending** | 0eb9ed3, 97fb624 |
-| 10 | Processors (`ProcessorSpec` synthesis, production sidecar) | not started | |
-| 11 | Power sources (fuel supply on the vanilla grid) | not started | |
-| 12 | Co-op handshake (missing-mod detection) | not started | |
-| 13 | SandPower mod, cargo ledger, docs, modpack | not started | |
-| Tooling 1–2 | `new-package.ps1`, `dev.ps1` | not started | |
+| 1–8 | Recon, kinds, registry, plugin, clones, catalog, placement, depot sidecar | complete, reviewed | 21d79f7 … a32328b |
+| 9 | Cargo kinds + canister sidecar | complete, reviewed (1 fix round) | 0eb9ed3, 97fb624 |
+| 10 | Processors: `ProcessorSpec` synthesis, generic cycle, production sidecar, `SolvePower` grid attach | complete, reviewed (1 fix round) | 9396bd2, 25fe999 |
+| 11 | Fuel power sources, modded-only grids (negative ids) | complete, reviewed (1 docs fix round) | 0b046a0, 3477b97 |
+| 12 | Co-op handshake over Steam lobby data | complete, reviewed (1 fix round); two-player untested | de46f47, 88638ad |
+| 13 | SandPower, cargo ledger, READMEs, modpack, slnx | complete, reviewed (1 docs fix round) | 9ab9d9a, ca2bd75, c872bbe |
+| Final | Whole-branch review + one fix wave + scoped re-review: clean | | ba9fed2 |
 
-What works in game today (dev self-test on save slot-2, 27 assertions passing, 25 xunit tests green): a modded
-structure registers from a plugin, gets a hashed kind, appears in the build menu with a rendered card, can be built,
-decorated, removed and refunded, is stripped from the vanilla save into `structurelib.json` and restored on load, and
-survives its mod being removed (orphan kept). Modded cargo values answer name/short name/kg/price, and modded-cargo
-canisters are stripped and re-injected the same way. The game saves normally with modded content present
-(`Moon save failed` = 0 in every run since Task 8).
+Unit tests: 111 green (`dotnet test tests/StructureLib.Tests -c Release`). In-game dev self-test on slot-2: every run
+since Task 8 ends with `0 failed` and `Moon save failed` 0; the last runs (final fix wave) were 31/0, 40/0, 27/0.
 
-## Resume here
+What works in game, proven by the self-test: a modded structure registers, gets a hashed kind, appears in the build
+menu with rendered card art, builds (dev `AutoBuild` and the build menu's own placement path), decorates, removes with
+refund, is kept out of the vanilla save in `structurelib.json` with its pose and restored on load, survives its mod being
+uninstalled (orphan kept) and reinstalled. Modded cargo answers name/short name/kg/price; modded-cargo canisters
+round-trip the sidecar. A modded processor (example grinder, SandPower compactor) takes `CrewProcessorLoad` input,
+cycles on vanilla solar power or on a modded generator, keeps its slots across save/load. A modded fuel generator
+(example burner, SandPower generator) burns fuel into stored charge, supplies StructureLib machines within range on
+the vanilla grid or on its own negative-id grid, never burns into a full battery, keeps its charge across reload. The
+handshake manifest builds, encodes and round-trips in single player.
 
-1. Open a session in the repo, `git checkout structurelib`, `git pull --rebase` is not needed (nothing remote).
-2. Invoke `superpowers:subagent-driven-development` with the plan file. It reads the ledger and resumes at the first
-   task without a `complete` line: **Task 9, mid fix loop**. The task review (opus) found five Important findings on
-   the canister save path (canister claimed before its cargo was applied; sidecar commit gated on `MoonDepotSave.Write`
-   although the vanilla write is the whole of `MoonProgressStore.Serialize`; per-save record hand-off; a shared fixed
-   `.tmp` name across overlapping saves, which explains the stale-lamp flake; grit weight). Fix round 1 is committed as
-   `97fb624` (30 unit tests green; modes A and B 27/27; `Moon save failed` 0). **Next step:** run
-   `bash scripts/review-package PLAN 0eb9ed3 HEAD` from the skill's directory, dispatch the scoped re-review
-   (`re-review-prompt.md`) against the findings listed in the ledger's Task 9 review line, then close Task 9 and start
-   Task 10. The fix report is appended to `task-9-report.md`.
-3. Facts the re-reviewer and Task 10 need (also in the ledger): the registry freeze moved from `RestoreDepots` to
-   `RestoreCanisters`; canister cargo is re-applied in a `RestoreProduction` postfix via `MoveCanisterRecord` because
-   the game restores modded cargo as dust; the strip runs in a `MoonProgressStore.Serialize` prefix (there is no
-   canister saver); the sidecar commit decision now lives in `Pure/CommitOrder.cs` with a unique ordered `.tmp` name per
-   save. The last self-test run in the log shows `21 passed, 2 failed`: that was a cleanup run with `AutoSave` on and
-   no lamp, where `save-strips-modded` and `sidecar-written` fail by design (harness limit, not a regression).
-4. Open concerns from the Task 9 fix round, for the re-reviewer: the stale-lamp cause is unconfirmed (the RED log was
-   overwritten); two unexplained extra lamps appeared during the mode-B setup and the sidecar was trimmed by hand; the
-   sidecar commit still cannot detect a read-back refusal that does not throw. Slot-2 ended clean (empty
-   `structurelib.json`, no `.tmp` files).
+## Before merging (Ryan or Andrew)
 
-## Rulings made so far (what to re-check if you disagree)
+1. **Merge `origin/main` into `structurelib` by hand** (a dry run showed conflicts in `GarageLib.slnx`, `README.md`,
+   `modpack.json`; `Directory.Build.targets` and `CONTRIBUTING.md` auto-merge):
+   - `modpack.json`: main is `0.2.0` with `["GarageLib","SharedUpgrades","LateGameVehicles"]` (Ms Choppa was pulled
+     out and `modpack-v0.2.0` is already released). Resolve to version `0.3.0`, packages
+     `GarageLib, SharedUpgrades, LateGameVehicles, StructureLib, SandPower`, description merged. Do **not** keep this
+     branch's `0.1.0`/`MsChoppa` side: `package.ps1 -Release` would skip the modpack as "already released".
+   - `GarageLib.slnx`: both sides add a `/mods/` folder; keep both `SharedUpgrades` and `SandPower` plus this branch's
+     `/tests/` folder and the StructureLib/ExampleStructure entries.
+   - `README.md`: keep main's rewritten install section; add this branch's StructureLib and SandPower rows.
+2. **Fix `package.ps1`'s release note** (both sides append `' and GarageLib'` for every non-GarageLib package): SandPower
+   needs StructureLib, StructureLib needs nothing. Derive the dependency from the csproj `ProjectReference` or a small
+   name→dependency map. Do it in the merge commit or right after, before any `-Release`.
+3. Then merge `worktree-dev-tooling` (independent; touches `new-package.ps1`, `new-vehicle.ps1`, `dev.ps1`,
+   `templates/**`, `tests/scripts/**`, one section each in `README.md`/`CONTRIBUTING.md`).
+4. The work-order board was unreachable in every session; hot-path edits on this branch: `Directory.Build.targets`,
+   `GarageLib.slnx`, `modpack.json`, `README.md`, `CONTRIBUTING.md` (`package.ps1` untouched but needs item 2).
 
-- No separate git worktree; work directly on branch `structurelib` in this clone.
-- Work-order board unreachable (ArtifactData tool absent in the session); hot-path edits (`Directory.Build.targets`)
-  made without a board claim.
-- Task 2 collision test: the plan's single-letter `Contains` asserts were vacuous; test asserts `IdA`/`IdB`.
-- Event payloads defined in Task 3 as placeholders; Task 7 reshaped `StructureBuilt`; Task 10 reshapes
-  `CycleFinished`.
-- `Freeze` is transactional (`Frozen` set last; any exception → `Disabled`); self-test hooks Unity's log.
-- **Prefixing static `MoonWorld.IsProcessor` crashes the game at world load.** StructureLib does not patch it. Task 10
-  must answer "is processor" another way (candidate: instance `MoonWorld.IsProcessorId(int id)` + `Processor(kind)`
-  prefix). Other statics patch fine.
-- Task 5's per-kind remaps were never observed firing for a built modded depot (vanilla either never asks or inlines
-  them). Tasks 10/11 must verify each behaviour directly rather than rely on the remaps.
-- Card art: keep `cardart-modded` as the plan wrote it, add `cardart-rendered`.
-- The `MoonDepotSave.Write` strip prefix is unconditional (no `Frozen` guard): accepted as the safer form.
-- `Merge` keeps records with a null/empty id verbatim (orphans).
-- Sidecar `.tmp` is written in the prefix and committed in the finalizer only when the vanilla write did not throw.
-- `reload-restores` fails only when the loaded sidecar held a lamp record that the world then lacks; absent otherwise.
-- Vanilla `MoonDepotSnapshot.Copy()` zeroes contribution dollars, so the sidecar stores $0 shares (same as vanilla).
+## Needs a human (by hand, in this order)
 
-## Carried items for Tasks 10–13
+- **Build-menu placement, real ghost and remove tool** (the Critical finding of the final review was fixed through the
+  menu's placement path driven from the dev tool, not by hand): place a lamp, the compactor and the generator from the
+  menu with a non-zero rotation, snapped or supported on a vanilla structure; save twice; expect no "vanilla write
+  threw" / "Structure pose ID" line, `Sidecar written: N structures` and `(N placed with a free pose)` in the "moved"
+  line, and no `vanilla depots on a modded one` warning. Reload: same rotation in the world view. Remove with the
+  remove tool, save: the sidecar drops it and the save is still clean.
+- **Belts**: sand into the compactor, briquettes out, briquettes into the generator (unsupported and untested; the
+  vanilla port path refuses modded machines, so expect refusal, and confirm the save stays clean).
+- **Carried cargo**: pick up / vehicle-carry a briquette canister, save, inspect the save for cargo value 3.
+- **Power UI**: the generator's interaction panel with a negative grid id; the re-added panel node during a placement
+  preview; `MoonSolarPanelView.Animate` on the burner (the post donor has 0 kWh serialized).
+- **Two-player (Andrew's machine)**: identical mods → join succeeds and a host-built modded structure appears on the
+  client; client without ExampleStructure → refused with the `missing mod` line. Watch: which `Admit` branch each join
+  path takes (lobby data / member data / "cannot check"); the "wrote the manifest as lobby (member) data" lines appear
+  once per lobby, not five times then muted; the host logs "wrote the manifest as lobby data", not "Steam refused"; a
+  refusal comes from a real manifest, not the empty-manifest branch; what `EndJoin` inside the `Offered` prefix does to
+  the join coroutine; whether `why` is shown as a dialog; whether the host streams `SendWorld` to a departed client.
+- **Balance (Ryan, mechanics)**: each generator burn adds 3 kWh (two burns fill the 6 kWh battery) against 10 kW peak
+  output; $7 per 2 kg briquette; compactor 12 kW / 8 s.
+- Optional: install .NET SDK 9.0.200+ so `GarageLib.slnx` builds in one command (not buildable here, SDK 8.0.421).
 
-- `WriteTmp` merges production and canister records with `_ => false`; live production records (Task 10) need
-  per-record ownership like the depots' `inWorld` set or they will duplicate.
-- `IsProcessor` cannot be prefixed (above). `ProcessorSpec` is a class, so a `Processor(kind)` prefix is safe.
-- The S0 spike found `SolvePower` recomputes `SunFactor` itself and there is no per-node creation hook: fuel power
-  (Task 11) goes through a `SolvePower` postfix (spec fallback).
-- `MoonDepotBuildDefinition` donor for the generator: battery_bank (kind 6) may lack a production view; fall back to
-  solar post (93) if so.
-- GarageLib bug found in passing: `DevTools.Buy` relies on `MoonWorld.DevAddMoney`, which is a no-op in this build;
-  `SetTeamDollars` works. Not fixed (outside scope); file on the board.
+## Known limitations shipped as documented (both READMEs say so)
 
-## Deferred minor findings (reviewers' lists, not fixed)
+Belt and canister input into modded machines; belt output and collector selling untested; vanilla machines are never
+fed by a modded generator and vanilla grid totals never see modded demand (`MoonPowerGrid` is a struct that cannot be
+written back); no power link is drawn to modded structures; a generator's `RunningKw` is ignored; `SupplyMode.Solar`
+supplies nothing; `CanisterTint` is declared but never applied; the walker's `LoadProcessor` refuses modded machines;
+a modded-kind anchor or "robots off" entry is stripped from the save and not persisted; the handshake admits a join it
+cannot check (client not yet in the lobby, oversize manifest, host without StructureLib) and never kicks from the host;
+a client joining within ~2 s of lobby creation can be wrongly refused.
 
-Collected in the ledger per task. Highlights: `DevTools.cs` is over 800 lines (split `SelfTest` out); `Remap.ToBase`
-allocates its `Once` key before checking the count; `CargoOffenders` duplicates `CheckCargo` rules without a parity
-test; shared `.tmp` path if saves ever overlap; `CheckRestored` is a postfix (a throwing `RestoreDepots` would drop
-unrestored records on the next write); exception text in logs can include file paths.
+## Rulings (every decision made on your behalf, in order; details in the ledger)
+
+1. No worktree; work on `structurelib` in the clone. 2. Board unreachable; hot-path edits without a claim. 3. Task 5's
+remap prefixes in one `KindRules` class. 4. Task 2 collision test asserts real ids (the plan text was vacuous).
+5. Event payloads were placeholders in Task 3, reshaped in Tasks 7/10. 6. `Freeze` is transactional, `Disabled` on any
+exception; the self-test hooks Unity's log. 7. **Static `MoonWorld.IsProcessor` is never prefixed** (native crash);
+`IsProcessorId` + `Processor(kind)` instead. 8. Card art: keep `cardart-modded`, add `cardart-rendered`.
+9. Unconditional strip prefix. 10. Null-id records are orphans. 11. `.tmp` in the prefix, commit in the finalizer only
+when the vanilla write did not throw. 12. `reload-restores` fails only when the sidecar held a lamp the world lacks.
+13. Grid membership for modded processors in Task 10 via a `SolvePower` postfix (load-bearing for S2/S3).
+14. Beyond-brief Task 10 changes accepted (`CrewProcessorLoad` prefix, generic cycle, `pendingKilograms`).
+15. Belt/canister input out of Task 10. 16. No per-node hook exists; fuel supply through the same postfix.
+17. Modded-only grids get a StructureLib-owned negative id. 18. **`TryPanel` is never patched** (native crash).
+19. The handshake compares and refuses on the client (spec S4); the host never kicks; a client without StructureLib
+getting in is the spec's accepted gap. 20. The generator burns 2 kg (one briquette) per cycle, spec text over plan
+number; balance left to Ryan. 21. Modpack row/description edited in place; other README/CONTRIBUTING edits additive.
+22. The documented `AutoBuild` order replaces the brief's unreachable one. 23. The generator note says "Powers
+StructureLib machines"; accuracy over verbatim plan text. 24. Recon heading names with task numbers may stay as link
+text. 25. The older DECISIONS line gets a parenthetical. 26. One final fix wave covering C1 and I1/I4/I5/I6/I7f/I8;
+merge-time items (modpack version, `package.ps1` note) left to the merge. 27. Parked after the fix wave: the README's
+"with its pose" is proven for identity rotation only (the by-hand check covers it); a null `ModdedKinds` fallback could
+let modded production reach a vanilla save that is then refused (narrow, safe); anchor/robots-off entries not persisted
+(accepted for 0.1.0). 28. The plan workspace is kept, not deleted.
+
+Deferred minor findings (none blocking; triaged by the final review as ship-as-known-limitation or follow-up): per-solve
+interop enumeration and allocations in the power postfix; an `AddNode` duplicate guard; battery draw not capped at
+stored kWh; `SerializeFin` overwriting a deferred commit; Il2Cpp lists mutated under `gate` in older inject code;
+unclaimed production record pairs; `priceDollars` truncation; `Redact` first-only; `heard` never pruned; the
+tautological `handshake-manifest` kind compare; the `sandpower-briquette-out` disjunct; README Output-slot wording;
+`DevTools.cs` (~1400 lines, DEVBUILD-only) and `Sidecar.cs` (~1000) splits can follow the merge; SandPower's
+assertions living in the library's dev file want a consumer-mod assertion hook.
 
 ## Environment state
 
 - Game installed with BepInEx 6 be.791 + ModEngine 1.0.2; launch `MoonSweepers.exe` directly (Steam launch does nothing
-  on this machine). Close the game before any installing build. Allow ≥10 s between a kill and a relaunch.
-- Installed plugins: `StructureLib`, `ExampleStructure` (dev builds). The research spike DLL was removed.
-- Dev config `BepInEx/config/com.ryanhartwig.structurelib.cfg`: `AutoLoadSlot = 2`, `SelfTest = true`, `AutoBuild`
-  empty, `AutoRemove = true`, `AutoSave = false`, `ScreenshotMenu = false`.
-- Save slots: slot-1 is Ryan's (never load it from dev tools; `AllowSlot1` guard). slot-2 is the test copy: vanilla
-  solar twin + pressure chamber from the spike, no modded structures, an empty `structurelib.json`. slot-3 may exist as
-  a backup of slot-2.
-- .NET SDK 8 only: build per project (`.slnx` needs SDK 9). In-game check recipe is in the plan's Global Constraints
-  (build `examples/ExampleStructure` with `-p:InstallToGame=true`, launch, grep `[selftest]`).
-
-## Needs a human
-
-- Two-player co-op test (Task 12) needs Andrew's machine.
-- By-hand checks never done: placing a modded structure with the real ghost and removing it with the real remove tool
-  (Task 7 Step 4); belt hand-off between a vanilla press and a modded machine (Task 13).
-- Board access: Andrew must share the work-order artifact with Ryan as Editor; the session also needs the
-  `ArtifactData` tool to be present.
-- Optional: install .NET SDK 9.0.200+ so the `.slnx` builds in one command.
+  here). Close the game before any installing build. Allow ≥10 s between a kill and a relaunch. The game autosaves into
+  the loaded slot on its own; dev runs restore slot-2 from `C:\Users\ryguy\projects\moonsweep\.scratch\slot-2-backup-task11`.
+- Installed plugins: `GarageLib` (this branch's build), `StructureLib`, `StructureLib.ExampleStructure` (dev builds of
+  ba9fed2). `SandPower` is **not** installed (built with `-p:InstallToGame=true` only during Task 13).
+- Dev config `BepInEx/config/com.ryanhartwig.structurelib.cfg`: `AutoLoadSlot = 2`, `SelfTest = true`, `AutoBuild` and
+  `AutoFeed` empty, `AutoBuildViaPlan` off, `AutoRemove = true`, `AutoSave = false`, `ForcePower = false`,
+  `AllowSlot1 = false`.
+- Save slots: slot-1 is Ryan's (never auto-loaded). slot-2 is the test copy, byte-identical to the backup: vanilla solar
+  twin + pressure chamber, no modded structures, empty `structurelib.json`, no `.tmp` files.
+- .NET SDK 8 only: build per project. The in-game check recipe is in the plan's Global Constraints.
