@@ -41,16 +41,21 @@ order below.
 
 ## Two differences from the vanilla splitter and merger
 
-- **No cut-in.** You cannot drop a box onto an existing belt to split it. Place the box free-standing and join belts
-  to its ports.
+- **No cut-in.** StructureLib does not implement dropping a box onto an existing belt to split it. Place the box
+  free-standing and join belts to its ports. (The game may still offer cut-in on a placed box; see "Not checked
+  yet" below.)
 - **No visible crossing.** A canister does not ride across the box: it vanishes at the end of the input belt and a new
   canister (with a new id) appears at the start of the output belt in the same frame.
 
 ## Laying one out
 
-- A belt may leave or enter any ported face straight; the unported faces take nothing.
-- Side outputs and inputs need room: the belt tool needs a few metres for a belt that turns 90° or more out of a side
-  port.
+- The straight path, splitter `In` → `Forward` and merger `Back` → `Out`, has no turning limit: boxes in a line along
+  +X join with short straight belts (1.3 m between boxes worked in game).
+- Side belts need room to swing. A U-turn from a side output to the next box's side input, with 1.3 m between the
+  boxes, is refused by the game as "Turn too tight: give it more room." (StructureLib's spike planned belts of 6.86 m
+  and 5.56 m there; both were routable but never valid). Give a side belt several metres to turn, or turn the box it
+  feeds so the belt runs straight out of the side port.
+- Unported faces take nothing.
 - The turn is kept in memory only: it starts again from the first port after a load. Building or removing belts and
   structures elsewhere keeps it.
 
@@ -61,21 +66,30 @@ join when the two players' mods differ, so both players need Belt Boxes.
 
 ## What works, and what does not yet
 
-Checked in game (StructureLib's dev self-test with its example grinder and burner, single player): both boxes build,
-their four ports are joined by belts, grit rides from a grinder through the splitter's `In` and `Forward`, into the
-merger's `Back` and out of its `Out` into a burner.
+Checked in game (StructureLib's dev self-test with its example grinder and burner, single player):
+- both boxes register with four ports each and build;
+- belts were joined at the splitter's `In` and `Forward` and at the merger's `Back` and `Out`;
+- grit was routed through both boxes, from a grinder into a burner (12 canisters reached the burner in the run);
+- any cargo passes: a sand canister was routed through both boxes too, and then waited at the burner, which takes only
+  grit.
 
 Not checked yet, worth a look before a release:
 
-- **Belts placed by hand** with the belt tool onto each port, side ports included, at the 0.7 m port spacing.
+- **The side ports** (`Left`, `Right` on both boxes): no belt was joined to them in game.
+- **Belts placed by hand** with the belt tool onto each port at the 0.7 m port spacing. That includes whether a belt
+  can leave or enter every ported face straight.
+- **What the game does with a placed box.** The game decides whether a structure is a router (`MoonWorld.Routes`) from
+  its definition's ports, so it treats any clone with three or four ports, these boxes included, as a router. The belt
+  tool may offer cut-in on a placed box, and the other `Routes`-gated paths in the game are untested. StructureLib's
+  own hop answers first for a box's input belts, which is what the run above exercised.
 - **Building from the build menu by hand** (the real ghost and the remove tool).
-- **Side outputs and inputs in game** (`Left`, `Right`): the run above used the straight-through ports.
 - **Co-op** with two players.
 
 ## The models
 
-Both boxes are shown as the vanilla floodlight for now; their own models (`box_splitter.bin`, `box_merger.bin`, built
-from the scripts in [`blender/`](blender)) and preview images follow.
+Both boxes are shown as the vanilla floodlight for now. Their own models, `box_splitter.bin` and `box_merger.bin`
+(built from the scripts in [`blender/`](blender)), already sit in this folder and ship next to `BeltBoxes.dll`. The
+next version switches the boxes to them and adds preview images.
 
 ## Saves
 
