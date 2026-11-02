@@ -57,6 +57,10 @@ canisters are stripped and re-injected the same way. The game saves normally wit
    canister saver); the sidecar commit decision now lives in `Pure/CommitOrder.cs` with a unique ordered `.tmp` name per
    save. The last self-test run in the log shows `21 passed, 2 failed`: that was a cleanup run with `AutoSave` on and
    no lamp, where `save-strips-modded` and `sidecar-written` fail by design (harness limit, not a regression).
+4. Open concerns from the Task 9 fix round, for the re-reviewer: the stale-lamp cause is unconfirmed (the RED log was
+   overwritten); two unexplained extra lamps appeared during the mode-B setup and the sidecar was trimmed by hand; the
+   sidecar commit still cannot detect a read-back refusal that does not throw. Slot-2 ended clean (empty
+   `structurelib.json`, no `.tmp` files).
 
 ## Rulings made so far (what to re-check if you disagree)
 
