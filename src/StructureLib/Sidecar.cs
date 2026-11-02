@@ -21,12 +21,13 @@ namespace StructureLib
         static string loadedRoot;
         static IntPtr loadedSnapshot;
         static SidecarFile loaded = new();
-        // True once InjectDepots ran for the loaded file. Until then every loaded record is kept as-is on write, so a
-        // failed or skipped inject can never drop records the world does not hold.
-        static bool injected;
+        // Loaded records that are in the world now (injected, and restored by RestoreDepots), with the depot id they got.
+        // Only these are replaced by the live records on write; every other loaded record is written back verbatim, so a
+        // skipped, failed or partial inject can never drop or duplicate a record.
+        static readonly Dictionary<StructureRecord, int> inWorld = new(ReferenceEqualityComparer.Instance);
         static IntPtr injectedFor;
-        // Records injected into the load snapshot that RestoreDepots did not keep: written back verbatim, like orphans.
-        static List<StructureRecord> notRestored = new();
+        // True once a load (RestoreDepots) happened since the last session start; see BeginSession.
+        static bool sessionLoaded;
         // Latest stripped records (what the world holds now).
         static List<StructureRecord> live = new();
 
@@ -35,6 +36,9 @@ namespace StructureLib
 
         /// <summary>Structure ids in the file loaded for this session (orphans included).</summary>
         internal static List<string> LoadedIds() { lock (gate) return loaded.Structures.Select(s => s.Id).ToList(); }
+
+        /// <summary>True when the sidecar file existed when this session's save was loaded.</summary>
+        internal static bool LoadedFileExisted { get; private set; }
 
         /// <summary>Structure ids kept as orphans at the last inject.</summary>
         internal static readonly List<string> Orphans = new();
@@ -48,6 +52,13 @@ namespace StructureLib
             internal bool MainThread;
         }
 
+        /// <summary>A sidecar written to its .tmp by the Write prefix, committed by the finalizer.</summary>
+        internal sealed class PendingWrite
+        {
+            internal string Tmp, Path;
+            internal int Structures, Kept;
+        }
+
         static int writeSeq;
         internal static int WriteSeq => Volatile.Read(ref writeSeq);
         internal static volatile WriteStats LastWrite;
@@ -55,6 +66,37 @@ namespace StructureLib
 
         /// <summary>Called every frame from CoreDriver (main thread) so save hooks can tell which thread they run on.</summary>
         internal static void NoteMainThread() => mainThreadId = Thread.CurrentThread.ManagedThreadId;
+
+        // ---- session boundaries ----
+
+        // Session left the game: the next load must read and inject afresh even if its snapshot reuses an old address.
+        // Loaded records and the root are kept, because the game may still be writing this session's last save.
+        internal static void EndSession()
+        {
+            lock (gate)
+            {
+                loadedSnapshot = IntPtr.Zero;
+                injectedFor = IntPtr.Zero;
+                sessionLoaded = false;
+            }
+        }
+
+        // Session entered the game. Without a load since the last session (a new game), nothing of the previous save
+        // may leak into this one: forget its root, records and live list.
+        internal static void BeginSession()
+        {
+            lock (gate)
+            {
+                if (sessionLoaded) return;
+                CoreLog.Info("Sidecar: in game without a save load (new game?); starting with an empty sidecar state");
+                loadedRoot = null;
+                loaded = new SidecarFile();
+                LoadedFileExisted = false;
+                inWorld.Clear();
+                Orphans.Clear();
+                live = new();
+            }
+        }
 
         // Reloads whenever a new load snapshot shows up, so returning to the menu and loading again reads fresh data.
         internal static void LoadFor(string root, IntPtr snapshot)
@@ -65,12 +107,14 @@ namespace StructureLib
                 loadedRoot = root;
                 loadedSnapshot = snapshot;
                 loaded = new SidecarFile();
-                injected = false;
-                notRestored = new();
+                LoadedFileExisted = false;
+                inWorld.Clear();
+                Orphans.Clear();
                 live = new();
                 string path = PathFor(root);
                 if (path == null) { CoreLog.Warn("Sidecar load: save root unknown, starting empty"); return; }
                 if (!File.Exists(path)) { CoreLog.Info($"Sidecar: none at {CoreLog.Redact(path)} (no modded structures saved yet)"); return; }
+                LoadedFileExisted = true;
                 try
                 {
                     loaded = SidecarCodec.Deserialize(File.ReadAllText(path));
@@ -81,7 +125,7 @@ namespace StructureLib
                 catch (Exception e)
                 {
                     string keep = path + ".unreadable-" + DateTime.Now.ToString("yyyyMMdd-HHmmss");
-                    CoreLog.Error($"Sidecar at {CoreLog.Redact(path)} is unreadable, moving it to {Path.GetFileName(keep)} and starting empty: {e.Message}");
+                    CoreLog.Error($"Sidecar at {CoreLog.Redact(path)} is unreadable, moving it to {System.IO.Path.GetFileName(keep)} and starting empty: {e.Message}");
                     try { File.Move(path, keep, true); }
                     catch (Exception) { try { File.Copy(path, keep, true); } catch (Exception) { } }
                     loaded = new SidecarFile();
@@ -96,6 +140,7 @@ namespace StructureLib
             CoreState.World = world;
             CoreState.CaptureRoot(world);
             LoadFor(CoreState.SaveRoot, snapshot?.Pointer ?? IntPtr.Zero);
+            lock (gate) sessionLoaded = true;
             if (snapshot == null || snapshot.Pointer == injectedFor) return;
             if (!MoonStructures.Frozen || MoonStructures.Disabled)
             {
@@ -105,18 +150,20 @@ namespace StructureLib
             injectedFor = snapshot.Pointer;
             snapshot.depots ??= new Il2CppSystem.Collections.Generic.List<MoonDepotSnapshot>();
             var list = snapshot.depots;
-            var taken = new HashSet<int>();
-            for (int i = 0; i < list.Count; i++) { var s = list.get_Item(i); if (s != null) taken.Add(s.id); }
-            int added = 0, orphaned = 0;
             lock (gate)
             {
+                // Pass 1: decide ids and build every snapshot without touching the load snapshot. A throw here injects
+                // nothing, and every record stays in the file as it was.
+                var taken = new HashSet<int>();
+                for (int i = 0; i < list.Count; i++) { var s = list.get_Item(i); if (s != null) taken.Add(s.id); }
+                int next = snapshot.nextDepotId;
+                var plan = new List<(StructureRecord r, MoonDepotSnapshot s)>();
                 Orphans.Clear();
                 foreach (var r in loaded.Structures)
                 {
                     var d = MoonStructures.Definition(r.Id);
                     if (d == null || !MoonStructures.IsModded(d.Kind))
                     {
-                        orphaned++;
                         Orphans.Add(r.Id);
                         CoreLog.Warn($"Sidecar: structure '{r.Id}' (depot {r.DepotId}, owner {CoreLog.Redact(r.Owner)}) has no registered mod; kept in the sidecar untouched until it is installed again");
                         continue;
@@ -124,43 +171,57 @@ namespace StructureLib
                     int id = r.DepotId;
                     if (taken.Contains(id))
                     {
-                        id = snapshot.nextDepotId++;
-                        while (taken.Contains(id)) id = snapshot.nextDepotId++;
+                        do id = next++; while (taken.Contains(id));
                         CoreLog.Warn($"Sidecar: depot id {r.DepotId} of '{r.Id}' is already taken in the save; restoring it as depot {id}");
                     }
-                    if (id >= snapshot.nextDepotId) snapshot.nextDepotId = id + 1;
+                    if (id >= next) next = id + 1;
                     taken.Add(id);
-                    list.Add(ToSnapshot(r, id, d.Kind));
-                    r.DepotId = id;
-                    added++;
-                    CoreLog.Info($"Sidecar: restored '{r.Id}' as depot {id} kind {d.Kind} at ({r.X:F1},{r.Y:F1},{r.Z:F1}) owner {CoreLog.Redact(r.Owner)}");
+                    plan.Add((r, ToSnapshot(r, id, d.Kind)));
                 }
-                injected = true;
+                // Pass 2: add them. A record counts as in the world only once it is in the snapshot.
+                snapshot.nextDepotId = next;
+                foreach (var (r, s) in plan)
+                {
+                    list.Add(s);
+                    inWorld[r] = s.id;
+                    CoreLog.Info($"Sidecar: restored '{r.Id}' as depot {s.id} kind {s.kind} at ({r.X:F1},{r.Y:F1},{r.Z:F1}) owner {CoreLog.Redact(r.Owner)}, {r.Contributions?.Count ?? 0} contribution(s)");
+                }
+                CoreLog.Info($"Sidecar: injected {plan.Count} modded structures into the load snapshot ({Orphans.Count} orphaned), nextDepotId={snapshot.nextDepotId}");
             }
-            CoreLog.Info($"Sidecar: injected {added} modded structures into the load snapshot ({orphaned} orphaned), nextDepotId={snapshot.nextDepotId}");
         }
 
-        // After RestoreDepots: every injected record must now be in world.depots. One that is not would be dropped by
-        // the next write (the world no longer holds it), so it is kept verbatim instead.
+        // After RestoreDepots: every injected record must now be in world.depots. One that is not would be lost on the
+        // next write (the world no longer holds it), so it stops counting as in the world and is kept verbatim.
         internal static void CheckRestored(MoonWorld world)
         {
             lock (gate)
             {
-                if (!injected) return;
+                if (inWorld.Count == 0) return;
                 var depots = world?.depots;
-                var missing = new List<StructureRecord>();
-                foreach (var r in loaded.Structures)
+                foreach (var (r, id) in inWorld.ToList())
                 {
                     var d = MoonStructures.Definition(r.Id);
-                    if (d == null || !MoonStructures.IsModded(d.Kind)) continue;
-                    bool there = depots != null && depots.ContainsKey(r.DepotId) && depots.get_Item(r.DepotId)?.kind == d.Kind;
-                    if (!there) missing.Add(r);
+                    bool there = d != null && depots != null && depots.ContainsKey(id) && depots.get_Item(id)?.kind == d.Kind;
+                    if (there) continue;
+                    inWorld.Remove(r);
+                    CoreLog.Error($"Sidecar: '{r.Id}' depot {id} was injected but the world did not restore it; kept in the sidecar untouched");
                 }
-                notRestored = missing;
-                foreach (var r in missing)
-                    CoreLog.Error($"Sidecar: '{r.Id}' depot {r.DepotId} was injected but the world did not restore it; kept in the sidecar untouched");
-                CoreLog.Info($"Sidecar: world restored {loaded.Structures.Count - Orphans.Count - missing.Count} modded structures; world has {depots?.Count ?? 0} depots");
+                CoreLog.Info($"Sidecar: world restored {inWorld.Count} modded structures; world has {depots?.Count ?? 0} depots");
             }
+        }
+
+        /// <summary>MoonWalletSnapshot -> ShareRecord (dollars and pending kilograms as doubles).</summary>
+        internal static ShareRecord ShareOf(MoonWalletSnapshot w) =>
+            new() { Owner = w.player, Amount = (double)w.dollars, Pending = (double)w.pendingKilograms };
+
+        /// <summary>ShareRecord -> MoonWalletSnapshot.</summary>
+        internal static MoonWalletSnapshot WalletOf(ShareRecord share)
+        {
+            var w = new MoonWalletSnapshot();
+            w.player = share.Owner;
+            w.dollars = new Il2CppSystem.Decimal(share.Amount);
+            w.pendingKilograms = new Il2CppSystem.Decimal(share.Pending);
+            return w;
         }
 
         static MoonDepotSnapshot ToSnapshot(StructureRecord r, int id, int kind)
@@ -179,14 +240,7 @@ namespace StructureLib
             s.style = r.Style;
             var c = new Il2CppSystem.Collections.Generic.List<MoonWalletSnapshot>();
             foreach (var share in r.Contributions ?? new())
-            {
-                if (share == null) continue;
-                var w = new MoonWalletSnapshot();
-                w.player = share.Owner;
-                w.dollars = new Il2CppSystem.Decimal(share.Amount);
-                w.pendingKilograms = new Il2CppSystem.Decimal(share.Pending);
-                c.Add(w);
-            }
+                if (share != null) c.Add(WalletOf(share));
             s.contributions = c;
             return s;
         }
@@ -206,94 +260,145 @@ namespace StructureLib
                 {
                     var w = c.get_Item(i);
                     if (w == null) continue;
-                    r.Contributions.Add(new ShareRecord { Owner = w.player, Amount = (double)w.dollars, Pending = (double)w.pendingKilograms });
+                    var share = ShareOf(w);
+                    CoreLog.Debug($"Save: depot {s.id} contribution {i}: {CoreLog.Redact(w.player)} dollars '{w.dollars.ToString()}' -> {share.Amount}");
+                    r.Contributions.Add(share);
                 }
             return r;
         }
 
         // ---- save ----
 
-        // May run off the main thread: touches only the save snapshot, the frozen registry and the file.
-        internal static List<MoonDepotSnapshot> StripDepots(MoonLooseDustSnapshot state)
+        // Runs inside the MoonDepotSave.Write prefix, possibly off the main thread: touches only the save snapshot, the
+        // frozen registry and the file. `removed` belongs to the caller, so whatever was taken out of state.depots is put
+        // back by the finalizer even if this throws halfway.
+        // Pass 1 builds every record without changing the snapshot: a throw there leaves the save untouched (the game's
+        // read-back then refuses it, which loses nothing). Pass 2 only removes. The .tmp is written last, in its own try.
+        internal static PendingWrite StripDepots(MoonLooseDustSnapshot state, List<MoonDepotSnapshot> removed)
         {
-            var removed = new List<MoonDepotSnapshot>();
             var list = state?.depots;
-            if (list == null) return removed;
+            if (list == null) return null;
             var stats = new WriteStats { Before = list.Count, MainThread = Thread.CurrentThread.ManagedThreadId == mainThreadId };
+
+            // No Frozen/Disabled guard on the strip itself: before the registry freezes no modded kind can be in a world,
+            // so stripping every kind in the modded range is equivalent, and it can never let one reach the vanilla save.
+            var take = new List<(int index, MoonDepotSnapshot s)>();
             var records = new List<StructureRecord>();
-            for (int i = list.Count - 1; i >= 0; i--)
+            for (int i = 0; i < list.Count; i++)
             {
                 var s = list.get_Item(i);
                 if (s == null || s.kind < KindAllocator.FirstModdedKind) continue;
-                stats.Modded++;
-                // Any kind above the vanilla range would make the game refuse the save, registered or not.
+                take.Add((i, s));
                 var d = Remap.Live(s.kind);
+                // Any kind in the modded range would make the game refuse the save, registered or not.
                 if (d == null) CoreLog.Warn($"Save: depot {s.id} has unknown modded kind {s.kind}; left out of the vanilla save and not recorded");
                 else records.Add(ToRecord(d.Id, s));
-                removed.Add(s);
-                list.RemoveAt(i);
-                stats.StrippedIds.Add(s.id);
-                stats.StrippedKinds.Add(s.kind);
             }
-            records.Reverse();
+            stats.Modded = take.Count;
+
+            for (int k = take.Count - 1; k >= 0; k--)
+            {
+                var (index, s) = take[k];
+                list.RemoveAt(index);
+                removed.Add(s);
+                stats.StrippedIds.Insert(0, s.id);
+                stats.StrippedKinds.Insert(0, s.kind);
+            }
             stats.Stripped = removed.Count;
             stats.VanillaAfter = list.Count;
             stats.Seq = Interlocked.Increment(ref writeSeq);
             LastWrite = stats;
             CoreLog.Info($"Save: moved {removed.Count} modded structures out of the vanilla save ({stats.VanillaAfter} vanilla depots stay; write #{stats.Seq}, {(stats.MainThread ? "main thread" : "thread " + Thread.CurrentThread.ManagedThreadId)})");
-            lock (gate) live = records;
-            WriteFile();
-            return removed;
+
+            try
+            {
+                lock (gate) live = records;
+                return WriteTmp();
+            }
+            catch (Exception e)
+            {
+                CoreLog.Error($"Save: preparing the sidecar failed; the vanilla save goes ahead WITHOUT the {records.Count} modded structure(s): {e}");
+                return null;
+            }
         }
 
+        // Called by the finalizer, after the stripped records are back. Puts them back in their original order.
         internal static void PutBackDepots(MoonLooseDustSnapshot state, List<MoonDepotSnapshot> removed)
         {
+            if (removed == null) return;
             int n = 0;
-            if (removed != null && removed.Count > 0 && state?.depots != null)
-                for (int i = removed.Count - 1; i >= 0; i--) { state.depots.Add(removed[i]); n++; }
+            if (removed.Count > 0)
+            {
+                if (state?.depots == null) { CoreLog.Error($"Save: cannot put {removed.Count} modded structures back: the snapshot has no depot list"); return; }
+                for (int i = 0; i < removed.Count; i++) { state.depots.Add(removed[i]); n++; }
+            }
             var stats = LastWrite;
-            if (stats != null && removed != null) stats.PutBack = n;
+            if (stats != null) stats.PutBack = n;
         }
 
-        static bool LiveOwned(string id)
+        // The file is committed only when the vanilla Write went through; otherwise the .tmp is dropped and the previous
+        // sidecar stays, matching the vanilla save the game keeps.
+        internal static void CommitWrite(PendingWrite p, Exception vanillaFailed)
         {
-            // Called under gate. Before the inject ran, nothing in the file is the world's: keep it all.
-            if (!injected) return false;
-            var d = MoonStructures.Definition(id);
-            return d != null && MoonStructures.IsModded(d.Kind);
-        }
-
-        static void WriteFile()
-        {
-            string root = CoreState.SaveRoot;
-            string path = PathFor(root);
-            if (path == null) { CoreLog.Error("Save: save root unknown, modded structures NOT written to the sidecar this time"); return; }
+            if (p == null) return;
             lock (gate)
             {
+                try
+                {
+                    if (vanillaFailed != null)
+                    {
+                        CoreLog.Error($"Save: MoonDepotSave.Write threw ({vanillaFailed.GetType().Name}: {vanillaFailed.Message}); the sidecar is NOT updated this time");
+                        try { File.Delete(p.Tmp); } catch (Exception) { }
+                        return;
+                    }
+                    if (File.Exists(p.Path)) File.Copy(p.Path, p.Path + ".bak", true);
+                    File.Move(p.Tmp, p.Path, true);
+                    CoreLog.Info($"Sidecar written: {p.Structures} structures ({p.Kept} kept untouched) -> {CoreLog.Redact(p.Path)}");
+                }
+                catch (Exception e)
+                {
+                    CoreLog.Error($"Save: committing sidecar {CoreLog.Redact(p.Path)} failed; the vanilla save went ahead WITHOUT the modded structures: {e}");
+                }
+            }
+        }
+
+        static PendingWrite WriteTmp()
+        {
+            string root = CoreState.SaveRoot;
+            if (root == null) { CoreState.CaptureRoot(CoreState.World); root = CoreState.SaveRoot; }
+            lock (gate)
+            {
+                // After the session left the game its root is cleared, but its last save may still be writing.
+                root ??= loadedRoot;
+                string path = PathFor(root);
+                if (path == null)
+                {
+                    CoreLog.Error($"Save: save root unknown; the vanilla save goes ahead WITHOUT the {live.Count} modded structure(s)");
+                    return null;
+                }
                 if (loadedRoot != root)
                 {
-                    // A save root this session never loaded (a new game, a changed root): read its file first so its
-                    // records are kept, not overwritten.
+                    // A save root this session never loaded (a changed root): read its file first so its records are kept,
+                    // not overwritten. Nothing of it is in the world, so all of it is written back.
                     CoreLog.Warn($"Save: writing the sidecar to {CoreLog.Redact(root)} but loaded from {CoreLog.Redact(loadedRoot) ?? "nothing"}; reading it first");
                     var keepLive = live;
                     LoadFor(root, IntPtr.Zero);
                     live = keepLive;
                 }
                 var current = new SidecarFile { Written = DateTime.Now.ToString("s"), Structures = live.ToList() };
-                var data = SidecarCodec.Merge(current, loaded, LiveOwned);
-                // Records injected but not restored are the world's by id, so Merge dropped them; keep them as they were.
-                foreach (var r in notRestored) if (!data.Structures.Contains(r)) data.Structures.Add(r);
-                int kept = data.Structures.Count - live.Count;
-                if (data.Structures.Count == 0 && data.Production.Count == 0 && data.Canisters.Count == 0 && !File.Exists(path)) return;
-                try
+                // Loaded records the world holds are replaced by the live list; every other one is kept as it was.
+                var notInWorld = new SidecarFile
                 {
-                    string tmp = path + ".tmp";
-                    File.WriteAllText(tmp, SidecarCodec.Serialize(data));
-                    if (File.Exists(path)) File.Copy(path, path + ".bak", true);
-                    File.Move(tmp, path, true);
-                    CoreLog.Info($"Sidecar written: {data.Structures.Count} structures ({kept} kept untouched) -> {CoreLog.Redact(path)}");
-                }
-                catch (Exception e) { CoreLog.Error($"Writing sidecar {CoreLog.Redact(path)} failed: {e}"); }
+                    Structures = loaded.Structures.Where(r => !inWorld.ContainsKey(r)).ToList(),
+                    Production = loaded.Production,
+                    Canisters = loaded.Canisters,
+                };
+                var data = SidecarCodec.Merge(current, notInWorld, _ => false);
+                int kept = data.Structures.Count - live.Count;
+                if (data.Structures.Count == 0 && data.Production.Count == 0 && data.Canisters.Count == 0 && !File.Exists(path)) return null;
+                string tmp = path + ".tmp";
+                File.WriteAllText(tmp, SidecarCodec.Serialize(data));
+                return new PendingWrite { Tmp = tmp, Path = path, Structures = data.Structures.Count, Kept = kept };
             }
         }
     }

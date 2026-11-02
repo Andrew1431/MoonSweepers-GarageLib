@@ -10,22 +10,29 @@ namespace StructureLib.Patches
     [HarmonyPatch]
     internal static class SavePatches
     {
+        // Owned here, so the finalizer puts back whatever the prefix took out, even if the prefix threw halfway.
         [ThreadStatic] static List<MoonDepotSnapshot> strippedDepots;
+        [ThreadStatic] static Sidecar.PendingWrite pendingWrite;
 
         [HarmonyPatch(typeof(MoonDepotSave), nameof(MoonDepotSave.Write)), HarmonyPrefix]
         static void DepotWritePre(MoonLooseDustSnapshot state)
         {
-            strippedDepots = null;
-            try { strippedDepots = Sidecar.StripDepots(state); }
-            catch (Exception e) { CoreLog.Error("Save: stripping modded structures failed: " + e); }
+            strippedDepots = new List<MoonDepotSnapshot>();
+            pendingWrite = null;
+            try { pendingWrite = Sidecar.StripDepots(state, strippedDepots); }
+            catch (Exception e) { CoreLog.Error($"Save: stripping modded structures failed ({strippedDepots.Count} taken out so far, put back after the write): {e}"); }
         }
 
+        // Puts the stripped records back, then commits the sidecar only if the vanilla Write did not throw.
         [HarmonyPatch(typeof(MoonDepotSave), nameof(MoonDepotSave.Write)), HarmonyFinalizer]
-        static void DepotWriteFin(MoonLooseDustSnapshot state)
+        static void DepotWriteFin(MoonLooseDustSnapshot state, Exception __exception)
         {
             try { Sidecar.PutBackDepots(state, strippedDepots); }
             catch (Exception e) { CoreLog.Error("Save: putting modded structures back failed: " + e); }
+            try { Sidecar.CommitWrite(pendingWrite, __exception); }
+            catch (Exception e) { CoreLog.Error("Save: committing the sidecar failed: " + e); }
             strippedDepots = null;
+            pendingWrite = null;
         }
 
         // After FreezePatches.RestoreDepots (normal priority), which freezes the registry and builds this world's cloned

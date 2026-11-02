@@ -196,7 +196,28 @@ namespace StructureLib
                 CoreLog.Info($"[dev] AutoBuild: '{entry}' (kind {kind}) at {dist:F0} m, heading {h:F0} deg from facing: ok={ok} reason='{reason}'");
                 if (ok) break;
             }
+            if (ok && id >= 0 && MoonStructures.IsModded(kind)) SeedContribution(world, id, def.priceDollars);
             Report(entry, ok, id, reason);
+        }
+
+        // The lamp's own build leaves contributions empty (single player). One entry for the local player at the price
+        // makes the sidecar's contribution path (Decimal conversion both ways) run on every save and load.
+        static void SeedContribution(MoonWorld world, int id, int price)
+        {
+            try
+            {
+                var rec = world.depots != null && world.depots.ContainsKey(id) ? world.depots.get_Item(id) : null;
+                if (rec == null) return;
+                rec.contributions ??= new Il2CppSystem.Collections.Generic.List<MoonWalletSnapshot>();
+                if (rec.contributions.Count > 0) return;
+                var w = new MoonWalletSnapshot();
+                w.player = MoonWorld.LocalPlayer;
+                w.dollars = new Il2CppSystem.Decimal((double)price);
+                w.pendingKilograms = new Il2CppSystem.Decimal(0.0);
+                rec.contributions.Add(w);
+                CoreLog.Info($"[dev] AutoBuild: depot {id} had no contributions; added {CoreLog.Redact(w.player)} at ${price} (now {rec.contributions.Count})");
+            }
+            catch (Exception e) { CoreLog.Warn($"[dev] AutoBuild: seeding a contribution on depot {id} failed: {e.Message}"); }
         }
 
         // DevAddMoney is a no-op in this build; the wallet is team-wide, so it is set directly.
@@ -293,6 +314,7 @@ namespace StructureLib
         {
             Begin();
             Assert("registry-frozen", MoonStructures.Frozen, "MoonStructures.Frozen is false after the world loaded");
+            ContributionsRoundTrip();
             var lamp = MoonStructures.Definition("ryanhartwig.example-lamp");
             orphanMode = lamp == null && Sidecar.Orphans.Contains(LampId);
             if (orphanMode)
@@ -589,6 +611,8 @@ namespace StructureLib
                 if (lampIdx < 0) return (false, $"write #{w.Seq} stripped kinds [{string.Join(",", w.StrippedKinds)}], none is {lamp.Kind}");
                 if (w.PutBack != w.Stripped) return (false, $"write #{w.Seq}: the finalizer put back {w.PutBack} of {w.Stripped}");
                 int depot = w.StrippedIds[lampIdx];
+                if (world.depots != null && world.depots.ContainsKey(depot))
+                    CoreLog.Info($"[selftest] saved depot {depot} contributions in the world: {ContributionText(world.depots.get_Item(depot))}; in its Copy(): {ContributionText(world.depots.get_Item(depot).Copy())}");
                 bool inWorld = world.depots != null && world.depots.ContainsKey(depot) && world.depots.get_Item(depot)?.kind == lamp.Kind;
                 return (inWorld, $"depot {depot} is not in world.depots after the save");
             });
@@ -616,18 +640,55 @@ namespace StructureLib
             });
         }
 
+        // "<count>: [owner $dollars +pending kg, ...]" for a depot record (owners redacted).
+        static string ContributionText(MoonDepotSnapshot rec)
+        {
+            var c = rec?.contributions;
+            if (c == null) return "null";
+            var parts = new List<string>();
+            for (int i = 0; i < c.Count; i++)
+            {
+                var w = c.get_Item(i);
+                parts.Add(w == null ? "null" : $"{CoreLog.Redact(w.player)} ${DecimalOf(w.dollars)} +{DecimalOf(w.pendingKilograms)} kg (ShareOf {Sidecar.ShareOf(w).Amount})");
+            }
+            return $"{c.Count}: [{string.Join(", ", parts)}]";
+        }
+
+        // The sidecar's money conversion: a MoonWalletSnapshot with $12.50 and 0.25 kg pending, through ShareOf, the JSON
+        // codec and WalletOf, comes back with the same values.
+        static void ContributionsRoundTrip()
+        {
+            Check("contributions-roundtrip", null, () =>
+            {
+                var w = new MoonWalletSnapshot();
+                w.player = "dev-roundtrip";
+                w.dollars = new Il2CppSystem.Decimal(12.5);
+                w.pendingKilograms = new Il2CppSystem.Decimal(0.25);
+                var share = Sidecar.ShareOf(w);
+                var file = new SidecarFile { Structures = { new StructureRecord { Id = "dev.roundtrip", Contributions = { share } } } };
+                var read = SidecarCodec.Deserialize(SidecarCodec.Serialize(file)).Structures[0].Contributions[0];
+                var back = Sidecar.WalletOf(read);
+                decimal dollars = DecimalOf(back.dollars), pending = DecimalOf(back.pendingKilograms);
+                CoreLog.Info($"[selftest] contributions round trip: $12.5/0.25 kg -> share {share.Amount}/{share.Pending} -> json {read.Amount}/{read.Pending} -> wallet {dollars}/{pending} '{back.player}'");
+                bool ok = share.Amount == 12.5 && share.Pending == 0.25 && dollars == 12.5m && pending == 0.25m && back.player == "dev-roundtrip";
+                return (ok, $"got share {share.Amount}/{share.Pending}, wallet {dollars}/{pending} '{back.player}'");
+            });
+        }
+
         // A launch that did not build the lamp, after one that saved it: the sidecar brought it back into the world and
         // its view was spawned (Built with a view).
         static void ReloadChecks(StructureDefinition lamp)
         {
-            if (lamp == null || DevTools.AutoBuildNames(LampId) || !Sidecar.LoadedIds().Contains(LampId)) return;
+            // Not applicable when this run builds the lamp itself, or when the save has no sidecar file at all.
+            if (lamp == null || DevTools.AutoBuildNames(LampId) || !Sidecar.LoadedFileExisted) return;
             var world = CoreState.World ?? CoreState.FindWorld();
             Check("reload-restores", world == null ? "no MoonWorld found" : null, () =>
             {
+                if (!Sidecar.LoadedIds().Contains(LampId)) return (false, $"the save's {Sidecar.FileName} existed at load but held no '{LampId}' record");
                 int depot = DepotOfKind(world, lamp.Kind);
                 if (depot < 0) return (false, $"the sidecar held '{LampId}' but world.depots ({world.depots?.Count}) has no record of kind {lamp.Kind}");
                 if (!builtViews.Contains(depot)) return (false, $"MoonStructures.Built was not raised with a view for restored depot {depot}");
-                CoreLog.Info($"[selftest] restored '{LampId}' is depot {depot}, Built fired with its view");
+                CoreLog.Info($"[selftest] restored '{LampId}' is depot {depot}, Built fired with its view; contributions {ContributionText(world.depots.get_Item(depot))}");
                 return (true, null);
             });
         }

@@ -94,11 +94,18 @@ namespace StructureLib
                     CoreLog.Info(inGame ? "Session in game" : "Session left game");
                     if (inGame)
                     {
+                        Sidecar.BeginSession();
                         var world = CoreState.FindWorld();
                         if (world != null) Injection.Ensure(world);
                         IconRenderer.QueueAll();
                     }
-                    else CoreState.World = null;
+                    else
+                    {
+                        // The next session must not save into this one's folder, nor match its snapshot by address.
+                        CoreState.World = null;
+                        CoreState.SaveRoot = null;
+                        Sidecar.EndSession();
+                    }
                 }
                 IconRenderer.Tick();
 #if DEVBUILD
