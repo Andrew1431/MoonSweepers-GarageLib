@@ -112,6 +112,9 @@ from an input port to an output port, then board the output belt. The members th
 
 ## 3. Several ports on a StructureLib structure today
 
+> Settled by the spike: `Routes(def, kind)` reads the definition, so a clone of 11 or 12 answers True (see "Spike
+> facts (Task 1)" (a)); the last bullet's "probably false" below is wrong.
+
 - **Outputs: refused at freeze.** `PortRules.CheckPorts` adds "N output ports; a structure has at most one"
   (`src/StructureLib/Pure/PortRules.cs:45-47`). It also needs every output's cargo to be the single Output slot's
   (lines 39-42), so a processor-less structure cannot declare an output at all.
@@ -271,7 +274,7 @@ anyway. It is no cheaper than B and worse in every way.
 ## Open questions
 
 1. Does vanilla `HandOff` call `EnterMachine` for a splitter's input, and does `Routes(def, kind)` read the kind or
-   the definition? Settle it with a trace of `HandOff` / `EnterMachine` / `RouteEntranceClear` on a built vanilla
+   the definition? (Settled for `Routes` by the spike: it reads the definition, "Spike facts (Task 1)" (a).) Settle it with a trace of `HandOff` / `EnterMachine` / `RouteEntranceClear` on a built vanilla
    splitter, plus `Routes` answers for 11, 12 and a clone. This decides whether A is possible at all.
 2. Vanilla splitter rule: strict alternation through `machineTurns`, or skipping blocked or unconnected outputs?
    (Trace `machineTurns` with one output belt full.) The merger: what `GivesWay` prefers.
@@ -282,3 +285,124 @@ anyway. It is no cheaper than B and worse in every way.
 5. Where do canisters inside a vanilla splitter go after save and reload (`BoardCanisters` onto routes, or drop)?
 6. Can a modded router support cut-in (prefix `CutIn` / `Routes` for our kinds) without design A's native
    dependencies?
+
+## Spike facts (Task 1)
+
+Traced in game on slot-2 (restored from `.scratch/slot-2-backup-task11` before every run), 2026-11-02, with the dev
+switches `[Dev] RegisterBoxProbe`, `HopProbe`, `PrefixProbe` (the last two removed in Task 3, when the router hop replaced them; `src/StructureLib/DevBelts.cs` `BoxSpike`; the probe
+structure `ryanhartwig.example-box-probe` is a clone of kind 11 with no processor and `Ports` null, registered by
+`examples/ExampleStructure/Plugin.cs` behind the flag). Logs: `.superpowers/sdd/2026-11-02-belt-boxes/task-1-logs/`
+(`run1-donors`, `run2-sidebelts`, `run3-probe-dust`, `run4a`/`run4b`/`run4c` emit, `run5-place`). AutoBuild gained two
+dev extensions for this: `<id>#<n>` in AutoBelt endpoints (the n-th AutoBuild entry of an id named more than once; a
+repeated entry now gets its own depot) and `<entry>@<yaw>` in AutoBuild (TryBuildDepot's yaw, degrees). No native
+crash in any run; no exception from any probe call.
+
+**(a) Donor: the floodlight, kind 4.** Prefab components (distinct types; every component under the prefab asset,
+inactive included) and `MoonWorld.Routes(def, kind)` (called, never patched):
+
+| Kind | `halfFootprint` | Components | Colliders | Game scripts | `Routes` |
+|---|---|---|---|---|---|
+| 4 Floodlight | (0.73, 0.73) | BoxCollider, MeshFilter ×6, MeshRenderer ×6, Transform ×7 | 1 | none | False |
+| 10 Packager | (1.41, 1.55) | BoxCollider ×2, MeshFilter ×23, MeshRenderer ×23, MoonPackagerView, Transform ×24 | 2 | `MoonPackagerView` on the root | False |
+| 11 Splitter | (1.23, 1.67) | BoxCollider ×10, MeshFilter ×3, MeshRenderer ×3, MoonMachineBelt, Transform ×5 | 10 | `MoonMachineBelt` on `Model/SM_splitter.001` | True |
+| 12 Merger | (1.23, 1.67) | BoxCollider ×10, MeshFilter ×2, MeshRenderer ×2, MoonMachineBelt, Transform ×3 | 10 | `MoonMachineBelt` on `Model` | True |
+| 93 Solar post | (0.91, 0.64) | BoxCollider ×3, MeshFilter ×10, MeshRenderer ×10, MoonSolarPanelView, Transform ×15 | 3 | `MoonSolarPanelView` on the root | False |
+| probe (clone of 11, kind 1441920781) | (1.23, 1.67) | as 11 | 10 | `MoonMachineBelt` on `Model/SM_splitter.001`, enabled and active on the built view | **True** |
+
+    [spike] donor 1441920781 'Box probe': halfFootprint (1.23,1.67) price 5 ports 3 Routes(def, 1441920781) True
+    [spike] donor 4 prefab 'floodlight': 20 components, 1 colliders; types: BoxCollider, MeshFilter x6, MeshRenderer x6, Transform x7; game scripts: none
+    [spike] probe depot 27: MoonMachineBelt present x1 on 'SM_splitter.001' (enabled True, active True); ports 'IN' in dust at (-0.00,0.85,-1.60) ...
+
+- **`Routes` reads the definition, not the kind**: it answers True for a hashed kind it has never seen. So a clone of 11
+  or 12 *is* a vanilla router as far as `Routes` goes, and cut-in and the routing path stay gated on for it (open
+  question 1). `CutIn` itself was not called, because it has an `out Vector3` (the interop hazard rule). That rules 11
+  out by the spec's own test ("no vanilla routing"). It also carries `MoonMachineBelt` and ten root colliders.
+- The packager carries a `MoonPackagerView` (a stray view) and the solar post a `MoonSolarPanelView`. **The floodlight
+  is the only candidate with no game script, one collider and `Routes` False.** Its footprint is 1.46 m square, close to
+  the box's 1.4 m, and the example lamp already clones it.
+- The probe's runtime ports keep the splitter's names and +Z flow (`'Box probe input'`, `'Box probe output A'`,
+  `'Box probe output B'`). `MachineJoins(kind, port)` answers True for each free port, and False for the input once a
+  belt has joined it.
+- **A canister at the probe's input waits, and nothing routes it.** In run3 the probe stood at yaw 90 behind a pressure
+  chamber (`96,ryanhartwig.example-box-probe@90`, belt 1, 2.53 m). A dust canister put at the belt's end was refused by
+  our prefix (`Belt canister 8 (dust, 1 kg) waits at 'ryanhartwig.example-box-probe' depot 27 port 'IN': dust does not
+  go in here`) and stayed put for 11 s: `rider belt 1 d 2.53 moving False`, `WaitingAtEnd(1) True`, 1.82 m from the
+  depot centre at every 2 s sample. `machineTurns`, `lastInput` and `crossingByMachine` never held the depot. There was
+  no `EnterMachine`-like move (the prefix answers first, so vanilla's router branch never ran).
+
+**(b) `EmitCargo(outfeed, owner, cargo, 3.0)` keeps the kilograms but sets capacity 1. `MoveCanisterRecord` fixes the
+capacity with the rider intact.** Run4c used `96,grinder,burner`: belt A 1 = chamber → grinder `Dust in`, belt B 2 =
+grinder `Grit out` → burner `Grit in`, with belt B emptied first (see below). Inside the `HandOff` prefix, for a 3 kg /
+capacity 3 grit canister waiting at A's end:
+
+    [spike] hop emit: EmitCargo(belt 2, owner local, cargo 250, 3.0) -> True reason ''; new canister 19: canister 19 3.00 kg / capacity 1.00, cargo 250, at (28.52,1992.86,-35.75), rider belt 2 d 0.00 moving False
+    [spike] hop emit: after MoveCanisterRecord(3 kg, capacity 3): canister 19 3.00 kg / capacity 3.00, cargo 250, at (28.52,1992.86,-35.75), rider belt 2 d 0.00 moving False
+    [spike] hop emit: RemoveCanister(18) -> present False; riders A 1: none; riders B 2: [19 cargo 250 d 0.00 moving False]; queue A 1 entry; queue B 0 entries; leftBelts []; answering true
+    [spike] hop t+0.5 s: canister 18 gone; new canister 19 3.00 kg / capacity 3.00, cargo 250, at (29.07,1992.86,-35.75), rider belt 2 d 0.55 moving True; riders A 1: none; ... queue A 0 entries; queue B 1 entry; leftBelts []
+    [v] Belt canister 19: 3 kg ryanhartwig.example-grit into 'ryanhartwig.example-burner' depot 28 slot 0
+
+- The new canister has a rider on B at d 0 at once and rides at belt speed. The burner took all 3 kg at B's end. A's
+  queue drops its entry by the next step: no stale rider or queue entry is left on A.
+- **A full output belt refuses.** With B holding five canisters (the self-test's `belt-save-clean` pins one at its
+  end), `EmitCargo` answered `False reason 'The grit output belt is full'` 300 times in a row, and `EntranceClear(2)`
+  was False (run4b). The canister kept waiting and nothing was lost. So the router must check `EntranceClear` (or
+  `EmitCargo`'s answer) before `RemoveCanister`, as the spec says.
+- Interop note: `beltQueues` entries are `ValueTuple<float,int>`. Enumerated from managed code they read back as
+  garbage (`-803349120@-10598219776.00`), so only their count was logged. The counts track the riders.
+
+**(c) `PlaceRider(id, BeltPath(B), 0f)` from the prefix does not move the rider: the canister snaps back to A.** Run5
+used the same chain. The signature is `Void PlaceRider(Int32 id, MoonConveyorPath path, Single distance)`, as dumped.
+
+    [spike] hop place: PlaceRider(18, BeltPath(2), 0f) returned; canister 18 3.00 kg / capacity 3.00, cargo 250, at (28.52,1992.86,-35.75), rider belt 1 d 3.61 moving False; riders A 1: [18 cargo 250 d 3.61 moving False]; riders B 2: none; queue A 1 entry; queue B 0 entries; leftBelts []; answering true
+    [spike] hop: HandOff called again for canister 18 on belt 1 after the hop (phase 2); canister 18 3.00 kg / capacity 3.00, cargo 250, at (28.52,1992.86,-35.75), rider belt 1 d 3.61 moving False
+    [spike] hop t+0.5 s: canister 18 3.00 kg / capacity 3.00, cargo 250, at (22.62,1992.86,-35.75), rider belt 1 d 3.61 moving False; riders A 1: [18 cargo 250 d 3.61 moving False]; riders B 2: [19 cargo 250 d 0.48 moving True]; queue A 1 entry; queue B 1 entry; leftBelts []
+    [spike] hop t+10.0 s: canister 18 3.00 kg / capacity 3.00, cargo 250, at (22.62,1992.86,-35.75), rider belt 1 d 3.61 moving False; riders A 1: [18 cargo 250 d 3.61 moving False]; riders B 2: none; queue A 1 entry; queue B 0 entries; leftBelts []
+
+- `PlaceRider` moved only the canister record's position to B's start. The rider stayed `belt 1 d 3.61`.
+- Answering true did not drop the rider. `HandOff` was called again the next frame for the same canister on A, the
+  canister went back to A's end (22.62), and it waited there (the grinder refuses grit) for the whole 10 s.
+- B never had a rider for it (canister 19 on B is the grinder's own output). There was one rider record throughout and
+  no loss, but no hop either.
+- **Mechanism for Tasks 3–6: spec option (2).** The hop is:
+  1. `EmitCargo(output belt, owner, cargo, kg)`;
+  2. `MoveCanisterRecord` of the new canister with the arriving one's kilograms and capacity (and owner);
+  3. `RemoveCanister(arriving)`;
+  4. answer true.
+
+  The canister id changes on every hop.
+
+**(d) The four calls are safe from the `HandOff` prefix.** With `PrefixProbe` on, these calls ran on every prefix call
+over four world loads (run3, run4a, run4b, run4c), with no throw and no native crash (`PrefixProbe: 51024 prefix calls
+so far, 0 threw, 2 belt(s) seen` is an intermediate tick of run4a; its last was 57,296 calls, 0 threw):
+- `EntranceClear(belt)`, `WaitingAtEnd(belt)`, `BeltStartingAt(start)` and `BeltEndingAt(end)`;
+- per output port of the machine, `BeltStartingAt(port point)` and `EntranceClear` of that belt.
+
+The answers:
+
+    [spike] PrefixProbe belt 1 -> 'ryanhartwig.example-box-probe' depot 27, canister 8: EntranceClear True WaitingAtEnd True BeltStartingAt(start) 1 BeltEndingAt(end) 1; output ports ['OUT_A' BeltStartingAt null; 'OUT_B' BeltStartingAt null]
+    [spike] PrefixProbe belt 1 -> 'ryanhartwig.example-grinder' depot 27, canister 8: EntranceClear True WaitingAtEnd True BeltStartingAt(start) 1 BeltEndingAt(end) 1; output ports ['Grit out' BeltStartingAt 2 EntranceClear True]
+    [spike] PrefixProbe belt 2 -> 'ryanhartwig.example-burner' depot 28, canister 12: EntranceClear False WaitingAtEnd True BeltStartingAt(start) 2 BeltEndingAt(end) 2; output ports []
+
+- `WaitingAtEnd(belt)` is already True on the first `HandOff` call for a canister.
+- `BeltStartingAt(port world point)` finds the belt on an output port (the port's local position under the view's
+  pose), and answers null on a free port.
+- `EntranceClear` of the incoming belt itself can be False (belt 2, a 2.47 m belt full behind the waiting canister).
+
+**(e) A U-shaped belt between +Z side ports of neighbouring structures does not build at the line spacing.** Run2 used
+`AutoBuild = probe,probe` on the line: centres 3.76 m apart along +X, 1.3 m between footprints, both at yaw 0, so each
+port flows +Z.
+
+    [dev] AutoBelt 'ryanhartwig.example-box-probe#1:OUT_A->ryanhartwig.example-box-probe#2:IN': route +start,+end (unset ids -1) valid=False routable=True length=6.86 reason='Turn too tight: give it more room.'
+    [dev] AutoBelt 'ryanhartwig.example-box-probe#1:OUT_B->ryanhartwig.example-box-probe#2:IN': route +start,+end (unset ids -1) valid=False routable=True length=5.56 reason='Turn too tight: give it more room.'
+
+- `routable` was True for every direction pairing, but `valid` never was:
+  - as declared (+start, +end): 'Turn too tight', length 6.86 for OUT_A (4.46 m across) and 5.56 for OUT_B (3.06 m
+    across);
+  - the reversed pairings: for OUT_A 'Blocked by a structure' (lengths 6.04–7.03); for OUT_B 'Turn too tight' with
+    one direction reversed (5.60) and 'Blocked by a structure' with both reversed (4.74).
+- Run1 failed the same way (`96,probe` at yaw 0, the chamber's +X output into the probe's +Z input; length 4.70,
+  'Turn too tight').
+- The same probe at yaw 90 behind the chamber (run3) built a straight 2.53 m belt on the first route
+  (`valid=True routable=True length=2.53`).
+- So the belt tool needs room for a 180° turn. In the self-test, place a side output's target off the line (or add
+  spacing), or rotate the target so the belt runs straight.

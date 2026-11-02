@@ -15,12 +15,12 @@ namespace StructureLib
     internal static partial class DevTools
     {
         internal static ConfigEntry<string> AutoBelt, AutoBuildLayout;
-        internal static ConfigEntry<bool> DumpCards, RegisterBadPorts, SunOverhead;
+        internal static ConfigEntry<bool> DumpCards, RegisterBadPorts, SunOverhead, RegisterBoxProbe;
         static bool cardsDumped, sunSet;
 
         static void BindBelts(ConfigFile cfg)
         {
-            AutoBelt = cfg.Bind("Dev", "AutoBelt", "", "Dev build: ';'-separated '<from>:<port>-><to>:<port>' belts to build 3 s after the AutoBuild step (before AutoFeed). <from>/<to> is a structure id or vanilla kind number, resolved to the depot AutoBuild built for that entry; <port> is the definition's port name (IN_SAND), a PortName or PortLabel when only one port has it, or a 0-based index into the definition's conveyorPorts (the '[dev] ports of' lines print all three); the runtime port is the one at that definition port's position. Each belt goes through the game's TryBuildConveyor.");
+            AutoBelt = cfg.Bind("Dev", "AutoBelt", "", "Dev build: ';'-separated '<from>:<port>-><to>:<port>' belts to build 3 s after the AutoBuild step (before AutoFeed). <from>/<to> is a structure id or vanilla kind number, resolved to the depot AutoBuild built for that entry ('<id>#<n>' picks the n-th entry of an id AutoBuild names more than once); <port> is the definition's port name (IN_SAND), a PortName or PortLabel when only one port has it, or a 0-based index into the definition's conveyorPorts (the '[dev] ports of' lines print all three); the runtime port is the one at that definition port's position. Each belt goes through the game's TryBuildConveyor.");
             DumpCards = cfg.Bind("Dev", "DumpCards", false, "Dev build: once in game (30 s after load, so modded pictures are rendered), write every build-menu card picture (vanilla and modded) to BepInEx/cache/structurelib/cards/<kind>-<name>.png.");
             RegisterBadPorts = cfg.Bind("Dev", "RegisterBadPorts", false, "Dev build: the example plugin also registers ryanhartwig.example-bad-ports, whose input port takes a cargo no slot holds; the registry must drop it at freeze (self-test ports-rules-logged).");
             SunOverhead = cfg.Bind("Dev", "SunOverhead", false, "Dev build: 5 s after a world loads, set the lunar clock (MoonSolarSystem.SetLunarTime) so the sun stands overhead at the walker, so vanilla solar panels supply power (the belt checks need the pressure chamber to make sand). The clock runs in real time, so a cloned save is often at night.");
@@ -32,6 +32,7 @@ namespace StructureLib
         {
             SelfTest.HookBeltEvents();
             SelfTest.TrackChain();
+            BoxSpike.Tick(gameT);
             if (SunOverhead.Value && !sunSet && gameT > 5f) { sunSet = true; SetSunOverhead(); }
             if (DumpCards.Value && !cardsDumped && gameT > 30f)
             {
@@ -674,7 +675,7 @@ namespace StructureLib
         // (recon fact (c)); the game boards it.
         static int Spawn(MoonWorld world, float d, MoonCargo cargo, out string why) => Spawn(world, inPath, d, cargo, out why);
 
-        static int Spawn(MoonWorld world, MoonConveyorPath path, float d, MoonCargo cargo, out string why)
+        internal static int Spawn(MoonWorld world, MoonConveyorPath path, float d, MoonCargo cargo, out string why)
         {
             why = null;
             var p = path.Point(d);
@@ -705,7 +706,7 @@ namespace StructureLib
 
         static string RidersText(MoonWorld world) => RidersText(world, inBelt);
 
-        static string RidersText(MoonWorld world, int beltId)
+        internal static string RidersText(MoonWorld world, int beltId)
         {
             var parts = new List<(float d, string text)>();
             foreach (var kv in world.riders)
@@ -984,9 +985,13 @@ namespace StructureLib
             along.Clear();
             var half = entries.Select(e =>
             {
-                int kind = int.TryParse(e, out int k) ? k : MoonStructures.Definition(e)?.Kind ?? -1;
+                var (who, yaw) = AutoBuilder.SplitYaw(e);
+                int kind = int.TryParse(who, out int k) ? k : MoonStructures.Definition(who)?.Kind ?? -1;
                 var def = kind < 0 ? null : world.BuildDefinition(kind);
-                return def != null ? def.halfFootprint.x : 2f;
+                if (def == null) return 2f;
+                // The footprint's extent along the line at the entry's yaw ('<id>@<yaw>').
+                float r = yaw * Mathf.Deg2Rad;
+                return Mathf.Abs(Mathf.Cos(r)) * def.halfFootprint.x + Mathf.Abs(Mathf.Sin(r)) * def.halfFootprint.y;
             }).ToList();
             float x = 0f;
             for (int i = 0; i < half.Count; i++)
@@ -1252,6 +1257,144 @@ namespace StructureLib
 
             static bool Same(Sidecar.ProductionRestore r) => r != null && r.Saved.Length == r.Loaded.Length && r.Saved.Zip(r.Loaded, (a, b) => Math.Abs(a - b) <= 0.01).All(x => x);
             static string Prod(Sidecar.ProductionRestore r) => r == null ? "not restored" : $"depot {r.Depot} saved kg [{string.Join(" ", r.Saved)}], at load [{string.Join(" ", r.Loaded)}]";
+        }
+    }
+
+    // [Dev] RegisterBoxProbe: the example plugin registers ryanhartwig.example-box-probe, a router (a splitter: In on -X,
+    // Forward on +X, Left on +Z, Right on -Z) cloned from the floodlight (kind 4) with a 1.4 x 1.4 m Footprint. 15 s
+    // after load: the donor's and the probe's build definitions (halfFootprint, Routes(def, kind), port count), the
+    // prefab components and colliders of both and of the probe's built view, MachineJoins for the probe's runtime ports,
+    // and three dust canisters put on the AutoBelt belt into the probe, followed for 10 s (each hops onto a belt at
+    // one of the probe's outputs that can take it, or waits: RouterHop, CargoRouted). Belt-boxes plan Tasks 1 and 3.
+    internal static class BoxSpike
+    {
+        internal const string ProbeId = "ryanhartwig.example-box-probe";
+        static readonly int[] DonorKinds = { 4 };
+
+        static bool donorDone;
+        static int dustId = -1, dustBelt = -1, dustDepot = -1;
+        static float dustFrom = -1f, dustNext = -1f;
+
+        internal static void Tick(float gameT)
+        {
+            try
+            {
+                var world = CoreState.World ?? CoreState.FindWorld();
+                if (world == null) return;
+                float now = Time.unscaledTime;
+                if (DevTools.RegisterBoxProbe.Value && !donorDone && gameT > 15f) { donorDone = true; Donors(world); }
+                if (dustId >= 0 && now >= dustNext) DustTick(world, now);
+            }
+            catch (Exception e) { CoreLog.Once("spike-tick", "[spike] tick threw: " + e, 3); }
+        }
+
+        static void Donors(MoonWorld world)
+        {
+            var probe = MoonStructures.Definition(ProbeId);
+            foreach (int k in DonorKinds.Concat(probe != null ? new[] { probe.Kind } : Array.Empty<int>()))
+            {
+                try
+                {
+                    var def = world.BuildDefinition(k);
+                    if (def == null) { CoreLog.Info($"[spike] donor {k}: no build definition"); continue; }
+                    string routes;
+                    try { routes = MoonWorld.Routes(def, k).ToString(); } catch (Exception e) { routes = "threw " + e.Message; }
+                    CoreLog.Info($"[spike] donor {k} '{def.displayName}': halfFootprint ({def.halfFootprint.x:F2},{def.halfFootprint.y:F2}) price {def.priceDollars} ports {def.conveyorPorts?.Length ?? 0} Routes(def, {k}) {routes}");
+                    Components($"donor {k} prefab", def.prefab);
+                }
+                catch (Exception e) { CoreLog.Warn($"[spike] donor {k} threw: {e.Message}"); }
+            }
+            if (probe == null) { CoreLog.Info($"[spike] '{ProbeId}' is not registered (RegisterBoxProbe read too late, or ExampleStructure missing)"); return; }
+            int depot = DevTools.BuildResults.TryGetValue(ProbeId, out var b) && b.ok ? b.depot : SelfTest.DepotOfKind(world, probe.Kind);
+            if (depot < 0) { CoreLog.Info("[spike] no probe depot (AutoBuild it)"); return; }
+            var rec = world.depots.get_Item(depot);
+            var view = UnityEngine.Object.FindFirstObjectByType<MoonDepotConstruction>()?.ViewOf(depot);
+            Components($"probe depot {depot} view", view);
+            var colliders = view == null ? null : view.GetComponentsInChildren<Collider>(true);
+            string colliderText = colliders == null ? "no view" : string.Join(", ", colliders.Select(c => c.GetIl2CppType().Name + " on '" + PathOf(c.transform, view.transform) + "'"));
+            CoreLog.Info($"[spike] probe depot {depot}: colliders on the view [{colliderText}]; ports {PortResolver.Describe(MoonStructures.PortsOf(probe)?.ToList())}");
+            foreach (var p in AutoBelter.RuntimePorts(world, rec))
+            {
+                string joins;
+                try { joins = world.MachineJoins(rec.kind, p).ToString(); } catch (Exception e) { joins = "threw " + e.Message; }
+                CoreLog.Info($"[spike] probe depot {depot} runtime port '{p.label}' {(p.output ? "out" : "in")} at {AutoBelter.V(p.position)} dir {AutoBelter.V(p.direction)} belt {p.belt}: MachineJoins {joins}");
+            }
+            var r = AutoBelter.Results.FirstOrDefault(x => x.Ok && x.To >= 0 && world.depots.ContainsKey(x.To) && world.depots.get_Item(x.To).kind == probe.Kind);
+            if (r == null) { CoreLog.Info("[spike] no AutoBelt belt into a probe: dust canister not placed"); return; }
+            // Three dust canisters, as the belt's spacing allows: each hops to the next output that can take it, and
+            // one that no output can take (an output belt full, the others not joined) waits at the input.
+            var path = world.BeltPath(r.Belt);
+            if (!routedHooked) { routedHooked = true; MoonStructures.CargoRouted += c => { if (c.DepotId == dustDepot) routed.Add(c); }; }
+            routed.Clear();
+            dustDepot = r.To;
+            var ids = new List<int>();
+            foreach (float d in new[] { path.Length - 0.4f, path.Length - 1.15f, path.Length - 1.9f })
+            {
+                if (d < 0.1f) break;
+                int id = SelfTest.Spawn(world, path, d, MoonCargo.Dust, out string why);
+                CoreLog.Info($"[spike] probe dust: canister {id} put at d {d:F2} of belt {r.Belt} (length {path.Length:F2}) into probe depot {r.To}{(id < 0 ? ": " + why : "")}");
+                if (id >= 0) ids.Add(id);
+            }
+            if (ids.Count == 0) return;
+            dustId = ids[0]; dustBelt = r.Belt;
+            outBelt = AutoBelter.Results.FirstOrDefault(x => x.Ok && x.From == r.To)?.Belt ?? -1;
+            dustFrom = Time.unscaledTime; dustNext = dustFrom + 1f;
+        }
+
+        static readonly List<CargoRouted> routed = new();
+        static bool routedHooked;
+        static int outBelt = -1;
+
+        static void DustTick(MoonWorld world, float now)
+        {
+            dustNext = now + 2f;
+            CoreLog.Info($"[spike] probe dust t+{now - dustFrom:F0} s: first {Canister(world, dustId)}; CargoRouted {routed.Count}x [{string.Join(", ", routed.Select(c => $"{c.Kilograms} kg {c.Cargo} belt {c.FromBeltId}->{c.ToBeltId}"))}]; riders on in belt {dustBelt}: {SelfTest.RidersText(world, dustBelt)}; WaitingAtEnd({dustBelt}) {Try(() => world.WaitingAtEnd(dustBelt).ToString())}; riders on out belt {outBelt}: {(outBelt >= 0 ? SelfTest.RidersText(world, outBelt) : "none")}");
+            if (now > dustFrom + 10.5f) dustId = -1;
+        }
+
+        static void Components(string what, GameObject go)
+        {
+            if (go == null) { CoreLog.Info($"[spike] {what}: null"); return; }
+            var comps = go.GetComponentsInChildren<Component>(true);
+            var count = new SortedDictionary<string, int>(StringComparer.Ordinal);
+            var where = new List<string>();
+            int colliders = 0;
+            foreach (var c in comps)
+            {
+                if (c == null) continue;
+                string n = c.GetIl2CppType().Name;
+                count[n] = count.TryGetValue(n, out int k) ? k + 1 : 1;
+                if (c.TryCast<Collider>() != null) colliders++;
+                if (n.StartsWith("Moon", StringComparison.Ordinal)) where.Add($"{n} on '{PathOf(c.transform, go.transform)}'");
+            }
+            CoreLog.Info($"[spike] {what} '{go.name}': {comps.Length} components, {colliders} colliders; types: {string.Join(", ", count.Select(kv => kv.Value > 1 ? $"{kv.Key} x{kv.Value}" : kv.Key))}; game scripts: {(where.Count == 0 ? "none" : string.Join("; ", where))}");
+        }
+
+        static string PathOf(Transform t, Transform root)
+        {
+            var parts = new List<string>();
+            for (var x = t; x != null && x != root; x = x.parent) parts.Add(x.name);
+            parts.Reverse();
+            return parts.Count == 0 ? "<root>" : string.Join("/", parts);
+        }
+
+        // One canister: present, kilograms / capacity, cargo, rider (belt, distance, moving).
+        static string Canister(MoonWorld world, int id) => Try(() =>
+        {
+            if (world.canisters == null || !world.canisters.ContainsKey(id)) return $"canister {id} gone";
+            var c = world.canisters.get_Item(id);
+            string rider = "no rider";
+            if (world.riders != null && world.riders.ContainsKey(id))
+            {
+                var r = world.riders.get_Item(id);
+                rider = $"rider belt {r.belt} d {r.distance:F2} moving {r.moving}";
+            }
+            return $"canister {id} {c.kilograms:F2} kg / capacity {c.capacity:F2}, cargo {(byte)c.cargo}, at {AutoBelter.V(c.position)}, {rider}";
+        });
+
+        static string Try(Func<string> f)
+        {
+            try { return f(); } catch (Exception e) { return "threw " + e.GetType().Name + ": " + e.Message; }
         }
     }
 }

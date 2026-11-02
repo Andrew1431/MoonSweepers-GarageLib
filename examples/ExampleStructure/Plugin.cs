@@ -125,9 +125,36 @@ namespace ExampleStructure
                     },
                     Ports = new() { PortDefinition.In("Sand in", Cargo.Sand, new Vector3(-2.95f, 0.85f, 0f), Vector3.right) },
                 }, Guid);
+
+            // Dev builds of StructureLib only ([Dev] RegisterBoxProbe): a router, a 1.4 m box splitter on the floodlight
+            // (kind 4: no game script, one collider; MoonWorld.Routes answers true for this 4-port clone, as for any 3-4
+            // port definition, but the HandOff prefix answers first, so the hop is StructureLib's). One input on -X,
+            // outputs on the other three faces, all flowing outward; round-robin in this port order (Forward, Left,
+            // Right). Router ports carry no cargo (any cargo passes), so Cargo here is ignored. DevBelts.cs BoxSpike logs
+            // its definition and view and belts to it.
+            if (StructureLibDevFlag("RegisterBoxProbe"))
+                MoonStructures.Register(new StructureDefinition
+                {
+                    Id = BoxProbeId,
+                    Name = "Box probe",
+                    Category = "Logistics",
+                    Note = "StructureLib dev probe: a box splitter.",
+                    Price = 5m,
+                    BaseStructure = 4, // vanilla floodlight
+                    Router = new RouterDefinition { Mode = RouterMode.Splitter },
+                    Footprint = new Vector2(1.4f, 1.4f),
+                    Ports = new()
+                    {
+                        PortDefinition.In("In", Cargo.Dust, new Vector3(-0.70f, 0.85f, 0f), Vector3.right),
+                        PortDefinition.Out("Forward", Cargo.Dust, new Vector3(0.70f, 0.85f, 0f), Vector3.right),
+                        PortDefinition.Out("Left", Cargo.Dust, new Vector3(0f, 0.85f, 0.70f), Vector3.forward),
+                        PortDefinition.Out("Right", Cargo.Dust, new Vector3(0f, 0.85f, -0.70f), Vector3.back),
+                    },
+                }, Guid);
         }
 
         public const string BadPortsId = "ryanhartwig.example-bad-ports";
+        public const string BoxProbeId = "ryanhartwig.example-box-probe";
 
         // A [Dev] bool from StructureLib's own config (it loads first, as our dependency). False when absent (release builds).
         static bool StructureLibDevFlag(string key)

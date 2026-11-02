@@ -39,6 +39,8 @@ namespace StructureLib
             "MoonCleaners.MoonWorld:PortCargo", "MoonCleaners.MoonDepotBuildDefinition:conveyorPorts",
             "MoonCleaners.MoonWorld:HandOff", "MoonCleaners.MoonWorld:MachineWithPort", "MoonCleaners.MoonWorld:canisters", "MoonCleaners.MoonProductionState:Flow",
             "MoonCleaners.MoonConveyorSnapshot:start", "MoonCleaners.MoonConveyorSnapshot:id",
+            "MoonCleaners.MoonWorld:EntranceClear", "MoonCleaners.MoonWorld:WaitingAtEnd", "MoonCleaners.MoonWorld:BeltStartingAt", "MoonCleaners.MoonWorld:BeltEndingAt",
+            "MoonCleaners.MoonDepotBuildDefinition:halfFootprint",
         };
 
         public override void Load()

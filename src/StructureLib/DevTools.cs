@@ -37,7 +37,7 @@ namespace StructureLib
             AutoLoadSlot = cfg.Bind("Dev", "AutoLoadSlot", -1, "Dev build: load the existing save in folder slot-<n> from the main menu. -1 = off. Slot 1 is the real save and is refused unless AllowSlot1 is true.");
             AllowSlot1 = cfg.Bind("Dev", "AllowSlot1", false, "Dev build: let AutoLoadSlot and SelfTest touch slot-1 (the real save). Leave false.");
             RunSelfTest = cfg.Bind("Dev", "SelfTest", false, "Dev build: run the in-game self-test 20 s after a world loads and log [selftest] lines.");
-            AutoBuild = cfg.Bind("Dev", "AutoBuild", "", "Dev build: comma-separated structure ids or vanilla kind numbers to build once, 10 s after a world loads, on a ring 10 m from the walker (headings 0, 90, 180, 270, 45, 135, 225, 315 deg from its facing, in entry order; a refused site tries the next free heading). An entry whose kind already has a depot reuses it.");
+            AutoBuild = cfg.Bind("Dev", "AutoBuild", "", "Dev build: comma-separated structure ids or vanilla kind numbers to build once, 10 s after a world loads, on a ring 10 m from the walker (headings 0, 90, 180, 270, 45, 135, 225, 315 deg from its facing, in entry order; a refused site tries the next free heading). An entry whose kind already has a depot reuses it (a repeated entry gets its own). '<entry>@<yaw>' builds at that yaw in degrees (TryBuildDepot's yaw; default 0).");
             AutoFeed = cfg.Bind("Dev", "AutoFeed", "", "Dev build: ';'-separated '<structureId|vanillaKind>:<cargoId|Dust|Sand|Stone>:<kg>' entries, each loaded through the game's CrewProcessorLoad, 5 s after the AutoBuild step, into the first built structure of that id, or for a vanilla kind number into the depot AutoBuild built for that entry.");
             AutoRemove = cfg.Bind("Dev", "AutoRemove", true, "Dev build: the self-test removes the example lamp it checked. false leaves it in place (the sidecar carries it into the next launch).");
             AutoSave = cfg.Bind("Dev", "AutoSave", false, "Dev build: request a save 10 s after the AutoBuild step (whether or not AutoBuild names anything). The self-test waits for that save and checks the structurelib.json sidecar.");
@@ -45,9 +45,11 @@ namespace StructureLib
             AutoBuildViaPlan = cfg.Bind("Dev", "AutoBuildViaPlan", false, "Dev build: AutoBuild places modded structures through the build menu's own path (PlanStructure, BeginStructureCheck, TryBuildStructure), which records a free pose (placedPose), instead of TryBuildDepot. Vanilla kinds still use TryBuildDepot.");
             BindBelts(cfg);
             BindModels(cfg);
+            // Box spike (belt-boxes plan, Task 1; DevBelts.cs BoxSpike).
+            RegisterBoxProbe = cfg.Bind("Dev", "RegisterBoxProbe", false, "Dev build: the example plugin also registers ryanhartwig.example-box-probe, a router (splitter: In on -X; Forward, Left, Right outputs) cloned from the floodlight (kind 4) with a 1.4 x 1.4 m Footprint. 15 s after load the donor's and the probe's definitions, prefab components and colliders (and the probe view's) are logged, and three dust canisters are put on the AutoBelt belt into the probe and followed for 10 s (CargoRouted count, riders on the in and out belts).");
             SelfTest.Subscribe();
             ScreenshotMenu = cfg.Bind("Dev", "ScreenshotMenu", false, "Dev build: 5 s after the self-test, open the build menu on the example lamp and save a screenshot to BepInEx/cache/structurelib/menu.png.");
-            CoreLog.Info($"[dev] AutoLoadSlot={AutoLoadSlot.Value} AllowSlot1={AllowSlot1.Value} SelfTest={RunSelfTest.Value} ScreenshotMenu={ScreenshotMenu.Value} AutoRemove={AutoRemove.Value} AutoSave={AutoSave.Value} ForcePower={ForcePower.Value} AutoBuildViaPlan={AutoBuildViaPlan.Value} AutoBuild='{AutoBuild.Value}' AutoFeed='{AutoFeed.Value}' AutoBelt='{AutoBelt.Value}' DumpCards={DumpCards.Value} RegisterBadPorts={RegisterBadPorts.Value} SunOverhead={SunOverhead.Value}");
+            CoreLog.Info($"[dev] AutoLoadSlot={AutoLoadSlot.Value} AllowSlot1={AllowSlot1.Value} SelfTest={RunSelfTest.Value} ScreenshotMenu={ScreenshotMenu.Value} AutoRemove={AutoRemove.Value} AutoSave={AutoSave.Value} ForcePower={ForcePower.Value} AutoBuildViaPlan={AutoBuildViaPlan.Value} AutoBuild='{AutoBuild.Value}' AutoFeed='{AutoFeed.Value}' AutoBelt='{AutoBelt.Value}' DumpCards={DumpCards.Value} RegisterBadPorts={RegisterBadPorts.Value} SunOverhead={SunOverhead.Value} RegisterBoxProbe={RegisterBoxProbe.Value}");
             // MoonStructures.Register reads this static at plugin Load time; prove the interop read works that early.
             try { CoreLog.Info($"[dev] MoonProductionSave.MaxSlots at Load = {MoonProductionSave.MaxSlots}"); }
             catch (Exception e) { CoreLog.Error("[dev] reading MoonProductionSave.MaxSlots at Load threw: " + e); }
@@ -174,26 +176,61 @@ namespace StructureLib
             }
             SelfTest.ResetEvents(world);
             taken.Clear();
+            claimed.Clear();
             if (AutoLine.On) AutoLine.Prepare(world, entries);
+            var seen = new Dictionary<string, int>(StringComparer.Ordinal);
             for (int i = 0; i < entries.Count; i++)
             {
-                try { Build(world, walker, entries[i], i); }
-                catch (Exception e) { Report(entries[i], false, -1, "threw " + e.GetType().Name + ": " + e.Message); }
+                string e = entries[i];
+                int n = seen.TryGetValue(e, out int k) ? k + 1 : 1;
+                seen[e] = n;
+                DevTools.BuildResults.TryGetValue(e, out var first);
+                try { Build(world, walker, e, i); }
+                catch (Exception ex) { Report(e, false, -1, "threw " + ex.GetType().Name + ": " + ex.Message); }
+                // An entry named more than once gets its own depot each time, under '<entry>#<n>' ([Dev] AutoBelt's '#n'
+                // endpoint); the plain key keeps the first.
+                if (DevTools.BuildResults.TryGetValue(e, out var r))
+                {
+                    DevTools.BuildResults[$"{e}#{n}"] = r;
+                    if (r.ok && r.depot >= 0) claimed.Add(r.depot);
+                    if (n > 1) DevTools.BuildResults[e] = first;
+                }
             }
+        }
+
+        // Depots AutoBuild built or reused in this run: a repeated entry does not reuse one of them.
+        static readonly HashSet<int> claimed = new();
+
+        static int UnclaimedDepotOfKind(MoonWorld world, int kind)
+        {
+            if (world?.depots == null) return -1;
+            foreach (var kv in world.depots)
+                if (kv.Value != null && kv.Value.kind == kind && !claimed.Contains(kv.Key)) return kv.Key;
+            return -1;
+        }
+
+        /// <summary>'&lt;id or kind&gt;@&lt;yaw&gt;' -> (id or kind, yaw in degrees); no '@' -> yaw 0.</summary>
+        internal static (string who, float yaw) SplitYaw(string entry)
+        {
+            int at = entry.LastIndexOf('@');
+            if (at > 0 && float.TryParse(entry.Substring(at + 1), System.Globalization.NumberStyles.Float, System.Globalization.CultureInfo.InvariantCulture, out float yaw))
+                return (entry.Substring(0, at).Trim(), yaw);
+            return (entry, 0f);
         }
 
         static void Build(MoonWorld world, MoonWalker walker, string entry, int index)
         {
+            var (who, yaw) = SplitYaw(entry);
             int kind;
-            if (!int.TryParse(entry, out kind))
+            if (!int.TryParse(who, out kind))
             {
-                var d = MoonStructures.Definition(entry);
+                var d = MoonStructures.Definition(who);
                 if (d == null || !MoonStructures.IsModded(d.Kind)) { Report(entry, false, -1, "no registered structure with this id"); return; }
                 kind = d.Kind;
             }
             // Only a modded kind is reused (one built earlier in this run, or restored from the save once saves carry modded
             // kinds); a vanilla kind is always built anew, since slot-2 already holds vanilla structures.
-            int existing = MoonStructures.IsModded(kind) ? SelfTest.DepotOfKind(world, kind) : -1;
+            int existing = MoonStructures.IsModded(kind) ? UnclaimedDepotOfKind(world, kind) : -1;
             if (existing >= 0)
             {
                 CoreLog.Info($"[dev] AutoBuild: '{entry}' (modded kind {kind}) already has depot {existing} in this world; reusing it");
@@ -222,9 +259,9 @@ namespace StructureLib
             foreach (var (h, at, where) in sites)
             {
                 var before = DepotIds(world);
-                ok = viaPlan ? BuildViaPlan(world, walker, kind, at, wt.position.magnitude, out reason) : world.TryBuildDepot(walker, at.normalized, 0f, out reason, null, kind);
+                ok = viaPlan ? BuildViaPlan(world, walker, kind, at, wt.position.magnitude, out reason) : world.TryBuildDepot(walker, at.normalized, yaw, out reason, null, kind);
                 if (ok) foreach (var kv in world.depots) if (!before.Contains(kv.Key)) { id = kv.Key; break; }
-                CoreLog.Info($"[dev] AutoBuild: '{entry}' (kind {kind}) {(viaPlan ? "via the build-menu plan path " : "")}{where}: ok={ok} reason='{reason}'");
+                CoreLog.Info($"[dev] AutoBuild: '{entry}' (kind {kind}) {(viaPlan ? "via the build-menu plan path " : "")}{where}{(yaw != 0f ? $", yaw {yaw:F0}" : "")}: ok={ok} reason='{reason}'");
                 if (ok) { taken.Add(h); break; }
             }
             if (ok && id >= 0)
