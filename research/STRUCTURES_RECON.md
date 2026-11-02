@@ -177,13 +177,74 @@ Everywhere (catalog, placement, built records, production, power, save), a struc
     self-test 9/9. `IsSolarPanel` has the same 15-byte native shape (`83 F9 5D 7D 03 32 C0 C3 83 F9 5F 0F 9E C0 C3
     CC`) and is fine. Only patching and load were proven: no modded kind reached those remaps in game, since nothing
     was built.
-  - Candidate alternative for Task 10 (**untested**): prefix the instance method `MoonWorld.IsProcessorId(int id)`
-    (normal prologue, not a tiny leaf), plus a `MoonWorld.Processor(int kind)` prefix that answers the modded
-    processor spec, and patch the specific `IsProcessor(kind)` callers only if a path still needs it.
+  - What Task 10 did instead: prefixes on the instance method `MoonWorld.IsProcessorId(int id)` and on
+    `MoonWorld.Processor(int kind)` (both patch and run fine), plus prefixes on the specific callers that refuse a modded
+    machine. See "Processors (Task 10)" below for which callers those are.
 - The static cargo switches `CargoName`, `CargoShortName`, `UnitKilograms` and the instance `CargoValue` (returning
   an `Il2CppSystem.Decimal` through `ref __result`) all take Harmony prefixes without trouble (Task 9, 4 runs).
 - `world.canisters` (`Dictionary<int, MoonDroppedCanister>`, value-type values): `set_Item` from managed code does not
   change the stored canister. Write through `MoveCanisterRecord` instead (see "Built records and save").
+
+## Processors (Task 10, traced in game on slot-2, 2026-11-01)
+
+Traced with a temporary Harmony probe (not committed) and the self-test. The example grinder is built on the pressure
+chamber (96): Input dust 10 kg, Batch dust 2 kg, Output grit 10 kg, 1 kW, 4 s cycle. Logs are in
+`.superpowers/sdd/2026-11-01-structurelib/task-10-logs/`.
+
+- **`NewProduction(id, kind)` asks `Processor(kind)` and sizes `stores` from the spec** (not inlined). The game creates
+  a built modded processor's state itself, with `NewProduction(27, kind)` right after the build. Without the
+  `Processor` prefix the state had `stores == null`; with it, the grinder's 3 slots.
+- **`RestoreProduction`** calls `NewProduction(id, depots[id].kind)` for every `snapshot.production` entry, then fills
+  the stores from the snapshot. So a snapshot injected in a `RestoreProduction` prefix restores a modded machine like a
+  vanilla one: saved `[0 0 6]` kg came back `[0 0 6]`.
+- **The production save shape.** `MoonProductionSnapshot` holds `id, progress, running, charge` and `stores`, with no
+  kind and no cargo. `stores` is a per-slot list of `MoonWalletSnapshot` owner shares. **The kilograms are in
+  `pendingKilograms`; `dollars` is 0.** `MoonProductionSave.Write` runs inside the same `Serialize` as
+  `MoonDepotSave.Write`, after it; by then the depot finalizer has put the modded depots back into `state.depots`.
+- **`IsProcessor(kind)` callers that refuse a modded machine** (inlined, or calling the unpatchable static), and what
+  StructureLib does about each:
+  - `CrewProcessorLoad`: vanilla loads nothing into a modded machine, and no `InputSlot` call was seen.
+    **Prefix:** for a modded machine, load the first Input slot that takes the cargo, up to its capacity, under the
+    player's share through `MoonWorld.Put(store, player, kg)`.
+  - `CanStartCycle`: answers false with batch 0 for a modded kind, even with 6 kg of dust in slot 0 and `Power` 1. The
+    recipe is hard-coded per vanilla kind.
+    **Prefixes** on `CanStartCycle` / `TryStartCycle` / `FinishCycle` run a generic cycle (`Pure/ProcessorCycle`):
+    - Start when every Batch slot is empty, each can be filled to its capacity from the first Input slot with the same
+      cargo, and the Output slot has room for the whole batch.
+    - `TryStartCycle` moves the kilograms with `MoonWorld.Move` (owners kept) and sets `Running`.
+    - `FinishCycle` moves every Batch slot into the Output slot at the same mass (as the chamber does, fact (c)), or
+      burns it for a power producer, and clears `Running` and `Progress`.
+    - `StepProduction` drives all of this for a modded state as for a vanilla one: it calls `CanStartCycle`,
+      `TryStartCycle`, `FinishCycle` and `EmitProduct`, advances `Progress` by `Power` × dt / `cycleSeconds`, and
+      counts `Cycles`.
+    - Seen in game: 6 kg dust became 6 kg grit in three 4 s cycles; the status line reads
+      `Connect a belt to the example grit output` (from `spec.product`).
+  - **`SolvePower`'s node list**: it is rebuilt from scratch on every call, from an inlined kind check (the patched
+    `IsPowerNode` is not asked). A `PowerNode` added to `powerNodes` in a `SolvePower` prefix was gone after the call.
+    So a modded processor is never a node, and stays at `Grid 0` / `Power 0`.
+  - Not checked: `LoadProcessor` (walker canister), `FeedProcessor` / `EnterMachine` (belts), `PortCargo`. They very
+    likely refuse modded machines the same way; belt and canister input is outside Task 10.
+- **Grid membership rule (a `SolvePower` postfix).** After the vanilla solve, each modded processor that is not a node
+  attaches to the grid of the nearest vanilla node, provided the node's own `PowerRange(node.record.kind)` reaches the
+  machine:
+  - Distance is measured with `FootprintDistance(machine record position, node.position, node.rotation, node.half)`.
+  - Demand is `RunningKw` while `Running`, else 0.
+  - The machine is supplied (`Pure/GridShare`) first from the grid's sun surplus, `supplyKw - usedKw` (shared between
+    modded machines in the same solve), then from its batteries when `storedKwh > 0` (S0 saw batteries discharge at any
+    rate). The battery share × dt / 3600 kWh is taken out of the `ChargeKwh` of the grid's panel states.
+  - Satisfaction is the share of demand covered. An idle machine reads 1 when the grid has any surplus or charge, else
+    0.
+  - The state then gets `Grid` = that grid, `Power` = satisfaction, `DemandKw`, `UsedKw = DemandKw × satisfaction`, and
+    `SuppliedKw = 0`.
+  - With no node in range: grid 0, power 0.
+  - **Limits.** `powerGrids` holds `MoonPowerGrid` *structs*, which managed code cannot write back (the same hazard as
+    `world.canisters`). So the grid's reported `demandKw` / `usedKw` / `satisfaction` leave out the modded demand, and
+    the vanilla machines on that grid do not see it.
+  - No power link is drawn to the modded machine.
+  - In game, the grinder attached to the new solar twin's grid 26 (5.8 m from the twin's footprint, range 24 m; supply
+    3.38 kW) and ran its cycles.
+- `[Dev] ForcePower` (default off) forces `Power = 1` on modded processors for isolating problems; with it on,
+  `cycle-produces-grit` fails on purpose.
 
 ## World-time findings (new game in slot-1, 2026-11-01)
 

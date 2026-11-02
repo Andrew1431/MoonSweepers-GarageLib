@@ -28,6 +28,39 @@ namespace StructureLib.Tests
         }
 
         [Fact]
+        public void SidecarCodec_ProductionRecord_RoundTrips()
+        {
+            var file = new SidecarFile { Production = { new ProductionRecord { Id = "a.grinder", DepotId = 12, Progress = 0.5f, Running = true, Charge = 1.25,
+                Stores = { new() { new ShareRecord { Owner = "steam-1", Pending = 4 } }, new(), new() { new ShareRecord { Owner = "steam-1", Pending = 2 }, new ShareRecord { Owner = "steam-2", Pending = 0.5 } } },
+                SlotCargoIds = { "dust", "dust", "a.grit" } } } };
+            var back = SidecarCodec.Deserialize(SidecarCodec.Serialize(file)).Production.Single();
+            Assert.Equal(("a.grinder", 12, 0.5f, true, 1.25), (back.Id, back.DepotId, back.Progress, back.Running, back.Charge));
+            Assert.Equal(new[] { 1, 0, 2 }, back.Stores.Select(s => s.Count).ToArray());
+            Assert.Equal(0.5, back.Stores[2][1].Pending);
+            Assert.Equal(new[] { "dust", "dust", "a.grit" }, back.SlotCargoIds);
+        }
+
+        [Fact]
+        public void SidecarCodec_Deserialize_ProductionNullLists_BecomeEmpty()
+        {
+            var p = SidecarCodec.Deserialize("{\"Production\":[{\"Id\":\"a.grinder\",\"Stores\":null,\"SlotCargoIds\":null}]}").Production.Single();
+            Assert.Empty(p.Stores);
+            Assert.Empty(p.SlotCargoIds);
+        }
+
+        [Fact]
+        public void SidecarCodec_Merge_KeepsProductionOfMissingStructureOrCargo()
+        {
+            var loaded = new SidecarFile { Production = {
+                new ProductionRecord { Id = "gone.grinder", DepotId = 1, SlotCargoIds = { "dust" } },
+                new ProductionRecord { Id = "here.grinder", DepotId = 2, SlotCargoIds = { "dust", "gone.grit" } },
+                new ProductionRecord { Id = "here.grinder", DepotId = 3, SlotCargoIds = { "dust", "here.grit" } } } };
+            var live = new SidecarFile { Production = { new ProductionRecord { Id = "here.grinder", DepotId = 9 } } };
+            var merged = SidecarCodec.Merge(live, loaded, id => id == "here.grinder" || id == "here.grit" || id == "dust");
+            Assert.Equal(new[] { 9, 1, 2 }, merged.Production.Select(p => p.DepotId).ToArray());
+        }
+
+        [Fact]
         public void SidecarCodec_Merge_KeepsCanistersOfUnregisteredCargo()
         {
             var loaded = new SidecarFile { Canisters = { new CanisterRecord { Id = 1, CargoId = "gone.grit" }, new CanisterRecord { Id = 2, CargoId = "here.grit" }, new CanisterRecord { Id = 3, CargoId = null } } };

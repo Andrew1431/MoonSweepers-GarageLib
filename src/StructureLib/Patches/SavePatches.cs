@@ -14,6 +14,8 @@ namespace StructureLib.Patches
     //   Serialize prefix: strip modded-cargo canisters; their records stay with this thread's SaveRun.
     //   MoonDepotSave.Write prefix: strip modded depots and write this save's own sidecar .tmp (depots + canisters).
     //   MoonDepotSave.Write finalizer: put the depots back.
+    //   MoonProductionSave.Write prefix: strip modded machines' production states and rewrite this save's .tmp with them.
+    //   MoonProductionSave.Write finalizer: put them back.
     //   Serialize finalizer: put the canisters back.
     //   The .tmp is committed when the outermost of Write / Serialize on this thread finishes without an exception, so a
     //   saver after MoonDepotSave, or the envelope write, that throws leaves the previous sidecar in place.
@@ -39,6 +41,7 @@ namespace StructureLib.Patches
         [ThreadStatic] static Sidecar.PendingWrite deferred;
         [ThreadStatic] static List<MoonDepotSnapshot> looseDepots;
         [ThreadStatic] static Sidecar.PendingWrite loosePending;
+        [ThreadStatic] static Sidecar.StrippedProduction production;
 
         // Numbers each save snapshot on the main thread, so overlapping saves commit in snapshot order.
         [HarmonyPatch(typeof(MoonWorld), nameof(MoonWorld.SnapshotCanisters), new[] { typeof(MoonLooseDustSnapshot) }), HarmonyPostfix]
@@ -138,10 +141,57 @@ namespace StructureLib.Patches
             catch (Exception e) { CoreLog.Error("Load: injecting modded-cargo canisters failed: " + e); }
         }
 
-        // The last step of a load: injected canisters get their modded cargo (see Sidecar.ApplyCanisterCargo).
+        // Inside the same Serialize, after MoonDepotSave.Write: modded machines' production snapshots leave the vanilla
+        // save and join this save's pending sidecar write. Outside a Serialize (not seen in game) they are only kept out of
+        // the vanilla save, and the sidecar keeps its loaded production records.
+        [HarmonyPatch(typeof(MoonProductionSave), nameof(MoonProductionSave.Write)), HarmonyPrefix]
+        static void ProductionWritePre(MoonLooseDustSnapshot state)
+        {
+            var stripped = new Sidecar.StrippedProduction();
+            production = stripped;
+            List<ProductionRecord> records;
+            try { records = Sidecar.StripProduction(state, stripped); }
+            catch (Exception e)
+            {
+                CoreLog.Error($"Save: stripping modded production states failed ({stripped.Items.Count} taken out so far, put back after the write); this save keeps the loaded production records as they were: {e}");
+                return;
+            }
+            var r = run;
+            if (r?.Pending == null)
+            {
+                if (records.Count > 0) CoreLog.Warn($"Save: {records.Count} modded production state(s) left out of the vanilla save with no sidecar write to join; the sidecar keeps its loaded production records");
+                return;
+            }
+            try { r.Pending = Sidecar.AddProduction(r.Pending, records); }
+            catch (Exception e) { CoreLog.Error($"Save: adding {records.Count} production record(s) to the sidecar failed; this save keeps the loaded production records as they were: {e}"); }
+        }
+
+        [HarmonyPatch(typeof(MoonProductionSave), nameof(MoonProductionSave.Write)), HarmonyFinalizer]
+        static void ProductionWriteFin(MoonLooseDustSnapshot state, Exception __exception)
+        {
+            var stripped = production;
+            production = null;
+            try { Sidecar.PutBackProduction(state, stripped); }
+            catch (Exception e) { CoreLog.Error("Save: putting modded production states back failed: " + e); }
+            if (__exception != null && run != null) run.Failed = __exception;
+        }
+
+        // After RestoreDepots: the injected structures are in world.depots, so their saved production states go into the
+        // load snapshot and restore like any machine's.
+        [HarmonyPatch(typeof(MoonWorld), nameof(MoonWorld.RestoreProduction), new[] { typeof(MoonLooseDustSnapshot) }), HarmonyPrefix]
+        static void RestoreProductionPre(MoonLooseDustSnapshot snapshot)
+        {
+            try { Sidecar.InjectProduction(snapshot); }
+            catch (Exception e) { CoreLog.Error("Load: injecting modded production states failed: " + e); }
+        }
+
+        // The last step of a load: injected production states are claimed (see Sidecar.ClaimProduction) and injected
+        // canisters get their modded cargo (see Sidecar.ApplyCanisterCargo).
         [HarmonyPatch(typeof(MoonWorld), nameof(MoonWorld.RestoreProduction), new[] { typeof(MoonLooseDustSnapshot) }), HarmonyPostfix]
         static void RestoreProductionPost(MoonWorld __instance)
         {
+            try { Sidecar.ClaimProduction(__instance); }
+            catch (Exception e) { CoreLog.Error("Load: checking restored modded production states failed: " + e); }
             try { Sidecar.ApplyCanisterCargo(__instance); }
             catch (Exception e) { CoreLog.Error("Load: giving restored canisters their modded cargo failed: " + e); }
         }

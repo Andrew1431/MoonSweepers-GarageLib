@@ -21,6 +21,13 @@ namespace StructureLib
             f.Production ??= new();
             f.Canisters ??= new();
             foreach (var s in f.Structures) if (s != null) s.Contributions ??= new();
+            foreach (var p in f.Production)
+                if (p != null)
+                {
+                    p.Stores ??= new();
+                    p.SlotCargoIds ??= new();
+                    for (int i = 0; i < p.Stores.Count; i++) p.Stores[i] ??= new();
+                }
             f.Structures.RemoveAll(s => s == null);
             f.Production.RemoveAll(p => p == null);
             f.Canisters.RemoveAll(c => c == null);
@@ -49,7 +56,7 @@ namespace StructureLib
                 Written = live.Written,
                 Structures = (live.Structures ?? new()).Concat((loaded.Structures ?? new()).Where(s => s != null && Missing(s.Id))).ToList(),
                 Production = (live.Production ?? new()).Concat((loaded.Production ?? new()).Where(p => p != null &&
-                    (Missing(p.Id) || (p.Slots ?? new()).Any(s => s != null && SlotMissing(s.Cargo))))).ToList(),
+                    (Missing(p.Id) || (p.SlotCargoIds ?? new()).Any(SlotMissing)))).ToList(),
                 Canisters = (live.Canisters ?? new()).Concat((loaded.Canisters ?? new()).Where(c => c != null && Missing(c.CargoId))).ToList(),
             };
         }

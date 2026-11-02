@@ -30,7 +30,7 @@ namespace StructureLib
         public static event Action<StructureBuilt> Built;
         /// <summary>Fired on the main thread after a modded structure is removed (its depot id).</summary>
         public static event Action<int> Removed;
-        /// <summary>Fired when a modded processor finishes a cycle.</summary>
+        /// <summary>Fired on the main thread when a modded processor finishes a cycle (its batch is in the output slot).</summary>
         public static event Action<CycleFinished> CycleFinished;
 
         /// <summary>Register a structure. Call from your plugin's Load().</summary>

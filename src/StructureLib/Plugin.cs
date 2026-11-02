@@ -23,12 +23,15 @@ namespace StructureLib
         static readonly string[] NeededMembers =
         {
             "MoonCleaners.MoonWorld:BuildDefinition", "MoonCleaners.MoonWorld:RestoreDepots", "MoonCleaners.MoonWorld:TryBuildDepot",
-            "MoonCleaners.MoonWorld:IsProcessor", "MoonCleaners.MoonWorld:IsPowerNode", "MoonCleaners.MoonWorld:Processor",
+            "MoonCleaners.MoonWorld:IsProcessorId", "MoonCleaners.MoonWorld:IsPowerNode", "MoonCleaners.MoonWorld:Processor",
             "MoonCleaners.MoonWorld:InputSlot", "MoonCleaners.MoonWorld:CargoName", "MoonCleaners.MoonWorld:CargoValue",
             "MoonCleaners.MoonWorld:CargoShortName", "MoonCleaners.MoonWorld:UnitKilograms", "MoonCleaners.MoonWorld:RestoreCanisters",
             "MoonCleaners.MoonWorld:RestoreProduction", "MoonCleaners.MoonWorld:MoveCanisterRecord", "MoonCleaners.MoonWorld:RemoveCanister",
             "MoonCleaners.MoonProgressStore:Serialize", "MoonCleaners.MoonLooseDustSnapshot:cargo",
-            "MoonCleaners.MoonDepotSave:Write", "MoonCleaners.MoonProductionSave:Write",
+            "MoonCleaners.MoonDepotSave:Write", "MoonCleaners.MoonProductionSave:Write", "MoonCleaners.MoonLooseDustSnapshot:production",
+            "MoonCleaners.MoonWorld:AcceptsText", "MoonCleaners.MoonWorld:FinishCycle", "MoonCleaners.MoonWorld:EmitCargo", "MoonCleaners.MoonWorld:ProductionOf",
+            "MoonCleaners.MoonWorld:CanStartCycle", "MoonCleaners.MoonWorld:TryStartCycle", "MoonCleaners.MoonWorld:CrewProcessorLoad", "MoonCleaners.MoonWorld:SolvePower",
+            "MoonCleaners.MoonWorld:powerNodes", "MoonCleaners.MoonWorld:powerGrids", "MoonCleaners.MoonWorld:FootprintDistance", "MoonCleaners.MoonWorld:Put", "MoonCleaners.MoonWorld:Move",
             "MoonCleaners.MoonDepotBuilder:baseStructures", "MoonCleaners.MoonDepotBuilder:catalogCategories",
             "MoonCleaners.MoonDepotBuilder:BuildCatalog", "MoonCleaners.MoonDepotBuilder:CardArt", "MoonCleaners.MoonDepotBuilder:ProductionNote",
             "MoonCleaners.MoonDepotConstruction:Spawn", "MoonCleaners.MoonDepotConstruction:ViewOf", "MoonCleaners.MoonWorld:RemoveStructureNow",
@@ -53,7 +56,7 @@ namespace StructureLib
             ClassInjector.RegisterTypeInIl2Cpp<CoreDriver>();
             var h = new Harmony(Guid);
             int ok = 0, failed = 0;
-            foreach (var t in new[] { typeof(FreezePatches), typeof(DefinitionPatches), typeof(KindRules), typeof(CatalogPatches), typeof(ModelPatches), typeof(BuildPatches), typeof(SavePatches), typeof(CargoPatches) })
+            foreach (var t in new[] { typeof(FreezePatches), typeof(DefinitionPatches), typeof(KindRules), typeof(CatalogPatches), typeof(ModelPatches), typeof(BuildPatches), typeof(SavePatches), typeof(CargoPatches), typeof(ProductionPatches) })
             {
                 try { h.CreateClassProcessor(t).Patch(); ok++; CoreLog.Debug($"Patched {t.Name}"); }
                 catch (Exception e) { failed++; CoreLog.Error($"Patching {t.Name} failed: {e}"); }

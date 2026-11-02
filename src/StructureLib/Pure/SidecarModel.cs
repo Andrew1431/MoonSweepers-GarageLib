@@ -46,30 +46,29 @@ namespace StructureLib
     public sealed class ShareRecord
     {
         public string Owner { get; set; }
-        /// <summary>MoonWalletSnapshot.dollars (in a production slot: kilograms).</summary>
+        /// <summary>MoonWalletSnapshot.dollars (0 in a production slot).</summary>
         public double Amount { get; set; }
-        /// <summary>MoonWalletSnapshot.pendingKilograms, kept so the round trip loses nothing.</summary>
+        /// <summary>MoonWalletSnapshot.pendingKilograms (in a production slot: the owner's kilograms, checked in game).</summary>
         public double Pending { get; set; }
     }
 
-    /// <summary>Production state of one modded processor (MoonProductionSnapshot). Used from Task 10.</summary>
+    /// <summary>
+    /// Production state of one modded processor: a MoonProductionSnapshot (id, progress, running, charge, stores) plus the
+    /// structure id and the cargo id of every slot, so a record can be checked against the definition it is restored into.
+    /// </summary>
     public sealed class ProductionRecord
     {
         /// <summary>Structure id of the machine.</summary>
         public string Id { get; set; }
+        /// <summary>Depot id of the machine; matches its <see cref="StructureRecord.DepotId"/>.</summary>
         public int DepotId { get; set; }
         public float Progress { get; set; }
         public bool Running { get; set; }
         public double Charge { get; set; }
-        public List<ProductionSlotRecord> Slots { get; set; } = new();
-    }
-
-    /// <summary>One processor slot: its cargo id and the per-owner shares held in it.</summary>
-    public sealed class ProductionSlotRecord
-    {
-        /// <summary>Cargo id held by the slot (a registered cargo id, or the game's own cargo name).</summary>
-        public string Cargo { get; set; }
-        public List<ShareRecord> Shares { get; set; } = new();
+        /// <summary>Per slot, the owners' shares (Pending = kilograms).</summary>
+        public List<List<ShareRecord>> Stores { get; set; } = new();
+        /// <summary>Per slot, its cargo id when saved: a registered cargo id, or "dust", "sand", "stone".</summary>
+        public List<string> SlotCargoIds { get; set; } = new();
     }
 
     /// <summary>

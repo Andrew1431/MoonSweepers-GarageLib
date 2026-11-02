@@ -1,13 +1,14 @@
 using BepInEx;
 using BepInEx.Logging;
 using BepInEx.Unity.IL2CPP;
+using MoonCleaners;
 using StructureLib;
 using UnityEngine;
 
 namespace ExampleStructure
 {
     // Example consumer: a floodlight clone sold in the Services tab, tagged with a small cube so tests can find its model,
-    // and one modded cargo kind, example grit.
+    // one modded cargo kind, example grit, and a processor that grinds moon dust into it.
     [BepInPlugin(Guid, "StructureLib Example Structure", "0.1.0")]
     [BepInDependency(StructureLib.Plugin.Guid)]
     public class Plugin : BasePlugin
@@ -38,7 +39,7 @@ namespace ExampleStructure
             }, Guid);
 
             // A modded cargo kind. Value 250 is what the world holds; structurelib.json records the id.
-            MoonStructures.RegisterCargo(new CargoDefinition
+            var grit = MoonStructures.RegisterCargo(new CargoDefinition
             {
                 Id = "ryanhartwig.example-grit",
                 Value = 250,
@@ -46,6 +47,28 @@ namespace ExampleStructure
                 ShortName = "grit",
                 UnitKilograms = 3,
                 Price = 2m,
+            }, Guid);
+
+            // A processor on the pressure chamber's model: grinds moon dust into example grit, 2 kg per 4 s cycle.
+            MoonStructures.Register(new StructureDefinition
+            {
+                Id = "ryanhartwig.example-grinder",
+                Name = "Example grinder",
+                Category = "Production",
+                Note = "StructureLib example: grinds moon dust into example grit.",
+                Price = 100m,
+                BaseStructure = MoonWorld.PressureChamberKind,
+                Processor = new ProcessorDefinition
+                {
+                    RunningKw = 1,
+                    CycleSeconds = 4,
+                    Slots =
+                    {
+                        Slot.Input("Dust", Cargo.Dust, 10),
+                        Slot.Batch("Grinding", Cargo.Dust, 2),
+                        Slot.Output("Grit", grit, 10),
+                    },
+                },
             }, Guid);
         }
     }

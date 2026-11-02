@@ -16,9 +16,9 @@ namespace StructureLib
     internal static class DevTools
     {
         internal static ConfigEntry<int> AutoLoadSlot;
-        internal static ConfigEntry<bool> AllowSlot1, RunSelfTest, ScreenshotMenu, AutoRemove, AutoSave;
+        internal static ConfigEntry<bool> AllowSlot1, RunSelfTest, ScreenshotMenu, AutoRemove, AutoSave, ForcePower;
         internal static ConfigEntry<string> AutoBuild, AutoFeed;
-        static float menuT, gameT, saveAt = -1f;
+        static float menuT, gameT, saveAt = -1f, feedAt = -1f;
         static bool loadRequested, selfTestRan, menuShot, autoBuilt;
 
         /// <summary>What AutoBuild did per entry (id or kind number as written in the config): ok, depot id, reason.</summary>
@@ -38,12 +38,13 @@ namespace StructureLib
             AllowSlot1 = cfg.Bind("Dev", "AllowSlot1", false, "Dev build: let AutoLoadSlot and SelfTest touch slot-1 (the real save). Leave false.");
             RunSelfTest = cfg.Bind("Dev", "SelfTest", false, "Dev build: run the in-game self-test 20 s after a world loads and log [selftest] lines.");
             AutoBuild = cfg.Bind("Dev", "AutoBuild", "", "Dev build: comma-separated structure ids or vanilla kind numbers to build once, 10 s after a world loads, 8 m apart behind (or beside) the walker. An entry whose kind already has a depot reuses it.");
-            AutoFeed = cfg.Bind("Dev", "AutoFeed", "", "Dev build: '<structureId>:<cargoId|Dust|Sand|Stone>:<kg>' to load into a built structure. (Not used yet.)");
+            AutoFeed = cfg.Bind("Dev", "AutoFeed", "", "Dev build: '<structureId>:<cargoId|Dust|Sand|Stone>:<kg>' to load into the first built structure of that id through the game's CrewProcessorLoad, 5 s after the AutoBuild step.");
             AutoRemove = cfg.Bind("Dev", "AutoRemove", true, "Dev build: the self-test removes the example lamp it checked. false leaves it in place (the sidecar carries it into the next launch).");
             AutoSave = cfg.Bind("Dev", "AutoSave", false, "Dev build: request a save 10 s after the AutoBuild step (whether or not AutoBuild names anything). The self-test waits for that save and checks the structurelib.json sidecar.");
+            ForcePower = cfg.Bind("Dev", "ForcePower", false, "Dev build: run every modded processor at full power (Power = 1) whatever its grid supplies. For isolating power problems; no self-test relies on it.");
             SelfTest.Subscribe();
             ScreenshotMenu = cfg.Bind("Dev", "ScreenshotMenu", false, "Dev build: 5 s after the self-test, open the build menu on the example lamp and save a screenshot to BepInEx/cache/structurelib/menu.png.");
-            CoreLog.Info($"[dev] AutoLoadSlot={AutoLoadSlot.Value} AllowSlot1={AllowSlot1.Value} SelfTest={RunSelfTest.Value} ScreenshotMenu={ScreenshotMenu.Value} AutoRemove={AutoRemove.Value} AutoSave={AutoSave.Value} AutoBuild='{AutoBuild.Value}' AutoFeed='{AutoFeed.Value}'");
+            CoreLog.Info($"[dev] AutoLoadSlot={AutoLoadSlot.Value} AllowSlot1={AllowSlot1.Value} SelfTest={RunSelfTest.Value} ScreenshotMenu={ScreenshotMenu.Value} AutoRemove={AutoRemove.Value} AutoSave={AutoSave.Value} ForcePower={ForcePower.Value} AutoBuild='{AutoBuild.Value}' AutoFeed='{AutoFeed.Value}'");
             // MoonStructures.Register reads this static at plugin Load time; prove the interop read works that early.
             try { CoreLog.Info($"[dev] MoonProductionSave.MaxSlots at Load = {MoonProductionSave.MaxSlots}"); }
             catch (Exception e) { CoreLog.Error("[dev] reading MoonProductionSave.MaxSlots at Load threw: " + e); }
@@ -71,12 +72,18 @@ namespace StructureLib
                     if (refusal != null) CoreLog.Warn("[dev] AutoBuild skipped: " + refusal);
                     else AutoBuilder.Run(AutoBuild.Value);
                 }
+                if (!string.IsNullOrWhiteSpace(AutoFeed.Value))
+                {
+                    if (refusal != null) CoreLog.Warn("[dev] AutoFeed skipped: " + refusal);
+                    else feedAt = gameT + 5f;
+                }
                 if (AutoSave.Value)
                 {
                     if (refusal != null) CoreLog.Warn("[dev] AutoSave skipped: " + refusal);
                     else saveAt = gameT + 10f;
                 }
             }
+            if (feedAt > 0f && gameT > feedAt) { feedAt = -1f; AutoFeeder.Run(AutoFeed.Value); }
             if (saveAt > 0f && gameT > saveAt) { saveAt = -1f; RequestSave(); }
             if (RunSelfTest.Value && !selfTestRan && gameT > 20f)
             {
@@ -245,6 +252,57 @@ namespace StructureLib
         }
     }
 
+    // [Dev] AutoFeed: loads cargo into the first built depot of a modded structure through the game's own
+    // CrewProcessorLoad, as the local player, and notes slot 0 before and after (in the same frame, before a cycle can
+    // take from it). Cargo is Dust, Sand, Stone or a registered cargo id.
+    internal static class AutoFeeder
+    {
+        internal sealed class Result
+        {
+            internal string StructureId, Error;
+            internal int Depot = -1;
+            internal double Kg, Before, After;
+            internal float At;
+        }
+
+        /// <summary>The last AutoFeed run; null when none ran.</summary>
+        internal static Result Last;
+
+        internal static void Run(string spec)
+        {
+            var r = new Result { At = Time.unscaledTime };
+            Last = r;
+            try { r.Error = Feed(spec.Trim(), r); }
+            catch (Exception e) { r.Error = "threw " + e.GetType().Name + ": " + e.Message; }
+            CoreLog.Info($"[dev] AutoFeed '{spec}': " + (r.Error ?? $"depot {r.Depot} slot 0 held {r.Before} kg, now {r.After} kg"));
+        }
+
+        static string Feed(string spec, Result r)
+        {
+            var parts = spec.Split(':');
+            if (parts.Length != 3) return "expected '<structureId>:<cargo>:<kg>'";
+            r.StructureId = parts[0].Trim();
+            var d = MoonStructures.Definition(r.StructureId);
+            if (d == null || !MoonStructures.IsModded(d.Kind)) return $"no registered structure '{r.StructureId}'";
+            string cargoText = parts[1].Trim();
+            MoonCargo cargo;
+            var modded = MoonStructures.CargoDefinition(cargoText);
+            if (modded != null) cargo = (MoonCargo)modded.Value;
+            else if (!Enum.TryParse(cargoText, true, out cargo) || (byte)cargo > (byte)MoonCargo.Stone) return $"unknown cargo '{cargoText}'";
+            if (!double.TryParse(parts[2].Trim(), System.Globalization.NumberStyles.Float, System.Globalization.CultureInfo.InvariantCulture, out double kg) || kg <= 0)
+                return $"bad kilograms '{parts[2]}'";
+            r.Kg = kg;
+            var world = CoreState.World ?? CoreState.FindWorld();
+            if (world == null) return "no MoonWorld";
+            r.Depot = SelfTest.DepotOfKind(world, d.Kind);
+            if (r.Depot < 0) return $"no built '{r.StructureId}' in this world";
+            r.Before = SelfTest.Stored(world.ProductionOf(r.Depot), 0);
+            world.CrewProcessorLoad(MoonWorld.LocalPlayer, r.Depot, cargo, kg);
+            r.After = SelfTest.Stored(world.ProductionOf(r.Depot), 0);
+            return null;
+        }
+    }
+
     // Evidence for the build-menu check without a screen: open the first builder's menu on the example lamp's tab,
     // select the lamp, and save a screenshot to BepInEx/cache/structurelib/menu.png.
     internal static class MenuShot
@@ -326,6 +384,7 @@ namespace StructureLib
             }
             CargoChecks();
             CanisterRoundTrip();
+            ProcessorChecks(lamp);
             int expected = KindAllocator.KindOf("ryanhartwig.example-lamp");
             Assert("example-kind-hashed", lamp != null && lamp.Kind == expected,
                 lamp == null ? "'ryanhartwig.example-lamp' is not registered (is ExampleStructure installed?)" : $"kind {lamp.Kind}, expected {expected}");
@@ -374,9 +433,10 @@ namespace StructureLib
         // Every frame in game: answers the pending card art checks, then finishes the run.
         internal static void Tick()
         {
+            if (cycleUntil >= 0f) TickCycle();
             if (artUntil >= 0f) { TickCardArt(); return; }
             if (renderUntil >= 0f) { TickRendered(); return; }
-            if (saveUntil >= 0f) TickSaveWait();
+            if (saveUntil >= 0f && cycleUntil < 0f) TickSaveWait();
         }
 
         // cardart-modded: CardArt answers something once nothing is pending, or after 5 s.
@@ -481,7 +541,7 @@ namespace StructureLib
             });
         }
 
-        static readonly HashSet<int> builtEvents = new(), builtViews = new(), removedEvents = new();
+        static readonly HashSet<int> builtEvents = new(), builtViews = new(), removedEvents = new(), cycleEvents = new();
 
         // Called when AutoBuild starts: forget every event id except Built for modded depots that exist in this world now
         // (raised when the save restored them), so an id from an earlier build cannot satisfy a later assertion.
@@ -494,6 +554,7 @@ namespace StructureLib
             builtEvents.IntersectWith(live);
             builtViews.IntersectWith(live);
             removedEvents.Clear();
+            cycleEvents.Clear();
         }
 
         // Records the library's events so the checks can see they fired. Called once from DevTools.Bind.
@@ -506,6 +567,7 @@ namespace StructureLib
                 if (b.View != null) builtViews.Add(b.DepotId);
             };
             MoonStructures.Removed += id => removedEvents.Add(id);
+            MoonStructures.CycleFinished += c => { if (c != null && c.State != null && c.Definition != null) cycleEvents.Add(c.DepotId); };
         }
 
         internal static int DepotOfKind(MoonWorld world, int kind)
@@ -565,8 +627,9 @@ namespace StructureLib
             else
             {
                 // Before BuildChecks, which may remove the lamp.
-                if (DevTools.AutoSave.Value) SaveChecks(lamp);
+                if (DevTools.AutoSave.Value) { SaveChecks(lamp); ProductionSaveCheck(); }
                 ReloadChecks(lamp);
+                ProductionReloadCheck();
                 BuildChecks(lamp);
             }
             Done();
@@ -605,6 +668,15 @@ namespace StructureLib
         {
             var world = CoreState.World ?? CoreState.FindWorld();
             string skip = lamp == null ? "example lamp not registered" : world == null ? "no MoonWorld found" : null;
+            // The lamp checks apply when this run built the lamp or the world holds one (as BuildChecks).
+            if (skip == null && !DevTools.AutoBuildNames(LampId) && DepotOfKind(world, lamp.Kind) < 0)
+                CoreLog.Info($"[selftest] no '{LampId}' in the world: save-strips-modded and sidecar-written not applicable");
+            else LampSaveChecks(lamp, world, skip);
+            VanillaSaveCheck(world, skip);
+        }
+
+        static void LampSaveChecks(StructureDefinition lamp, MoonWorld world, string skip)
+        {
             Check("save-strips-modded", skip, () =>
             {
                 var w = WriteAfterRequest(out string why);
@@ -625,6 +697,10 @@ namespace StructureLib
                 CoreLog.Info($"[selftest] sidecar {CoreLog.Redact(SidecarPath())} holds {n} '{LampId}' record(s)");
                 return (n > 0, $"{Sidecar.FileName} has no structure with Id '{LampId}'");
             });
+        }
+
+        static void VanillaSaveCheck(MoonWorld world, string skip)
+        {
             Check("vanilla-save-clean", skip, () =>
             {
                 var w = WriteAfterRequest(out string why);
@@ -823,6 +899,107 @@ namespace StructureLib
             var r = new List<string>();
             for (int i = 0; i < l.Count; i++) { var c = l.get_Item(i); r.Add(c == null ? "null" : $"{c.id}:{c.cargo}"); }
             return string.Join(",", r);
+        }
+
+        // The example grinder (a processor on the pressure chamber): InputSlot answers from its Input slots; a built or
+        // restored grinder has the three slots of its definition; AutoFeed's dust lands in slot 0; within 30 s a cycle
+        // puts grit into the output slot (slot 2) and raises CycleFinished. With no outfeed belt the game never calls
+        // EmitCargo (fact (d)), so the output slot is what is asserted; EmitCargo's grit count is only logged.
+        const string GrinderId = "ryanhartwig.example-grinder";
+        static int grinderDepot = -1;
+        static float cycleUntil = -1f;
+
+        static void ProcessorChecks(StructureDefinition lamp)
+        {
+            var world = CoreState.World ?? CoreState.FindWorld();
+            var grinder = MoonStructures.Definition(GrinderId);
+            string noGrinder = grinder == null ? $"'{GrinderId}' is not registered (is ExampleStructure installed?)" : null;
+            Check("inputslot-accepts-dust", noGrinder, () =>
+            {
+                int i = MoonWorld.InputSlot(grinder.Kind, MoonCargo.Dust);
+                return (i == 0, $"InputSlot({grinder.Kind}, Dust) = {i}");
+            });
+            Check("inputslot-refuses-dust", noGrinder ?? (lamp == null ? "example lamp not registered" : null), () =>
+            {
+                int l = MoonWorld.InputSlot(lamp.Kind, MoonCargo.Dust), s = MoonWorld.InputSlot(grinder.Kind, MoonCargo.Stone);
+                return (l == -1 && s == -1, $"InputSlot(lamp {lamp.Kind}, Dust) = {l}, InputSlot(grinder {grinder.Kind}, Stone) = {s}");
+            });
+            grinderDepot = grinder != null && world != null ? DepotOfKind(world, grinder.Kind) : -1;
+            if (grinderDepot < 0 && !DevTools.AutoBuildNames(GrinderId))
+            {
+                CoreLog.Info($"[selftest] '{GrinderId}' was neither built (AutoBuild) nor restored this run: processor state checks not applicable");
+                return;
+            }
+            Check("processor-spec-slots", noGrinder ?? (grinderDepot < 0 ? "no example grinder depot in world.depots" : null), () =>
+            {
+                var s = world.ProductionOf(grinderDepot);
+                if (s == null) return (false, $"ProductionOf({grinderDepot}) is null");
+                CoreLog.Info($"[selftest] grinder depot {grinderDepot}: {StateText(s)}");
+                int n = s.stores?.Length ?? -1;
+                return (n == 3, $"ProductionOf({grinderDepot}).stores.Length = {n}, expected 3");
+            });
+            var feed = AutoFeeder.Last;
+            if (feed == null || feed.StructureId != GrinderId) return;
+            Check("feed-lands-in-slot0", feed.Error, () => (feed.After >= feed.Kg, $"Stored(0) {feed.Before} -> {feed.After} kg after loading {feed.Kg} kg into depot {feed.Depot}"));
+            if (feed.Error == null) cycleUntil = feed.At + 30f;
+        }
+
+        static void TickCycle()
+        {
+            MoonProductionState s = null;
+            try { s = (CoreState.World ?? CoreState.FindWorld())?.ProductionOf(grinderDepot); } catch (Exception) { }
+            bool grit = Stored(s, 2) > 0, raised = cycleEvents.Contains(grinderDepot);
+            if (!(grit && raised) && Time.unscaledTime < cycleUntil) return;
+            cycleUntil = -1f;
+            CoreLog.Info($"[selftest] grinder depot {grinderDepot} after its cycle: {StateText(s)}; CycleFinished raised: {raised}; EmitCargo called with grit {Patches.ProductionPatches.ModdedCargoEmits}x (no outfeed belt, none expected)");
+            if (DevTools.ForcePower.Value) { Assert("cycle-produces-grit", false, "[Dev] ForcePower is on: the cycle ran on forced power, which proves nothing about the grid"); return; }
+            Assert("cycle-produces-grit", grit && raised, $"within 30 s of the feed: Stored(2) = {Stored(s, 2)}, CycleFinished raised: {raised}; {StateText(s)}");
+        }
+
+        // After the AutoSave save: the sidecar on disk holds the grinder's production record, slot 2 recorded as grit.
+        static void ProductionSaveCheck()
+        {
+            if (grinderDepot < 0) return;
+            Check("production-sidecar", SidecarPath() == null ? "CoreState.SaveRoot is unknown" : null, () =>
+            {
+                string path = SidecarPath();
+                if (!File.Exists(path)) return (false, $"no {Sidecar.FileName} in the save root");
+                var file = SidecarCodec.Deserialize(File.ReadAllText(path));
+                var p = file.Production.FirstOrDefault(r => r.DepotId == grinderDepot);
+                if (p == null) return (false, $"{Sidecar.FileName} has no production record for depot {grinderDepot} ({file.Production.Count} record(s))");
+                CoreLog.Info($"[selftest] sidecar production record: '{p.Id}' depot {p.DepotId} progress {p.Progress:F3} running {p.Running} charge {p.Charge} stores [{string.Join(" ", p.Stores.Select((s, i) => $"{i}:{s.Sum(x => x.Pending)}"))} kg] cargo [{string.Join(", ", p.SlotCargoIds)}]");
+                return (p.SlotCargoIds.Count > 2 && p.SlotCargoIds[2] == GritId, $"SlotCargoIds = [{string.Join(", ", p.SlotCargoIds)}]");
+            });
+        }
+
+        // A launch that did not build the grinder, after one that saved it: its production state came back at load with
+        // the saved kilograms in slot 0 and in every other slot (read right after RestoreProduction, before any cycle could
+        // change them), and it is still there.
+        static void ProductionReloadCheck()
+        {
+            if (DevTools.AutoBuildNames(GrinderId) || !Sidecar.LoadedProductionIds().Contains(GrinderId)) return;
+            var world = CoreState.World ?? CoreState.FindWorld();
+            Check("production-reload", world == null ? "no MoonWorld found" : null, () =>
+            {
+                var r = Sidecar.RestoredProduction.FirstOrDefault(x => x.StructureId == GrinderId);
+                if (r == null) return (false, "the sidecar held a grinder production record, but none was restored at load");
+                var s = world.ProductionOf(r.Depot);
+                string saved = string.Join(" ", r.Saved), loaded = string.Join(" ", r.Loaded);
+                CoreLog.Info($"[selftest] restored grinder production: depot {r.Depot}, saved kg [{saved}], at load [{loaded}]; now {StateText(s)}");
+                if (s == null) return (false, $"ProductionOf({r.Depot}) is null now");
+                bool same = r.Saved.Length == r.Loaded.Length && r.Saved.Zip(r.Loaded, (a, b) => Math.Abs(a - b) <= 0.01).All(x => x);
+                return (same, $"saved kg [{saved}], restored [{loaded}] (Stored(0) {r.Loaded.FirstOrDefault()} vs {r.Saved.FirstOrDefault()})");
+            });
+        }
+
+        /// <summary>Kilograms in a slot; -1 when there is no state or no such slot.</summary>
+        internal static double Stored(MoonProductionState s, int slot) => s?.stores != null && slot < s.stores.Length ? s.Stored(slot) : -1;
+
+        static string StateText(MoonProductionState s)
+        {
+            if (s == null) return "no production state";
+            int n = s.stores?.Length ?? 0;
+            return $"kind {s.Kind} stores [{string.Join(" ", Enumerable.Range(0, n).Select(i => $"{i}:{Stored(s, i):0.##}"))}] progress {s.Progress:F3} running {s.Running} grid {s.Grid} power {s.Power:F2} cycles {s.Cycles} status '{s.Status}'";
         }
 
         // A modded kind answers BuildDefinition with its own clone, the build menu answers for it, and an unregistered

@@ -155,7 +155,9 @@ namespace StructureLib
     public sealed class CycleFinished
     {
         public StructureDefinition Definition;
-        public int Kind;
-        public Vector3 Position;
+        /// <summary>The game's depot id of the machine (key of <c>MoonWorld.production</c>).</summary>
+        public int DepotId;
+        /// <summary>The machine's live production state, after the cycle moved its batch into the output slot.</summary>
+        public MoonProductionState State;
     }
 }

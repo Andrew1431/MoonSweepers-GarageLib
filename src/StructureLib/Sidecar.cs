@@ -38,6 +38,21 @@ namespace StructureLib
         /// <summary>Structure ids in the file loaded for this session (orphans included).</summary>
         internal static List<string> LoadedIds() { lock (gate) return loaded.Structures.Select(s => s.Id).ToList(); }
 
+        /// <summary>Structure ids of the production records in the file loaded for this session (orphans included).</summary>
+        internal static List<string> LoadedProductionIds() { lock (gate) return loaded.Production.Select(p => p.Id).ToList(); }
+
+        /// <summary>A production record the last load restored: where, and each slot as saved and as the world held it right after RestoreProduction.</summary>
+        internal sealed class ProductionRestore
+        {
+            internal string StructureId;
+            internal int Depot;
+            // Kilograms per slot as saved, and in the world right after RestoreProduction.
+            internal double[] Saved, Loaded;
+        }
+
+        /// <summary>Production records restored by the last load (read by the dev self-test).</summary>
+        internal static readonly List<ProductionRestore> RestoredProduction = new();
+
         /// <summary>Structure ids kept as orphans at the last inject.</summary>
         internal static readonly List<string> Orphans = new();
 
@@ -50,13 +65,19 @@ namespace StructureLib
             internal bool MainThread;
         }
 
-        /// <summary>A sidecar written to its own .tmp by the depot Write prefix, committed once the whole vanilla write is through.</summary>
+        /// <summary>
+        /// A sidecar written to its own .tmp by the depot Write prefix (and rewritten with this save's production records by
+        /// the MoonProductionSave.Write prefix), committed once the whole vanilla write is through.
+        /// </summary>
         internal sealed class PendingWrite
         {
             internal string Tmp, Path;
             /// <summary>Order of the save snapshot it was built from (see NoteSaveSnapshot); commits never go backwards.</summary>
             internal long Order;
-            internal int Structures, Kept, Canisters, KeptCanisters;
+            internal int Structures, Kept, Canisters, KeptCanisters, Production = -1, KeptProduction;
+            // This save's live records, kept so the production prefix can rewrite the .tmp with its own records added.
+            internal List<StructureRecord> LiveStructures;
+            internal List<CanisterRecord> LiveCanisters;
         }
 
         // Save snapshot order: every save snapshot is numbered on the main thread when SnapshotCanisters fills it, so
@@ -102,6 +123,7 @@ namespace StructureLib
                 loadedSnapshot = IntPtr.Zero;
                 injectedFor = IntPtr.Zero;
                 canistersInjectedFor = IntPtr.Zero;
+                productionInjectedFor = IntPtr.Zero;
                 sessionLoaded = false;
             }
         }
@@ -121,6 +143,7 @@ namespace StructureLib
                 canistersInWorld.Clear();
                 CanisterOrphans.Clear();
                 cargoPending.Clear();
+                ForgetProduction();
             }
         }
 
@@ -138,6 +161,7 @@ namespace StructureLib
                 canistersInWorld.Clear();
                 CanisterOrphans.Clear();
                 cargoPending.Clear();
+                ForgetProduction();
                 string path = PathFor(root);
                 if (path == null) { CoreLog.Warn("Sidecar load: save root unknown, starting empty"); return; }
                 if (!File.Exists(path)) { CoreLog.Info($"Sidecar: none at {CoreLog.Redact(path)} (no modded structures saved yet)"); return; }
@@ -337,7 +361,7 @@ namespace StructureLib
 
             try
             {
-                return WriteTmp(records, canisters, OrderOf(state));
+                return WriteTmp(records, canisters, null, OrderOf(state));
             }
             catch (Exception e)
             {
@@ -659,6 +683,223 @@ namespace StructureLib
             return s;
         }
 
+        // ---- production ----
+        // A machine's production state is saved by MoonProductionSave.Write from state.production (MoonProductionSnapshot:
+        // depot id, progress, running, charge, per-slot owner shares; no kind and no cargo). It runs inside the same
+        // Serialize as MoonDepotSave.Write, after it, so modded machines' snapshots are cut out there and their records
+        // join that save's pending sidecar write (its .tmp is rewritten with them); they are put back after. On load they
+        // go back into the load snapshot before RestoreProduction, which creates each machine's state through
+        // NewProduction (sized by the Processor(kind) prefix) and fills its stores, as for any machine.
+
+        // Loaded production records that are in the world now (injected, and restored by RestoreProduction), with their
+        // depot id. Only these are replaced by the live records on write; every other one is written back verbatim.
+        static readonly Dictionary<ProductionRecord, int> productionInWorld = new(ReferenceEqualityComparer.Instance);
+        // Injected into the load snapshot, not yet seen in the world (ClaimProduction decides).
+        static readonly List<(ProductionRecord r, int id)> productionPending = new();
+        static IntPtr productionInjectedFor;
+
+        // Under gate: a new load or session forgets the previous one's production bookkeeping.
+        static void ForgetProduction()
+        {
+            productionInWorld.Clear();
+            productionPending.Clear();
+            RestoredProduction.Clear();
+        }
+
+        /// <summary>What a production strip took out, with the original indexes. Owned by the caller (the MoonProductionSave.Write prefix).</summary>
+        internal sealed class StrippedProduction
+        {
+            internal readonly List<(int index, MoonProductionSnapshot s)> Items = new();
+        }
+
+        /// <summary>
+        /// Takes the production snapshot of every depot in the modded range (by state.depots, which holds the modded depots
+        /// again once the depot Write finalizer ran) out of state.production into <paramref name="stripped"/>, and returns
+        /// the records of the registered processors. Pass 1 builds every record; pass 2 only removes. Touches nothing but
+        /// the snapshot and the frozen registry, so it may run off the main thread.
+        /// </summary>
+        internal static List<ProductionRecord> StripProduction(MoonLooseDustSnapshot state, StrippedProduction stripped)
+        {
+            var records = new List<ProductionRecord>();
+            var list = state?.production;
+            var depots = state?.depots;
+            if (list == null || list.Count == 0 || depots == null) return records;
+            var kindOf = new Dictionary<int, int>();
+            for (int i = 0; i < depots.Count; i++)
+            {
+                var s = depots.get_Item(i);
+                if (s != null && s.kind >= KindAllocator.FirstModdedKind) kindOf[s.id] = s.kind;
+            }
+            if (kindOf.Count == 0) return records;
+
+            var take = new List<int>();
+            var unrecorded = new List<(int id, int kind)>();
+            for (int i = 0; i < list.Count; i++)
+            {
+                var p = list.get_Item(i);
+                if (p == null || !kindOf.TryGetValue(p.id, out int kind)) continue;
+                take.Add(i);
+                var d = Remap.Live(kind);
+                if (d?.Processor == null) unrecorded.Add((p.id, kind));
+                else records.Add(ToProductionRecord(d, p));
+            }
+            for (int k = take.Count - 1; k >= 0; k--)
+            {
+                int i = take[k];
+                var p = list.get_Item(i);
+                list.RemoveAt(i);
+                stripped.Items.Insert(0, (i, p));
+            }
+            foreach (var (id, kind) in unrecorded)
+                CoreLog.Warn($"Save: production state of depot {id} (modded kind {kind}, no registered processor) left out of the vanilla save and not recorded");
+            return records;
+        }
+
+        /// <summary>Puts stripped production snapshots back at their original indexes; returns how many.</summary>
+        internal static int PutBackProduction(MoonLooseDustSnapshot state, StrippedProduction stripped)
+        {
+            if (stripped == null || stripped.Items.Count == 0) return 0;
+            if (state?.production == null) { CoreLog.Error($"Save: cannot put {stripped.Items.Count} modded production states back: the snapshot has no production list"); return 0; }
+            foreach (var (i, p) in stripped.Items) state.production.Insert(Math.Min(i, state.production.Count), p);
+            return stripped.Items.Count;
+        }
+
+        /// <summary>
+        /// The MoonProductionSave.Write prefix: this save's production records join its pending sidecar write. The file is
+        /// rebuilt into a new .tmp (same snapshot order) and the old .tmp deleted; if that throws, the caller keeps the old
+        /// pending write, which holds every loaded production record verbatim.
+        /// </summary>
+        internal static PendingWrite AddProduction(PendingWrite pending, List<ProductionRecord> production)
+        {
+            if (pending == null) return null;
+            var rewritten = WriteTmp(pending.LiveStructures, pending.LiveCanisters, production, pending.Order);
+            if (rewritten == null) return pending;
+            try { File.Delete(pending.Tmp); } catch (Exception) { }
+            CoreLog.Info($"Save: moved {production.Count} modded production states out of the vanilla save; sidecar holds {rewritten.Production} production records ({rewritten.KeptProduction} kept untouched)");
+            return rewritten;
+        }
+
+        static ProductionRecord ToProductionRecord(StructureDefinition d, MoonProductionSnapshot p)
+        {
+            var r = new ProductionRecord { Id = d.Id, DepotId = p.id, Progress = p.progress, Running = p.running, Charge = p.charge, SlotCargoIds = SpecBuilder.SlotCargoIds(d) };
+            var stores = p.stores;
+            for (int i = 0; stores != null && i < stores.Count; i++)
+            {
+                var shares = stores.get_Item(i);
+                var slot = new List<ShareRecord>();
+                for (int j = 0; shares != null && j < shares.Count; j++)
+                {
+                    var w = shares.get_Item(j);
+                    if (w != null) slot.Add(ShareOf(w));
+                }
+                r.Stores.Add(slot);
+            }
+            return r;
+        }
+
+        static MoonProductionSnapshot ToProductionSnapshot(ProductionRecord r, int id)
+        {
+            var s = new MoonProductionSnapshot();
+            s.id = id;
+            s.progress = r.Progress;
+            s.running = r.Running;
+            s.charge = r.Charge;
+            var stores = new Il2CppSystem.Collections.Generic.List<Il2CppSystem.Collections.Generic.List<MoonWalletSnapshot>>();
+            foreach (var slot in r.Stores)
+            {
+                var shares = new Il2CppSystem.Collections.Generic.List<MoonWalletSnapshot>();
+                foreach (var share in slot) if (share != null) shares.Add(WalletOf(share));
+                stores.Add(shares);
+            }
+            s.stores = stores;
+            return s;
+        }
+
+        // RestoreProduction prefix (after RestoreDepots, so the injected structures are in world.depots): a loaded record
+        // goes into the load snapshot when its structure was injected and restored (inWorld, matched by structure id and
+        // saved depot id, so a depot restored under a new id takes its record along) and it still fits the definition's
+        // slots. Anything else stays in the file untouched. Same two passes as InjectDepots; the game list is filled
+        // outside `gate`.
+        internal static void InjectProduction(MoonLooseDustSnapshot snapshot)
+        {
+            if (snapshot == null) return;
+            var plan = new List<(ProductionRecord r, MoonProductionSnapshot s, int id)>();
+            lock (gate)
+            {
+                if (snapshot.Pointer == productionInjectedFor) return;
+                if (loaded.Production.Count == 0) { productionInjectedFor = snapshot.Pointer; return; }
+                if (!MoonStructures.Frozen || MoonStructures.Disabled)
+                {
+                    CoreLog.Warn($"Sidecar: registry not working (frozen={MoonStructures.Frozen}, disabled={MoonStructures.Disabled}); {loaded.Production.Count} production records kept in the sidecar untouched");
+                    return;
+                }
+                productionInjectedFor = snapshot.Pointer;
+                var depotOf = new Dictionary<(string, int), int>();
+                foreach (var (r, id) in inWorld) depotOf[(r.Id, r.DepotId)] = id;
+                var taken = new HashSet<int>();
+                var list = snapshot.production;
+                for (int i = 0; list != null && i < list.Count; i++) { var s = list.get_Item(i); if (s != null) taken.Add(s.id); }
+                foreach (var p in loaded.Production)
+                {
+                    var d = MoonStructures.Definition(p.Id);
+                    string why;
+                    int id = -1;
+                    if (d?.Processor == null || !MoonStructures.IsModded(d.Kind)) why = "no installed mod registers it as a processor";
+                    else if (!depotOf.TryGetValue((p.Id, p.DepotId), out id)) why = $"its structure (depot {p.DepotId}) is not in the world";
+                    else if (taken.Contains(id)) why = $"depot {id} already has a production state in the save";
+                    else why = ProcessorLayout.RecordMismatch(p.SlotCargoIds, p.Stores.Count, SpecBuilder.SlotCargoIds(d));
+                    if (why != null)
+                    {
+                        CoreLog.Warn($"Sidecar: production record of '{p.Id}' (depot {p.DepotId}) kept in the sidecar untouched: {why}");
+                        continue;
+                    }
+                    taken.Add(id);
+                    plan.Add((p, ToProductionSnapshot(p, id), id));
+                }
+                productionPending.Clear();
+                foreach (var (p, _, id) in plan) productionPending.Add((p, id));
+            }
+            snapshot.production ??= new Il2CppSystem.Collections.Generic.List<MoonProductionSnapshot>();
+            foreach (var (p, s, id) in plan)
+            {
+                snapshot.production.Add(s);
+                CoreLog.Info($"Sidecar: restoring production of '{p.Id}' as depot {id}: stores [{string.Join(" ", p.Stores.Select((x, i) => $"{i}:{x.Sum(y => y.Pending)}"))} kg], progress {p.Progress:F3}, running {p.Running}");
+            }
+            CoreLog.Info($"Sidecar: injected {plan.Count} modded production states into the load snapshot");
+        }
+
+        // RestoreProduction postfix: an injected record counts as in the world only once the machine's state is there with
+        // the record's slots; otherwise it stays unclaimed and is written back verbatim.
+        internal static void ClaimProduction(MoonWorld world)
+        {
+            List<(ProductionRecord r, int id)> pending;
+            lock (gate)
+            {
+                if (productionPending.Count == 0) return;
+                pending = productionPending.ToList();
+                productionPending.Clear();
+            }
+            int ok = 0;
+            foreach (var (r, id) in pending)
+            {
+                var s = world?.ProductionOf(id);
+                int slots = s?.stores?.Length ?? -1;
+                if (s == null || slots != r.Stores.Count)
+                {
+                    CoreLog.Error($"Sidecar: production of '{r.Id}' depot {id} was injected but the world did not restore it ({(s == null ? "no state" : slots + " slots")}); kept in the sidecar untouched");
+                    continue;
+                }
+                var restored = new ProductionRestore { StructureId = r.Id, Depot = id, Saved = r.Stores.Select(x => x.Sum(y => y.Pending)).ToArray(), Loaded = Enumerable.Range(0, slots).Select(i => s.Stored(i)).ToArray() };
+                lock (gate)
+                {
+                    productionInWorld[r] = id;
+                    RestoredProduction.Add(restored);
+                }
+                ok++;
+            }
+            CoreLog.Info($"Sidecar: {ok} of {pending.Count} injected production states restored");
+        }
+
         // Called once the whole vanilla write is through (see SavePatches): the file is committed only when nothing in it
         // threw; otherwise the .tmp is dropped and the previous sidecar stays, matching the vanilla save the game keeps.
         // Commits never go backwards: a write prepared from an older save snapshot than the last one committed to the same
@@ -696,9 +937,9 @@ namespace StructureLib
             }
         }
 
-        // Builds the file for one save into its own .tmp. `structures` and `canisters` are what this save stripped (the
-        // world now); `canisters` null keeps every loaded canister record verbatim.
-        static PendingWrite WriteTmp(List<StructureRecord> structures, List<CanisterRecord> canisters, long order)
+        // Builds the file for one save into its own .tmp. `structures`, `canisters` and `production` are what this save
+        // stripped (the world now); `canisters` or `production` null keeps every loaded record of that list verbatim.
+        static PendingWrite WriteTmp(List<StructureRecord> structures, List<CanisterRecord> canisters, List<ProductionRecord> production, long order)
         {
             string root = CoreState.SaveRoot;
             if (root == null) { CoreState.CaptureRoot(CoreState.World); root = CoreState.SaveRoot; }
@@ -720,12 +961,13 @@ namespace StructureLib
                     LoadFor(root, IntPtr.Zero);
                 }
                 var liveCanisters = canisters ?? new List<CanisterRecord>();
-                var current = new SidecarFile { Written = DateTime.Now.ToString("s"), Structures = structures.ToList(), Canisters = liveCanisters.ToList() };
+                var liveProduction = production ?? new List<ProductionRecord>();
+                var current = new SidecarFile { Written = DateTime.Now.ToString("s"), Structures = structures.ToList(), Production = liveProduction.ToList(), Canisters = liveCanisters.ToList() };
                 // Loaded records the world holds are replaced by the live lists; every other one is kept as it was.
                 var notInWorld = new SidecarFile
                 {
                     Structures = loaded.Structures.Where(r => !inWorld.ContainsKey(r)).ToList(),
-                    Production = loaded.Production,
+                    Production = production == null ? loaded.Production.ToList() : loaded.Production.Where(r => !productionInWorld.ContainsKey(r)).ToList(),
                     Canisters = canisters == null ? loaded.Canisters.ToList() : loaded.Canisters.Where(r => !canistersInWorld.ContainsKey(r)).ToList(),
                 };
                 var data = SidecarCodec.Merge(current, notInWorld, _ => false);
@@ -737,6 +979,8 @@ namespace StructureLib
                     Tmp = tmp, Path = path, Order = order,
                     Structures = data.Structures.Count, Kept = data.Structures.Count - structures.Count,
                     Canisters = data.Canisters.Count, KeptCanisters = data.Canisters.Count - liveCanisters.Count,
+                    Production = production == null ? -1 : data.Production.Count, KeptProduction = data.Production.Count - liveProduction.Count,
+                    LiveStructures = structures, LiveCanisters = canisters,
                 };
             }
         }

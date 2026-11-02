@@ -83,14 +83,5 @@ namespace StructureLib.Patches
             __result = d.Note ?? "";
             return false;
         }
-
-        // What a machine accepts, shown in its details. Empty until processors land.
-        [HarmonyPatch(typeof(MoonWorld), nameof(MoonWorld.AcceptsText)), HarmonyPrefix]
-        static bool AcceptsText(int kind, ref string __result)
-        {
-            if (Remap.Live(kind) == null) return true;
-            __result = "";
-            return false;
-        }
     }
 }
