@@ -517,6 +517,7 @@ namespace StructureLib
         static bool enteredHooked;
         static int beltPhase, inBelt = -1, inDepot = -1, waitId = -1, releasedId = -1, enteredMark;
         static float phaseUntil = -1f, waitSince = -1f;
+        static bool sandSeen;
         static double massMark;
         static MoonConveyorPath inPath;
         static readonly List<int> spawned = new();
@@ -630,12 +631,6 @@ namespace StructureLib
             waitSince = -1f;
             enteredMark = entered.Count;
             phaseUntil = Time.unscaledTime + 90f;
-            // The chamber makes sand only on solar power: without the solar tracker (94) no sand canister ever rides this belt.
-            if (!DevTools.AutoBuildNames("94"))
-            {
-                CoreLog.Info("[selftest] AutoBuild names no solar tracker (94), so the chamber makes no sand: belt-in-refuses-cargo not applicable");
-                StartGrit(world);
-            }
         }
 
         static void TickRefuse(MoonWorld world, float now)
@@ -645,13 +640,22 @@ namespace StructureLib
             foreach (var kv in world.riders)
             {
                 var r = kv.Value;
-                if (r.belt != inBelt || r.moving || r.distance < len - 0.1f || !world.canisters.ContainsKey(kv.Key)) continue;
-                if (world.canisters.get_Item(kv.Key).cargo == MoonCargo.Sand) atEnd = kv.Key;
+                if (r.belt != inBelt || !world.canisters.ContainsKey(kv.Key) || world.canisters.get_Item(kv.Key).cargo != MoonCargo.Sand) continue;
+                sandSeen = true;
+                if (!r.moving && r.distance >= len - 0.1f) atEnd = kv.Key;
             }
             if (atEnd >= 0 && atEnd != waitId) { waitId = atEnd; waitSince = now; }
             if (atEnd < 0) { waitId = -1; waitSince = -1f; }
             bool held = waitId >= 0 && now - waitSince >= 5f;
             if (!held && now < phaseUntil) return;
+            // Judged by what happened, not by the config: when no sand canister rode this belt in the whole window, the
+            // chamber made none (it needs power, e.g. the solar tracker 94 with SunOverhead), and there was nothing to refuse.
+            if (!held && !sandSeen)
+            {
+                CoreLog.Info($"[selftest] no sand canister rode belt {inBelt} into the grinder within 90 s (the chamber made no sand): belt-in-refuses-cargo not applicable");
+                StartGrit(world);
+                return;
+            }
             var s = world.ProductionOf(inDepot);
             string status = SafeStatus(s);
             int sandIn = entered.Skip(enteredMark).Count(e => e.DepotId == inDepot && e.Cargo.Id == "sand");

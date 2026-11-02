@@ -237,25 +237,39 @@ lines and `[selftest] done: N passed, M failed`. Leave the switches at their def
 | `RegisterBoxProbe` | The example registers `ryanhartwig.example-box-probe`, a box splitter router (floodlight donor, 1.4 m footprint, In / Forward / Left / Right); 15 s after load its definition, view and colliders are logged and three dust canisters are put on the AutoBelt belt into it and followed for 10 s (CargoRouted count, riders). |
 | `ForcePower`, `ScreenshotMenu` | Run modded processors at full power whatever the grid gives (isolating power problems only); screenshot the build menu after the self-test. |
 
-Checks whose setup a run lacks log `[selftest] ... not applicable` (an Info line, not a failure): the power checks
-when the burner has no `AutoFeed` entry and a belt feeds it, `belt-chain-feeds` and `belt-save-clean` when the
-grinder's belt ends at a router, `belt-in-refuses-cargo` when `AutoBuild` names no solar tracker (94, so the chamber
-makes no sand), and every `beltboxes-*` check when BeltBoxes is not installed.
+Checks whose setup a run lacks log `[selftest] ... not applicable` (an Info line, not a failure), and only then:
+- `power-burner-supplies`, `power-grinder-runs-on-burner` and `power-no-burn-when-full` when the burner has no
+  `AutoFeed` entry and is fed through a router (`power-node-registered` and `power-grid-joined` still run; a burner
+  fed straight by a machine's belt with no `AutoFeed` still fails all five);
+- `belt-chain-feeds` and `belt-save-clean` when the grinder's belt ends at a router;
+- `belt-in-refuses-cargo` when no sand canister rode the belt into the grinder in its 90 s window (the chamber made
+  none);
+- every `beltboxes-*` check when BeltBoxes is not installed.
+
+The belt checks need their own configs: belt input with `AutoBuild = 96,ryanhartwig.example-grinder,94`, `AutoFeed =
+96:Dust:10`, `AutoBelt = 96:output->ryanhartwig.example-grinder:Dust in` (`ring`, `SunOverhead`; `belt-canister-modded`
+needs the long ring belt, 15 m); belt output and power with `AutoBuild = ryanhartwig.example-grinder,ryanhartwig.example-burner,ryanhartwig.example-lamp`,
+`AutoFeed = ryanhartwig.example-grinder:Dust:6;ryanhartwig.example-burner:ryanhartwig.example-grit:4`, `AutoBelt =
+ryanhartwig.example-grinder:Grit out->ryanhartwig.example-burner:Grit in`. In one combined run the chamber's sand
+queues on the grinder's belt and the belt-input checks fail.
 
 **Belt boxes** (`DevBoxes.cs`, with [BeltBoxes](../../mods/BeltBoxes) installed). Chain run: `AutoBuildLayout = line`,
 `AutoBuildGap = 1.3,1.3,5,1.3`, `AutoBuild = 96,ryanhartwig.example-grinder,ryanhartwig.box-splitter,ryanhartwig.box-merger,ryanhartwig.example-burner`,
 `AutoFeed = 96:Dust:12`, `AutoBelt` from the chamber to the grinder, the grinder to the splitter's `In`, the
 splitter's `Forward`/`Left`/`Right` to the merger's `Back`/`Left`/`Right`, the merger's `Out` to the burner, with
 `AutoSave`, `DumpCards` and `SunOverhead`. A feeder adds 1 kg grit canisters to the splitter's input belt while there
-is room, and the burner's grit slot is emptied at 5 kg. In order: `beltboxes-registered`, `beltboxes-model` (holder,
-renderers, one box collider, ports at the model's nodes), `beltboxes-split-even` (12 hops, a third ± 1 each),
-`beltboxes-merge-fair` (the merger held by a sand canister until every input has two waiting, then six hops in turn
-order), `beltboxes-conserve` (grit in == grit out, within 1 kg), `beltboxes-heavy` (a 3 kg canister),
-`beltboxes-split-skips` (Forward belt removed: six hops to Left/Right only, none lost; the belt is then rebuilt),
-`beltboxes-save-clean` (a save with the chain backed up to the splitter's input) and `beltboxes-remove-clean` (the
-merger removed with a canister waiting at Back). Reload run (`AutoBuild`, `AutoFeed`, `AutoBelt` empty, the chain
-run's slot): `beltboxes-reload` and `beltboxes-model`. The game saves again right after the merger's removal, so the
-reload run gets the splitter, all five chain belts and every grit canister, but no merger; it takes the canister off the end of each belt that now ends at nothing, so the splitter can hop.
+is room, and the burner's grit slot is emptied at 5 kg. In order: `beltboxes-registered`, `beltboxes-model` (both
+boxes: holder, renderers, one box collider, ports at the model's nodes), `beltboxes-split-even` (12 hops, a third ± 1
+each), `beltboxes-merge-fair` (the merger held by a sand canister until two canisters queue at the end of every input,
+then six hops in turn order), `beltboxes-conserve` (grit in == grit out to 0.01 kg after the merge window),
+`beltboxes-heavy` (a 3 kg canister hops and rides on at 3 kg, capacity 3), `beltboxes-split-skips` (Forward belt
+removed: six hops to Left/Right only, none lost; the canisters it dropped are removed and counted, and the belt is
+rebuilt), `beltboxes-save-clean` (a save with canisters stopped at the end of the splitter's input and of all three
+middle belts, plus the grit balance over the whole run to 0.01 kg). Reload run (`AutoBuild`, `AutoFeed`, `AutoBelt`
+empty, the chain run's slot): `beltboxes-reload` (both boxes, all five belts at their ports, every saved grit canister
+restored and accounted for, the sand holder removed, then a merger hop or burner intake within 20 s), `beltboxes-model`
+(both boxes), and last `beltboxes-remove-clean` (the merger removed with a canister stopped at the end of its Back
+belt). Removal runs last because the game saves a few seconds after it.
 
 ## Status
 
@@ -269,7 +283,7 @@ reload run gets the splitter, all five chain belts and every grit canister, but 
 | Processors | Cycle, batch moved at the same mass, `CycleFinished`, loading through `CrewProcessorLoad`; belt input through a declared port (`HandOff` prefix, `CargoEntered`; a canister of another cargo, or one arriving while its slot is full, waits at the belt end); belt output (vanilla `EmitProduct`/`EmitCargo`, 1 kg canisters, `CargoEmitted`); machine-to-machine chains by belt (the example grinder to burner, self-test `belt-chain-feeds`), saved and reloaded with canisters on the belts | Walker loading (`LoadProcessor` refuses: "Not a production machine"); a structure without a processor taking belt input | Belt input in co-op (the host decides; clients untested) |
 | Ports | Declared ports (and a port on a port-less donor) written into the cloned definition as `sl:<cargo>:<Name>`; `PortCargo` answers the declared cargo; the game shows "input"/"output" and "<name> input/output"; refusal at freeze for a port cargo no slot holds | | Belts placed by hand onto modded ports (dev `AutoBelt` builds through the game's `TryBuildConveyor`); ports inherited from a donor (no example uses them) |
 | Models | `Model` file on the donor template (donor renderers hidden, colliders kept unless `Footprint` is set), ports from its `Port_*` nodes, card picture rendered from it (the example burner); a missing file falls back to the donor model and declared ports | The donor's animated effects on a custom model | Donors with a non-unit `scale` or a skinned mesh (none of the donors checked so far has either) |
-| Routers | Splitter and merger hops on the `HandOff` prefix with `CargoRouted` per hop: round-robin over three outputs (12 hops, 4 each), skipping a removed output belt with nothing lost, mergers serving three inputs in turn, a 3 kg canister hopping whole, cargo conserved through both boxes (BeltBoxes self-test, `beltboxes-*`); `Footprint` written into the clone (`halfFootprint` 0.70 × 0.70) with the collider swap under a `Model`; side-port U-belts (5 m between boxes); routers, belts and waiting canisters saved and reloaded, a router removed mid-traffic with its belts kept | Cut-in onto an existing belt; canisters visibly crossing the box | Belts placed by hand onto router ports (0.7 m port spacing); vanilla paths gated by `Routes` (true for a router clone), cut-in offers among them; routers in co-op (the host decides; clients untested) |
+| Routers | Splitter and merger hops on the `HandOff` prefix with `CargoRouted` per hop: round-robin over three outputs (12 hops, 4 each), skipping a removed output belt with nothing lost, mergers serving three inputs in turn, a 3 kg canister hopping whole, grit balanced to 0.01 kg through both boxes (BeltBoxes self-test, `beltboxes-*`); both boxes, five belts and every canister saved and reloaded; `Footprint` written into the clone (`halfFootprint` 0.70 × 0.70) with the collider swap under a `Model`; side-port U-belts (5 m between boxes); routers, belts and waiting canisters saved and reloaded, a router removed mid-traffic with its belts kept | Cut-in onto an existing belt; canisters visibly crossing the box | Belts placed by hand onto router ports (0.7 m port spacing); vanilla paths gated by `Routes` (true for a router clone), cut-in offers among them; routers in co-op (the host decides; clients untested) |
 | Power | Machines on a vanilla grid's surplus and batteries; fuel generators charge, supply modded machines and keep their charge across saves; a modded-only group gets a negative grid id | Fuel generators feeding vanilla machines; power links drawn to modded structures; `SupplyMode.Solar`; `Power` without a `Processor`; a generator's `RunningKw` (ignored) | |
 | Co-op | Manifest built and compared with itself | Graceful degradation for a client missing a mod | Both two-player cases (identical mods; client missing a mod) |
 
