@@ -124,7 +124,7 @@ namespace StructureLib.Patches
             if (ReferenceEquals(world, cacheWorld) && belts == cacheBelts && depots == cacheDepots) return;
             cache.Clear();
             emitters.Clear();
-            RouterHop.Reset();
+            RouterHop.Reset(world);
             cacheWorld = world;
             cacheBelts = belts;
             cacheDepots = depots;

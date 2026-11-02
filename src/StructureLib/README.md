@@ -167,7 +167,7 @@ A router is a structure that passes canisters between belts without processing t
 MoonStructures.Register(new StructureDefinition
 {
     Id = "you.box-splitter", Name = "Box splitter", Category = "Logistics", Price = 5m,
-    BaseStructure = 4,                                   // the floodlight: no game script, one collider, no vanilla routing
+    BaseStructure = 4,                                   // the floodlight: no game script, one collider
     Router = new RouterDefinition { Mode = RouterMode.Splitter },
     Footprint = new Vector2(1.4f, 1.4f),
     Ports = new()
@@ -180,9 +180,14 @@ MoonStructures.Register(new StructureDefinition
 }, Guid);
 ```
 
-- **Definition.** `Router` with no `Processor` and no `Power` (either drops the structure at freeze). Do not use the
-  vanilla splitter or merger (11, 12) as the donor: `MoonWorld.Routes` reads the definition, so their clones stay
-  vanilla routers (cut-in, the native routing path) and carry `MoonMachineBelt`. The floodlight (4) is the tested donor.
+- **Definition.** `Router` with no `Processor` and no `Power` (either drops the structure at freeze). The floodlight (4)
+  is the tested donor: no game script and one collider. Do not use the vanilla splitter or merger (11, 12): their
+  prefabs carry `MoonMachineBelt` and ten colliders.
+- **Vanilla still sees a router.** `MoonWorld.Routes(def, kind)` keys on the definition's ports, so any clone with three
+  or four ports answers true whatever the donor (the floodlight answers false, its 4-port router clone true). The hop is
+  still StructureLib's: the `HandOff` prefix answers for a router's input belt before vanilla's routing runs. Other
+  `Routes`-gated vanilla paths on a placed box, cut-in offers from the belt tool among them, are untested (by-hand list);
+  `Routes` itself must not be prefixed (a static leaf like `IsProcessor`).
 - **Ports.** A splitter has exactly one input and one to three outputs; a merger one to three inputs and exactly one
   output; names unique (else the structure is dropped, logged). Router ports carry no cargo: a declared port's `Cargo`
   is ignored and a model's `Port_*` node needs no `cargo` property; each is written into the clone as `sl:0:<Name>` (dust,
@@ -192,8 +197,8 @@ MoonStructures.Register(new StructureDefinition
   which the exporter writes alphabetically). A splitter gives each canister to the next output in turn whose belt
   exists and whose entrance is clear, skipping the others; when none can take it, it waits at the input belt's end and
   the belt queues behind it. A merger serves its inputs in turn among those with a canister waiting; when the output
-  belt is missing or blocked, everything waits. The turn is in memory only and resets on load and whenever a belt or
-  structure is built or removed. One hop per input belt per frame; the output belt's entrance spacing bounds the rate.
+  belt is missing or blocked, everything waits. The turn is in memory only: it resets on load (and any world change) and
+  goes with its router when that is removed; building or removing belts and structures elsewhere keeps it. One hop per input belt per frame; the output belt's entrance spacing bounds the rate.
 - **Two differences from vanilla.** No cut-in: a router is placed free-standing and belts are joined to its ports.
   Canisters do not ride across the box: one vanishes at the input belt's end and a new canister (a new id) appears at
   the output belt's start in the same frame.
@@ -236,7 +241,7 @@ lines and `[selftest] done: N passed, M failed`. Leave the switches at their def
 | Processors | Cycle, batch moved at the same mass, `CycleFinished`, loading through `CrewProcessorLoad`; belt input through a declared port (`HandOff` prefix, `CargoEntered`; a canister of another cargo, or one arriving while its slot is full, waits at the belt end); belt output (vanilla `EmitProduct`/`EmitCargo`, 1 kg canisters, `CargoEmitted`); machine-to-machine chains by belt (the example grinder to burner, self-test `belt-chain-feeds`), saved and reloaded with canisters on the belts | Walker loading (`LoadProcessor` refuses: "Not a production machine"); a structure without a processor taking belt input | Belt input in co-op (the host decides; clients untested) |
 | Ports | Declared ports (and a port on a port-less donor) written into the cloned definition as `sl:<cargo>:<Name>`; `PortCargo` answers the declared cargo; the game shows "input"/"output" and "<name> input/output"; refusal at freeze for a port cargo no slot holds | | Belts placed by hand onto modded ports (dev `AutoBelt` builds through the game's `TryBuildConveyor`); ports inherited from a donor (no example uses them) |
 | Models | `Model` file on the donor template (donor renderers hidden, colliders kept unless `Footprint` is set), ports from its `Port_*` nodes, card picture rendered from it (the example burner); a missing file falls back to the donor model and declared ports | The donor's animated effects on a custom model | Donors with a non-unit `scale` or a skinned mesh (none of the donors checked so far has either) |
-| Routers | Splitter hop on the `HandOff` prefix (dev `RegisterBoxProbe` on the floodlight: dust into `In` went to `Forward` while its belt had room, skipping the unjoined `Left`/`Right`, and waited at the input once `Forward` was full; `CargoRouted` per hop); `Footprint` written into the clone (`halfFootprint` 0.70 × 0.70); router, belts and waiting canisters saved and reloaded | Cut-in onto an existing belt; canisters visibly crossing the box | Mergers in game; round-robin over two or three joined outputs; the collider swap (`Footprint` with a `Model`); belts placed by hand onto router ports; routers in co-op (the host decides; clients untested) |
+| Routers | Splitter hop on the `HandOff` prefix (dev `RegisterBoxProbe` on the floodlight: dust into `In` went to `Forward` while its belt had room, skipping the unjoined `Left`/`Right`, and waited at the input once `Forward` was full; `CargoRouted` per hop); `Footprint` written into the clone (`halfFootprint` 0.70 × 0.70); router, belts and waiting canisters saved and reloaded | Cut-in onto an existing belt; canisters visibly crossing the box | Mergers in game; round-robin over two or three joined outputs; the collider swap (`Footprint` with a `Model`); belts placed by hand onto router ports; vanilla paths gated by `Routes` (true for a router clone), cut-in offers among them; routers in co-op (the host decides; clients untested) |
 | Power | Machines on a vanilla grid's surplus and batteries; fuel generators charge, supply modded machines and keep their charge across saves; a modded-only group gets a negative grid id | Fuel generators feeding vanilla machines; power links drawn to modded structures; `SupplyMode.Solar`; `Power` without a `Processor`; a generator's `RunningKw` (ignored) | |
 | Co-op | Manifest built and compared with itself | Graceful degradation for a client missing a mod | Both two-player cases (identical mods; client missing a mod) |
 

@@ -14,12 +14,14 @@ namespace StructureLib.Patches
     // there (BeltStartingAt of the port's world point) whose entrance is clear takes the canister; nextOut moves past it.
     // Merger: per depot a transient turn index; the output belt must exist with a clear entrance, and an input earlier in
     // turn order with a canister waiting at its belt's end (BeltEndingAt, WaitingAtEnd) goes first; turn moves past the
-    // input served. Both are RouterRules. The indexes reset with the belt caches (Reset, from BeltPatches.Fresh) and on load.
+    // input served. Both are RouterRules. The indexes live in memory: they go with a world change (and so on load) and
+    // with their depot, not when a belt elsewhere is built or removed (Reset, from BeltPatches.Fresh).
     //
     // The move (belt-boxes spike, facts (b)/(c)): EmitCargo(output belt, owner, cargo, kilograms) makes a new canister at
     // the belt's start with the kilograms but capacity 1 (it answers false while the entrance is blocked); MoveCanisterRecord
-    // rewrites it with the arriving canister's kilograms, capacity and owner; RemoveCanister drops the arriving one. Every
-    // failure between the steps undoes the emit and leaves the arriving canister waiting: nothing is lost or duplicated.
+    // rewrites it with the arriving canister's kilograms, capacity and owner; RemoveCanister drops the arriving one. A
+    // failure between the steps undoes the emit and leaves the arriving canister waiting; when the emit cannot be undone
+    // the hop completes instead, so the cargo exists once (a case where neither works is logged as an error).
     // PlaceRider is not used: from the prefix it moves the record but not the rider.
     internal static class RouterHop
     {
@@ -33,12 +35,30 @@ namespace StructureLib.Patches
 
         static readonly Dictionary<int, int> nextOut = new(), turn = new();
         static readonly Dictionary<int, Box> boxes = new();
+        static IntPtr world0;
 
-        internal static void Reset()
+        /// <summary>
+        /// Called from BeltPatches.Fresh when the world, the belt count or the depot count changes. A different world
+        /// clears everything; otherwise only the entries of depots that no longer exist go, so building or removing a belt
+        /// elsewhere keeps every router's turn (the port cache is checked against the record's kind and position anyway).
+        /// </summary>
+        internal static void Reset(MoonWorld world)
         {
-            nextOut.Clear();
-            turn.Clear();
-            boxes.Clear();
+            IntPtr now = world == null ? IntPtr.Zero : world.Pointer;
+            if (now != world0 || world?.depots == null)
+            {
+                world0 = now;
+                nextOut.Clear();
+                turn.Clear();
+                boxes.Clear();
+                return;
+            }
+            var depots = world.depots;
+            foreach (var map in new IDictionary<int, int>[] { nextOut, turn })
+                foreach (int k in map.Keys.ToList())
+                    if (!depots.ContainsKey(k)) map.Remove(k);
+            foreach (int k in boxes.Keys.ToList())
+                if (!depots.ContainsKey(k)) boxes.Remove(k);
         }
 
         /// <summary>True when the canister went onto an output belt (the caller answers HandOff true); false when it waits.</summary>
@@ -120,8 +140,11 @@ namespace StructureLib.Patches
             return true;
         }
 
-        // EmitCargo, MoveCanisterRecord of the new canister, RemoveCanister of the arriving one. False (with the emit undone)
-        // whenever the arriving canister must keep waiting.
+        // EmitCargo, MoveCanisterRecord of the new canister, RemoveCanister of the arriving one. True when the arriving
+        // canister is gone and its cargo rides the output belt; false (with the emit undone) when it must keep waiting.
+        // Once EmitCargo has answered true nothing here throws: every later step is guarded, and the outcome is decided by
+        // whether the arriving canister is still in world.canisters, so a hop can never leave both canisters behind
+        // silently (and HandOff, called again next frame, emit another copy).
         static bool Move(MoonWorld world, StructureDefinition d, int depot, int id, MoonConveyorSnapshot outBelt, out MoonCargo cargo, out double kg, out int fresh)
         {
             fresh = -1;
@@ -135,56 +158,92 @@ namespace StructureLib.Patches
 
             var before = new HashSet<int>();
             foreach (var kv in canisters) before.Add(kv.Key);
+            // A throw up to here (or from EmitCargo itself) leaves nothing emitted: the caller logs it and the canister waits.
             if (!world.EmitCargo(outBelt, owner, cargo, kg, out string reason))
             {
                 CoreLog.Once($"router-emit:{depot}:{reason}", $"Router '{d.Id}' depot {depot}: belt {outBelt.id} refused canister {id}: '{reason}'; it waits", 1);
                 return false;
             }
-            foreach (var kv in canisters)
-                if (!before.Contains(kv.Key)) { fresh = kv.Key; break; }
+
+            try
+            {
+                foreach (var kv in canisters)
+                    if (!before.Contains(kv.Key)) { fresh = kv.Key; break; }
+            }
+            catch (Exception e) { CoreLog.Once("router-find:" + d.Id, $"Router '{d.Id}' depot {depot}: finding the canister EmitCargo put on belt {outBelt.id} threw: {e.Message}", 1); }
+
             if (fresh < 0)
             {
                 // The emit made a canister we cannot find to fix: it already carries the kilograms (spike fact (b)), so the
                 // arriving one still goes (keeping both would duplicate the cargo); only its capacity may be off.
                 CoreLog.Once("router-nofresh:" + d.Id, $"Router '{d.Id}' depot {depot}: EmitCargo onto belt {outBelt.id} answered true but no new canister was found; its capacity was not rewritten", 1);
             }
-            else
+            else if (!Rewrite(world, fresh, ownerRaw, kg, capacity, out string why))
             {
-                try
+                // The emitted canister has the kilograms with capacity 1: right for a canister of up to 1 kg, wrong for a
+                // heavier one, which then waits at the input instead, unless the emit cannot be undone: completing the hop
+                // (capacity 1) beats leaving a duplicate on the belt.
+                if (kg > 1.0 + 1e-9 && Undo(world, d, depot, fresh, outBelt.id))
                 {
-                    var n = canisters.get_Item(fresh);
-                    var rotation = new Il2CppSystem.Nullable<Quaternion>(n.rotation);
-                    var moved = new MoonDroppedCanister(n.id, ownerRaw, kg, capacity, n.position, n.up, n.createdAt, rotation, n.cargo);
-                    moved.physicalPose = n.physicalPose;
-                    world.MoveCanisterRecord(moved, n.position, n.up, rotation);
+                    CoreLog.Once("router-rewrite:" + d.Id, $"Router '{d.Id}' depot {depot}: rewriting canister {fresh} to {kg} kg / capacity {capacity} threw; canister {id} waits: {why}", 1);
+                    return false;
                 }
-                catch (Exception e)
-                {
-                    // The emitted canister has the kilograms with capacity 1: right for a canister of up to 1 kg, wrong
-                    // for a heavier one, which then waits at the input instead.
-                    if (kg > 1.0 + 1e-9)
-                    {
-                        Undo(world, fresh);
-                        CoreLog.Once("router-rewrite:" + d.Id, $"Router '{d.Id}' depot {depot}: rewriting canister {fresh} to {kg} kg / capacity {capacity} threw; canister {id} waits: {e.Message}", 1);
-                        return false;
-                    }
-                    CoreLog.Once("router-rewrite:" + d.Id, $"Router '{d.Id}' depot {depot}: rewriting canister {fresh} threw; it keeps EmitCargo's capacity 1 ({kg} kg): {e.Message}", 1);
-                }
+                CoreLog.Once("router-rewrite:" + d.Id, $"Router '{d.Id}' depot {depot}: rewriting canister {fresh} threw; it keeps EmitCargo's capacity 1 ({kg} kg) and the hop completes: {why}", 1);
             }
-            world.RemoveCanister(id);
-            if (canisters.ContainsKey(id))
+
+            try { world.RemoveCanister(id); }
+            catch (Exception e) { CoreLog.Once("router-remove-threw:" + d.Id, $"Router '{d.Id}' depot {depot}: RemoveCanister({id}) threw: {e.Message}", 1); }
+            if (!Present(world, id)) return true;
+
+            // The arriving canister is still there: take the emitted one back so the cargo exists once, and wait.
+            if (fresh >= 0)
             {
-                if (fresh >= 0) Undo(world, fresh);
-                CoreLog.Once("router-remove:" + d.Id, $"Router '{d.Id}' depot {depot}: RemoveCanister({id}) left the canister in the world; {(fresh >= 0 ? "the emitted one was removed and it" : "it")} waits", 1);
-                return false;
+                Undo(world, d, depot, fresh, outBelt.id);
+                CoreLog.Once("router-remove:" + d.Id, $"Router '{d.Id}' depot {depot}: RemoveCanister({id}) left the canister in the world; the emitted canister {fresh} was taken back and it waits", 1);
             }
-            return true;
+            else Loud($"router-dup:{depot}:{outBelt.id}", $"Router '{d.Id}' depot {depot}: RemoveCanister({id}) left the canister in the world and the canister EmitCargo put on belt {outBelt.id} could not be found: {kg} kg of cargo {(byte)cargo} now exists twice (belt {outBelt.id} and canister {id}, which waits)");
+            return false;
         }
 
-        static void Undo(MoonWorld world, int fresh)
+        // MoveCanisterRecord of the emitted canister with the arriving one's kilograms, capacity and owner.
+        static bool Rewrite(MoonWorld world, int fresh, string owner, double kg, double capacity, out string why)
         {
+            why = null;
+            try
+            {
+                var n = world.canisters.get_Item(fresh);
+                var rotation = new Il2CppSystem.Nullable<Quaternion>(n.rotation);
+                var moved = new MoonDroppedCanister(n.id, owner, kg, capacity, n.position, n.up, n.createdAt, rotation, n.cargo);
+                moved.physicalPose = n.physicalPose;
+                world.MoveCanisterRecord(moved, n.position, n.up, rotation);
+                return true;
+            }
+            catch (Exception e) { why = e.Message; return false; }
+        }
+
+        // Removes the emitted canister; true only when it has left world.canisters. A failure is an error, once per belt.
+        static bool Undo(MoonWorld world, StructureDefinition d, int depot, int fresh, int belt)
+        {
+            string why = null;
             try { world.RemoveCanister(fresh); }
-            catch (Exception e) { CoreLog.Once("router-undo", $"Removing the emitted canister {fresh} threw: {e.Message}", 1); }
+            catch (Exception e) { why = e.Message; }
+            if (!Present(world, fresh)) return true;
+            Loud($"router-undo:{depot}:{belt}", $"Router '{d.Id}' depot {depot}: taking back the emitted canister {fresh} on belt {belt} failed{(why == null ? " (RemoveCanister left it in the world)" : ": " + why)}; it stays on the belt");
+            return false;
+        }
+
+        // Present in world.canisters; a lookup that throws counts as present (the safe answer: the canister waits).
+        static bool Present(MoonWorld world, int id)
+        {
+            try { return world.canisters.ContainsKey(id); }
+            catch (Exception) { return true; }
+        }
+
+        static readonly HashSet<string> loud = new(StringComparer.Ordinal);
+
+        static void Loud(string key, string m)
+        {
+            if (loud.Add(key)) CoreLog.Error(m);
         }
 
         // The router's ports in world space, from its view's pose; null while the view does not exist (a load in progress).

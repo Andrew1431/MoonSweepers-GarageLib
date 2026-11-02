@@ -106,8 +106,13 @@ namespace StructureLib
             int donorColliders = donorPrefab == null ? -1 : donorPrefab.GetComponentsInChildren<Collider>(true).Length;
             bool rootParent = holder.parent != null && holder.parent.Pointer == root.Pointer;
             CoreLog.Info($"[selftest] {what} view '{view.name}': {ModelSwap.HolderName} at local {AutoBelter.V(holder.localPosition)} scale {holder.localScale.x:F2}, parent is the view root {rootParent}; model renderers {modelOn}/{modelAll} enabled (materials {string.Join(", ", mats)}); donor mesh/skinned renderers {donorOn}/{donorAll} enabled{(donorOnNames.Count > 0 ? " [" + string.Join(", ", donorOnNames) + "]" : "")}; colliders {colliders} outside the model (+{modelColliders} in it), donor {donorKind} prefab {donorColliders}");
-            bool ok = rootParent && modelOn >= 1 && donorAll >= 1 && donorOn == 0 && colliders == donorColliders && modelColliders == 0;
-            return (ok, $"parent is root {rootParent}, model renderers enabled {modelOn}, donor mesh/skinned renderers enabled {donorOn}/{donorAll}, colliders {colliders} (+{modelColliders} in the model) vs prefab {donorColliders}");
+            // A Footprint with a Model swaps the donor's colliders for one BoxCollider (ModelSwap.SwapColliders).
+            var def = view.name.StartsWith("ModStructure_", StringComparison.Ordinal) ? MoonStructures.Definition(view.name.Substring("ModStructure_".Length)) : null;
+            bool swapped = def?.Footprint != null && def.ModelPath != null;
+            int boxes = view.GetComponentsInChildren<BoxCollider>(true).Count(c => !c.transform.IsChildOf(holder));
+            bool collidersOk = swapped ? colliders == 1 && boxes == 1 : colliders == donorColliders;
+            bool ok = rootParent && modelOn >= 1 && donorAll >= 1 && donorOn == 0 && collidersOk && modelColliders == 0;
+            return (ok, $"parent is root {rootParent}, model renderers enabled {modelOn}, donor mesh/skinned renderers enabled {donorOn}/{donorAll}, colliders {colliders} (+{modelColliders} in the model) vs {(swapped ? "one BoxCollider (Footprint swap)" : "prefab " + donorColliders)}");
         }
 
         static (bool, string) ModelPortsOk(MoonWorld world, StructureDefinition burner)

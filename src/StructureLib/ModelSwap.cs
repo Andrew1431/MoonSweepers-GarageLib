@@ -111,7 +111,7 @@ namespace StructureLib
                     }
                 }
                 foreach (var t in holder.GetComponentsInChildren<Transform>(true)) t.gameObject.layer = template.layer;
-                if (d.Footprint.HasValue) SwapColliders(d, template, d.Footprint.Value, ctx.Donor.scale, measured, top);
+                if (d.Footprint.HasValue) SwapColliders(d, template, holder, d.Footprint.Value, ctx.Donor.scale, measured, top);
 
                 CoreLog.Info($"'{d.Id}': model {d.Model} on base {d.BaseStructure} ('{prefab.name}'): hid {hidden} donor renderer(s) ({hiddenMeshes} mesh/skinned), {meshes} model mesh(es); donor lowest bound {donorBottom:F3} (floorOffset {ctx.Donor.floorOffset:F3}, not added), model lowest vertex {place.Lowest:F3} -> holder offset {place.Offset:F3}, scale {place.Scale:F2}; built lowest vertex {(float.IsInfinity(measured) ? "none" : measured.ToString("F3"))}");
                 if (Mathf.Abs(place.Offset) > 1e-4f || Mathf.Abs(place.Scale - 1f) > 1e-4f)
@@ -127,15 +127,16 @@ namespace StructureLib
         }
 
         // StructureDefinition.Footprint with a Model: the donor's colliders would outlive its hidden mesh (a big donor's
-        // collision around a small box), so every Collider on the template goes and one BoxCollider covers the footprint
-        // and the model's height (template-local; the footprint in metres through the donor's scale). It sits on the
-        // template root, or on a child with the first donor collider's layer when that differs from the root's.
-        static void SwapColliders(StructureDefinition d, GameObject template, Vector2 footprint, float donorScale, float bottom, float top)
+        // collision around a small box), so every donor Collider on the template goes (the model holder's subtree is left
+        // alone) and one solid BoxCollider covers the footprint and the model's height (template-local; the footprint in
+        // metres through the donor's scale). It sits on the template root, or on a child with the layer of the first solid
+        // (non-trigger) donor collider when that differs from the root's.
+        static void SwapColliders(StructureDefinition d, GameObject template, Transform holder, Vector2 footprint, float donorScale, float bottom, float top)
         {
-            var colliders = template.GetComponentsInChildren<Collider>(true);
+            var colliders = template.GetComponentsInChildren<Collider>(true).Where(c => c != null && !c.transform.IsChildOf(holder)).ToList();
             int layer = template.layer;
-            bool trigger = false;
-            if (colliders.Length > 0) { layer = colliders[0].gameObject.layer; trigger = colliders[0].isTrigger; }
+            var solid = colliders.FirstOrDefault(c => !c.isTrigger);
+            if (solid != null) layer = solid.gameObject.layer;
             foreach (var c in colliders) UnityEngine.Object.DestroyImmediate(c);
             if (float.IsInfinity(bottom) || float.IsInfinity(top) || top - bottom < 0.01f) { bottom = 0f; top = 1f; }
             float h = top - bottom, s = Math.Max(donorScale, 0.01f);
@@ -149,8 +150,8 @@ namespace StructureLib
             var box = host.AddComponent<BoxCollider>();
             box.center = new Vector3(0f, bottom + h / 2f, 0f);
             box.size = new Vector3(footprint.x / s, h, footprint.y / s);
-            box.isTrigger = trigger;
-            CoreLog.Info($"'{d.Id}': footprint {footprint.x:F2} x {footprint.y:F2} m: removed {colliders.Length} donor collider(s), added one BoxCollider on '{host.name}' (layer {layer}) centre (0.00, {box.center.y:F2}, 0.00) size ({box.size.x:F2}, {box.size.y:F2}, {box.size.z:F2})");
+            box.isTrigger = false;
+            CoreLog.Info($"'{d.Id}': footprint {footprint.x:F2} x {footprint.y:F2} m: removed {colliders.Count} donor collider(s), added one BoxCollider on '{host.name}' (layer {layer}) centre (0.00, {box.center.y:F2}, 0.00) size ({box.size.x:F2}, {box.size.y:F2}, {box.size.z:F2})");
         }
 
         static float LowestCorner(Bounds b, Transform from, Transform root)
