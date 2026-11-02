@@ -3,7 +3,8 @@
 The shared library for modded structures in Moon Sweepers: new buildings in the build menu, machines that turn one
 cargo into another, new cargo kinds, and fuel generators. A modded structure borrows a vanilla structure's prefab and
 rules, is kept out of the vanilla save (uninstalling a mod never breaks a save), and is checked between co-op players.
-[ExampleStructure](../../examples/ExampleStructure) shows every registration pattern.
+[SandPower](../../mods/SandPower) is the first mod built on it; [ExampleStructure](../../examples/ExampleStructure)
+shows every registration pattern.
 
 ## Using it
 
@@ -149,8 +150,8 @@ The recon behind all this, with the evidence, is in
 - **Models:** `Model = "<file>.bin"` beside the DLL replaces the donor's look on the donor's template (colliders,
   views and scripts kept). Its lowest vertex sits on the structure's floor, its materials start as tinted stand-ins
   and become the game's own within seconds of a world load, and the donor's animated effects are not carried over.
-  The example grinder and burner are the worked example: the grinder's grit rides a belt into the burner, which
-  burns it for power (self-test `belt-chain-feeds`).
+  SandPower's compactor and generator are the worked example: a vanilla pressure chamber's sand rides a belt into the
+  compactor, whose briquettes ride a belt into the generator (self-test `sandpower-chain`).
 
 ## Dev builds
 
@@ -162,7 +163,7 @@ lines and `[selftest] done: N passed, M failed`. Leave the switches at their def
 |---|---|
 | `AutoLoadSlot`, `AllowSlot1`, `SelfTest` | Load a save slot from the main menu (slot 1, the real save, only with `AllowSlot1`) and run the self-test 20 s after the world loads. |
 | `AutoBuild` | Comma-separated structure ids or vanilla kind numbers, built 10 s after load through the game's `TryBuildDepot` (`AutoBuildViaPlan`: through the build menu's own path instead). |
-| `AutoBuildLayout` | `ring` (default): 10 m from the walker at 0°, 90°, 180°, 270°, 45°, … from its facing. `line`: in entry order along the structures' +X, 1.3 m between neighbouring footprints (centres from each definition's half footprint), centred on the walker and 6 m to its side (10 m spacing and 10 m to the side put the end entries 18 m away, which the game refuses: "Move closer to the build site."), so each entry's output faces the next entry's input; use it for chains of three or more machines. |
+| `AutoBuildLayout` | `ring` (default): 10 m from the walker at 0°, 90°, 180°, 270°, 45°, … from its facing. `line`: in entry order along the structures' +X, 1.3 m between neighbouring footprints (centres from each definition's half footprint), centred on the walker and 6 m to its side (10 m spacing and 10 m to the side put the end entries 18 m away, which the game refuses: "Move closer to the build site."), so each entry's output faces the next entry's input; use it for chains of three or more machines (the SandPower chain). |
 | `AutoBelt` | `';'`-separated `<from>:<port>-><to>:<port>` belts between AutoBuild's depots, built 3 s after it through `TryBuildConveyor`. A port is a definition name (`IN_SAND`), a modded port's declared name (`Sand in`), a unique `input`/`output` label, or an index. |
 | `AutoFeed` | `';'`-separated `<id or kind>:<cargo>:<kg>`, loaded through `CrewProcessorLoad` 5 s after AutoBuild. |
 | `AutoSave`, `AutoRemove` | Request a save 10 s after AutoBuild and check the sidecar; remove the example lamp after its checks (false keeps it for a reload run). |
@@ -181,9 +182,9 @@ lines and `[selftest] done: N passed, M failed`. Leave the switches at their def
 | Build and remove | Build, refund, removal, `Built` and `Removed` | | |
 | Save | Sidecar for depots (pose included), production states and modded-cargo canisters; orphans kept; reload restores (see [Save audit](#save-audit)) | A modded robot dock's robots-off setting (resets on load); a modded garage holding vehicles | |
 | Cargo | Names, unit mass, price, canister round trip, modded canisters riding belts (see [Cargo audit](#cargo-audit)) | Depositing modded cargo at the collector; co-op cargo events; `CanisterTint` (not applied) | |
-| Processors | Cycle, batch moved at the same mass, `CycleFinished`, loading through `CrewProcessorLoad`; belt input through a declared port (`HandOff` prefix, `CargoEntered`; a canister of another cargo, or one arriving while its slot is full, waits at the belt end); belt output (vanilla `EmitProduct`/`EmitCargo`, 1 kg canisters, `CargoEmitted`); machine-to-machine chains by belt (the example grinder to burner, self-test `belt-chain-feeds`), saved and reloaded with canisters on the belts | Walker loading (`LoadProcessor` refuses: "Not a production machine"); a structure without a processor taking belt input | Belt input in co-op (the host decides; clients untested) |
+| Processors | Cycle, batch moved at the same mass, `CycleFinished`, loading through `CrewProcessorLoad`; belt input through a declared port (`HandOff` prefix, `CargoEntered`; a canister of another cargo, or one arriving while its slot is full, waits at the belt end); belt output (vanilla `EmitProduct`/`EmitCargo`, 1 kg canisters, `CargoEmitted`); machine-to-machine chains by belt (grinder to burner; SandPower's vanilla pressure chamber to compactor to generator, self-test `sandpower-chain`), saved and reloaded with canisters on the belts | Walker loading (`LoadProcessor` refuses: "Not a production machine"); a structure without a processor taking belt input | Belt input in co-op (the host decides; clients untested) |
 | Ports | Declared ports (and a port on a port-less donor) written into the cloned definition as `sl:<cargo>:<Name>`; `PortCargo` answers the declared cargo; the game shows "input"/"output" and "<name> input/output"; refusal at freeze for a port cargo no slot holds | | Belts placed by hand onto modded ports (dev `AutoBelt` builds through the game's `TryBuildConveyor`); ports inherited from a donor (no example uses them) |
-| Models | `Model` file on the donor template (donor renderers hidden, colliders kept), ports from its `Port_*` nodes, card picture rendered from it (the example burner); a missing file falls back to the donor model and declared ports | The donor's animated effects on a custom model | Donors with a non-unit `scale` or a skinned mesh (none of the donors checked so far has either) |
+| Models | `Model` file on the donor template (donor renderers hidden, colliders kept), ports from its `Port_*` nodes, card picture rendered from it (the example burner and both SandPower models, stone press and solar post donors); a missing file falls back to the donor model and declared ports | The donor's animated effects on a custom model | Donors with a non-unit `scale` or a skinned mesh (none of the three checked has either) |
 | Power | Machines on a vanilla grid's surplus and batteries; fuel generators charge, supply modded machines and keep their charge across saves; a modded-only group gets a negative grid id | Fuel generators feeding vanilla machines; power links drawn to modded structures; `SupplyMode.Solar`; `Power` without a `Processor`; a generator's `RunningKw` (ignored) | |
 | Co-op | Manifest built and compared with itself | Graceful degradation for a client missing a mod | Both two-player cases (identical mods; client missing a mod) |
 
@@ -320,4 +321,4 @@ Status:
 | `MoonCrewSession` (co-op world stream, joins) | unknown | Not dumped. A joining client receives the host's serialized world, which (through `Serialize`) has no modded canisters. |
 | `MoonCanisterStreaming/FarShown.cargo` | unknown | Far-LOD canister drawing. A grit canister in the world (end-to-end run) logged no exceptions; how it is tinted was not looked at. |
 | `MoonProductionState` | n/a | No `MoonCargo` member (slot stores are per owner; slot cargo comes from `ProcessorSpec.slotCargo`). |
-| Cargo carried by a walker or a vehicle (`MoonPlayerRecordSnapshot`, `MoonLoadoutSave`, `MoonOwnedVehicle` / `MoonOwnedVehicleSave`, `MoonVehicleStorageSnapshot`, `MoonInventorySnapshot`, `MoonToolContainerSnapshot`) | n/a (checked) | The dumps of these records have no `MoonCargo` or cargo-byte member (walkers and vehicle storage hold kilograms only), and there is no separate carried-canister save record. Whether a canister held in hand or riding a vehicle is saved through `state.canisters` + `state.cargo` (and so stripped like a dropped one) is not checked yet (a by-hand check). |
+| Cargo carried by a walker or a vehicle (`MoonPlayerRecordSnapshot`, `MoonLoadoutSave`, `MoonOwnedVehicle` / `MoonOwnedVehicleSave`, `MoonVehicleStorageSnapshot`, `MoonInventorySnapshot`, `MoonToolContainerSnapshot`) | n/a (checked) | The dumps of these records have no `MoonCargo` or cargo-byte member (walkers and vehicle storage hold kilograms only), and there is no separate carried-canister save record. Whether a canister held in hand or riding a vehicle is saved through `state.canisters` + `state.cargo` (and so stripped like a dropped one) is not checked: see the by-hand list in the SandPower README. |
