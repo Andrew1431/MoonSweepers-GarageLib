@@ -4,4 +4,8 @@
     <RootNamespace>GarageLib</RootNamespace>
     <GenerateDocumentationFile>true</GenerateDocumentationFile>
   </PropertyGroup>
+  <!-- The shared balance table exported from the scaling sheet. -->
+  <ItemGroup>
+    <VehicleStatsFile Include="$(RepoRoot)data\*.vehicles.json" />
+  </ItemGroup>
 </Project>

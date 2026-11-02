@@ -35,4 +35,8 @@
     <Reference Include="$(BepInExCoreDir)\0Harmony.dll" Private="false" />
     <Reference Include="$(InteropDir)\*.dll" Private="false" />
   </ItemGroup>
+  <!-- Balance tables (*.vehicles.json, read by GarageLib's VehicleStats) ship next to the plugin's DLL. -->
+  <ItemGroup>
+    <VehicleStatsFile Include="$(MSBuildProjectDirectory)\*.vehicles.json" />
+  </ItemGroup>
 </Project>

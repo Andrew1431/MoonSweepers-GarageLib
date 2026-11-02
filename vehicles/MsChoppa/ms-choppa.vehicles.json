@@ -1,0 +1,10 @@
+{
+  "comment": "Ms Choppa's balance numbers. GarageLib applies these over the code defaults; anything left out keeps the crew transport's value.",
+  "version": 1,
+  "vehicles": {
+    "andrew1431.utility-choppa": {
+      "name": "Utility Choppa",
+      "price": 12000
+    }
+  }
+}

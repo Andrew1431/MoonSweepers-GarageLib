@@ -37,6 +37,7 @@ function Stage($p, $dll, $into) {
     $dir = Join-Path $into "BepInEx\plugins\$($p.Name)"
     New-Item -ItemType Directory -Force $dir | Out-Null
     Copy-Item $dll $dir
+    Get-ChildItem (Split-Path $dll) -Filter '*.vehicles.json' | Copy-Item -Destination $dir
     $readme = Join-Path $p.Dir 'README.md'
     if (Test-Path $readme) { Copy-Item $readme $dir }
 }

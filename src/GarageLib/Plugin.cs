@@ -27,6 +27,7 @@ namespace GarageLib
 
             if (!MembersPresent()) { CoreLog.Error("Game members the core relies on are missing (game update?). GarageLib is disabled."); return; }
 
+            VehicleStats.Load();
             ClassInjector.RegisterTypeInIl2Cpp<VehicleController>();
             ClassInjector.RegisterTypeInIl2Cpp<CoreDriver>();
 #if DEVBUILD

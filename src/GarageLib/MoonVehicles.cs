@@ -54,6 +54,8 @@ namespace GarageLib
                 def.Controller = null;
             }
             def.Owner = ownerGuid ?? "unknown";
+            var stats = VehicleStats.Apply(def);
+            if (stats != null) CoreLog.Info($"'{def.Id}': stats from {stats}");
             def.Name ??= def.Id;
             def.Summary ??= "";
             byId[def.Id] = def;
