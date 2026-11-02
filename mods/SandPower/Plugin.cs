@@ -66,7 +66,7 @@ namespace SandPower
                     Slots =
                     {
                         Slot.Input("Briquettes", briquette, 10),
-                        Slot.Batch("Burning", briquette, 1),
+                        Slot.Batch("Burning", briquette, 2),
                     },
                 },
             }, Guid);

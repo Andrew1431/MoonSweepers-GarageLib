@@ -14,7 +14,7 @@ Maintainers: Andrew (Andrew1431) and Ryan (ryanhartwig), with equal say on what 
 | Ms Choppa | Flying utility helicopter, $12,000. | [`vehicles/MsChoppa`](vehicles/MsChoppa) |
 | StructureLib | The structure library: modded buildings, machines, cargo and fuel power. Required by structure mods. | [`src/StructureLib`](src/StructureLib) |
 | SandPower | Sand compactor and briquette generator: press moon sand into briquettes, burn them for power. | [`mods/SandPower`](mods/SandPower) |
-| Modpack | GarageLib + every vehicle in one zip. | [`modpack.json`](modpack.json) |
+| Modpack | GarageLib, StructureLib, every vehicle and SandPower in one zip. | [`modpack.json`](modpack.json) |
 
 ## Installing (players)
 

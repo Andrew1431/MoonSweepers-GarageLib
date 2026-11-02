@@ -11,7 +11,7 @@ Sand briquettes are regolith sand pressed into dense bricks that burn hot in the
 |---|---|
 | **Sand briquette** (cargo) | 2 kg per unit, sells for $7 per unit. Cargo value 3 (see [the cargo registry](../../docs/cargo-registry.md)). |
 | **Sand compactor** (Production, $800) | Built on the stone press. Holds 16 kg of sand, presses 4 kg per 8 s cycle at 12 kW. Mass is kept: 4 kg of sand becomes 4 kg of briquettes (2 units). The output slot holds 10 kg. |
-| **Briquette generator** (Power, $1,500) | Built on the solar post. Holds 10 kg of briquettes and burns 1 kg per 20 s cycle. Each burn adds 3 kWh to its 6 kWh battery (half of it), so one 2 kg briquette fills it; no burn starts while the battery is full. Supplies up to 10 kW to StructureLib machines within 24 m, wirelessly. |
+| **Briquette generator** (Power, $1,500) | Built on the solar post. Holds 10 kg of briquettes (5 units) and burns one 2 kg briquette per 20 s cycle. Each burn adds 3 kWh to its 6 kWh battery (half of it), so two briquettes fill it; no burn starts while the battery is full. Supplies up to 10 kW to StructureLib machines within 24 m, wirelessly. |
 
 The generator alone runs a compactor at 10 of its 12 kW (83 %), so a cycle takes about 9.6 s instead of 8 s. On a
 vanilla solar grid the compactor draws from the grid's surplus first, then from generators in range, then from the
