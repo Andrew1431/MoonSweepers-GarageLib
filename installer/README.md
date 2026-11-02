@@ -10,5 +10,6 @@ takes it from there. Then it installs the newest modpack from GitHub.
 It also makes a desktop shortcut, **Moon Sweepers (modded)**. Start the game from that shortcut and the mods update
 first, every time. Starting from Steam works too, just without the update check.
 
-To remove the mods: run `Install or update.bat -Uninstall` from a command prompt in the game's `MoonSweepersMods`
-folder. Your saves and settings stay.
+To remove the mods: close the game and double-click **Uninstall mods.bat** (in the unzipped installer, or in the game
+folder's `MoonSweepersMods`). It removes the mods, then asks whether to remove BepInEx too for a plain game. Saves stay:
+modded vehicles wait in `garagelib.json` next to the save and come back if you reinstall.

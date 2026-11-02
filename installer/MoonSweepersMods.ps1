@@ -4,11 +4,12 @@
 #     -Launch            start the game when done
 #     -GameDir <path>    game folder, if it isn't found through Steam
 #     -Zip <path>        install this modpack zip instead of downloading the latest release (testing)
-#     -Uninstall         remove the modpack's plugins (BepInEx, ModEngine, configs and saves stay)
+#     -Uninstall         remove the modpack's plugins, then offer to remove BepInEx too ("Uninstall mods.bat")
+#     -Vanilla           with -Uninstall: also remove BepInEx and ModEngine without asking (saves always stay)
 # What it does: BepInEx 6 IL2CPP be.791 (downloaded from builds.bepinex.dev if missing), the MoonSweepers.ModEngine
 # patcher (only on Nexus, so it opens the page and picks the zip up from Downloads), then the newest modpack release
 # from GitHub. It remembers which plugin folders it installed and replaces only those on update.
-param([switch]$Launch, [string]$GameDir, [string]$Zip, [switch]$Uninstall)
+param([switch]$Launch, [string]$GameDir, [string]$Zip, [switch]$Uninstall, [switch]$Vanilla)
 $ErrorActionPreference = 'Stop'
 $ProgressPreference = 'SilentlyContinue'   # Invoke-WebRequest's progress bar makes downloads 10x slower in PS 5.1
 [Net.ServicePointManager]::SecurityProtocol = [Net.SecurityProtocolType]::Tls12
@@ -79,10 +80,27 @@ function Remove-Installed {
 }
 
 $lnk = Join-Path ([Environment]::GetFolderPath('Desktop')) 'Moon Sweepers (modded).lnk'
+# Everything BepInEx + ModEngine add to the game folder; none of it is the game's own.
+$LoaderFiles = 'BepInEx', 'dotnet', 'winhttp.dll', 'doorstop_config.ini', '.doorstop_version', 'changelog.txt', 'steam_appid.txt'
+
 if ($Uninstall) {
     Remove-Installed
     Remove-Item $record, $lnk -ErrorAction SilentlyContinue
-    Say 'Modpack plugins removed. BepInEx is still installed; delete BepInEx, dotnet, winhttp.dll and doorstop_config.ini from the game folder for a fully vanilla game.' 'Green'
+    Say 'Mods removed.' 'Green'
+    $others = @(Get-ChildItem $plugins -Directory -ErrorAction SilentlyContinue | Select-Object -ExpandProperty Name)
+    if (-not $Vanilla) {
+        Say ''
+        if ($others) { Say "Other mods still in BepInEx\plugins: $($others -join ', ')" 'Yellow' }
+        $a = Read-Host "Also remove BepInEx$(if ($others) { ' (and those mods)' }) to get the plain game back? [y/N]"
+        $Vanilla = $a -match '^(y|yes)$'
+    }
+    if ($Vanilla) {
+        foreach ($f in $LoaderFiles) { $p = Join-Path $GameDir $f; if (Test-Path $p) { Remove-Item $p -Recurse -Force } }
+        $mine = Join-Path $GameDir 'MoonSweepersMods'
+        if (Test-Path $mine) { Remove-Item $mine -Recurse -Force }
+        Say 'BepInEx removed: the game is back to vanilla.' 'Green'
+    } else { Say 'BepInEx is still installed (run this again and answer y to remove it).' }
+    Say 'Saves are untouched. Modded vehicles wait in garagelib.json next to the save and come back if you reinstall.'
     return
 }
 
