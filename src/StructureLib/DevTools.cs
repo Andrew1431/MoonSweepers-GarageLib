@@ -100,7 +100,55 @@ namespace StructureLib
             int expected = KindAllocator.KindOf("ryanhartwig.example-lamp");
             Assert("example-kind-hashed", lamp != null && lamp.Kind == expected,
                 lamp == null ? "'ryanhartwig.example-lamp' is not registered (is ExampleStructure installed?)" : $"kind {lamp.Kind}, expected {expected}");
+            DefinitionChecks(lamp);
             Done();
+        }
+
+        // A modded kind answers BuildDefinition with its own clone, the build menu answers for it, and an unregistered
+        // hashed kind still falls through to vanilla (null, no exception).
+        static void DefinitionChecks(StructureDefinition lamp)
+        {
+            var world = CoreState.World ?? CoreState.FindWorld();
+            var builder = UnityEngine.Object.FindFirstObjectByType<MoonDepotBuilder>();
+            string noWorld = world == null ? "no MoonWorld found" : lamp == null ? "example lamp not registered" : null;
+            string noBuilder = builder == null ? "no MoonDepotBuilder found" : lamp == null ? "example lamp not registered" : null;
+
+            MoonDepotBuildDefinition def = null;
+            Check("builddef-modded-nonnull", noWorld, () =>
+            {
+                def = world.BuildDefinition(lamp.Kind);
+                return (def != null, $"BuildDefinition({lamp.Kind}) returned null");
+            });
+            Check("builddef-modded-distinct", noWorld, () =>
+            {
+                if (def == null) return (false, "no modded definition");
+                var donor = world.BuildDefinition(4);
+                return (donor == null || def.Pointer != donor.Pointer, "the modded definition is the donor's own object");
+            });
+            Check("builddef-modded-named", noWorld, () =>
+            {
+                if (def == null) return (false, "no modded definition");
+                return (def.displayName == "Example lamp" && def.priceDollars == 50, $"displayName '{def.displayName}', priceDollars {def.priceDollars}");
+            });
+            Check("builddef-unknown-null", world == null ? "no MoonWorld found" : null, () =>
+            {
+                var unknown = world.BuildDefinition(1_000_000 + 12345);
+                return (unknown == null, $"BuildDefinition(1012345) returned '{unknown?.displayName}'");
+            });
+            Check("canbuild-modded", noBuilder, () => (builder.CanBuild(lamp.Kind), $"CanBuild({lamp.Kind}) is false"));
+            Check("note-modded", noBuilder, () =>
+            {
+                string note = builder.ProductionNote(lamp.Kind);
+                return (note == "StructureLib example.", $"ProductionNote({lamp.Kind}) = '{note}'");
+            });
+        }
+
+        // An assertion that fails with `skip` as detail when it is set, and with the exception when the probe throws.
+        static void Check(string name, string skip, Func<(bool ok, string detail)> probe)
+        {
+            if (skip != null) { Assert(name, false, skip); return; }
+            try { var (ok, detail) = probe(); Assert(name, ok, detail); }
+            catch (Exception e) { Assert(name, false, "threw " + e.GetType().Name + ": " + e.Message); }
         }
 
         internal static void Begin()

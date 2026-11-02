@@ -48,7 +48,7 @@ namespace StructureLib
             ClassInjector.RegisterTypeInIl2Cpp<CoreDriver>();
             var h = new Harmony(Guid);
             int ok = 0, failed = 0;
-            foreach (var t in new[] { typeof(FreezePatches) })
+            foreach (var t in new[] { typeof(FreezePatches), typeof(DefinitionPatches), typeof(KindRules) })
             {
                 try { h.CreateClassProcessor(t).Patch(); ok++; CoreLog.Debug($"Patched {t.Name}"); }
                 catch (Exception e) { failed++; CoreLog.Error($"Patching {t.Name} failed: {e}"); }
@@ -82,14 +82,18 @@ namespace StructureLib
                 if (Time.unscaledTime >= nextEnsure)
                 {
                     nextEnsure = Time.unscaledTime + 3f;
-                    // Hook point (Task 5): Injection.Ensure() runs here every 3 s.
+                    if (CoreState.World != null) Injection.Ensure(CoreState.World);
                 }
                 bool inGame = MoonSession.InGame;
                 if (inGame != wasInGame)
                 {
                     wasInGame = inGame;
                     CoreLog.Info(inGame ? "Session in game" : "Session left game");
-                    if (inGame) CoreState.FindWorld(); // Hook point (Task 5): Injection.Ensure() again once the world is found.
+                    if (inGame)
+                    {
+                        var world = CoreState.FindWorld();
+                        if (world != null) Injection.Ensure(world);
+                    }
                     else CoreState.World = null;
                 }
 #if DEVBUILD

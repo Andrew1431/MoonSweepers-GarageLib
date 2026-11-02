@@ -12,13 +12,19 @@ namespace StructureLib.Patches
         [HarmonyPatch(typeof(MoonWorld), nameof(MoonWorld.RestoreDepots), new[] { typeof(MoonLooseDustSnapshot) }), HarmonyPrefix]
         static void RestoreDepots(MoonWorld __instance)
         {
-            if (MoonStructures.Frozen) return;
-            try
+            if (!MoonStructures.Frozen)
             {
-                CoreLog.Info("World loading (RestoreDepots): freezing the structure registry");
-                MoonStructures.Freeze(kind => Donor(__instance, kind));
+                try
+                {
+                    CoreLog.Info("World loading (RestoreDepots): freezing the structure registry");
+                    MoonStructures.Freeze(kind => Donor(__instance, kind));
+                }
+                catch (Exception e) { CoreLog.Error("Freezing the structure registry failed: " + e); }
             }
-            catch (Exception e) { CoreLog.Error("Freezing the structure registry failed: " + e); }
+            // Every world load (the first and any later one): build this world's cloned definitions before saved
+            // structures are restored. Ensure does nothing unless the registry is frozen and working.
+            try { Injection.Ensure(__instance); }
+            catch (Exception e) { CoreLog.Error("Building cloned structure definitions failed: " + e); }
         }
 
         // The traits Rules.CheckDonor needs, read from the vanilla build definition of a donor kind. A read that throws
