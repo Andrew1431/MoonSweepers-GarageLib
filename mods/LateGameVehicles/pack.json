@@ -1,0 +1,13 @@
+{
+  "name": "LateGameVehicles",
+  "title": "Late Game Vehicles",
+  "version": "0.1.0",
+  "description": "Ten sweepers past the Mega vacuum rover, built on GarageLib: a wide line, a fast line and two lunar buggies.",
+  "comment": "A data pack: no DLL. package.ps1 ships each listed vehicles/<Name>/ (its *.vehicles.json and model .bin) under BepInEx/plugins/LateGameVehicles/<Name>/, plus the stats files below in the pack folder. Sources stay in vehicles/<Name>/.",
+  "stats": ["../../data/lines.vehicles.json"],
+  "vehicles": [
+    "LunarBuggy", "DuneJumper",
+    "TitanSweeper", "ColossusVacuum", "RegolithLeviathan", "MareHarvester",
+    "SprintVacuum", "StreakSweeper", "CometHoover", "OrbitalPolisher"
+  ]
+}

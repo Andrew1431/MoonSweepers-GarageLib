@@ -35,7 +35,7 @@ Register from `Load()`. The registry freezes on the first frame after plugins lo
 - **Stats files.** Any `*.vehicles.json` in `BepInEx/plugins/**` or `BepInEx/config/` overrides a registered
   vehicle's numbers by id (`name`, `summary`, `price`, `baseVehicle`, `width`, `depth`, `reach`, `speed`, `turn`,
   `capacity`, `storageKg`, `heft`, `upgradePriceScale`), field by field, config last. Put a `*.vehicles.json` in your
-  project folder and the build ships it next to your DLL. The shared table is `data/lines.vehicles.json`.
+  project folder and the build ships it next to your DLL. The shared table is `data/lines.vehicles.json`, shipped in the Late Game Vehicles pack.
 - **Garage listing.**
   - The core grows `MoonPrototypeCatalog.Vehicles` and `MoonWorld.GarageOffers`.
   - Static per-index lookups (prefab, seats, card picture, upgrade rules) are remapped to the base vehicle unless the definition overrides them.

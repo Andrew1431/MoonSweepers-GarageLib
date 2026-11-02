@@ -4,6 +4,7 @@
 #   .\package.ps1 -Release             also create GitHub releases for versions that don't have one yet
 # Each package zip unpacks into the game folder: BepInEx/plugins/<Name>/<Name>.dll.
 # Data vehicles (a folder with *.vehicles.json + model .bin and no csproj; version in the json) zip the same way.
+# Data packs (mods/<Name>/pack.json) bundle several data vehicles into one package; their vehicles aren't released alone.
 # Tags: <name>-v<version> per package (garagelib-v0.1.0), modpack-v<version> for the bundle (version in modpack.json).
 param([string[]]$Only, [switch]$Release)
 $ErrorActionPreference = 'Stop'
@@ -12,10 +13,24 @@ $dist = Join-Path $root 'dist'
 $stage = Join-Path $dist 'stage'
 Add-Type -AssemblyName System.IO.Compression.FileSystem
 
+function Get-Packs {
+    Get-ChildItem (Join-Path $root 'mods') -Directory -ErrorAction SilentlyContinue | ForEach-Object {
+        $f = Join-Path $_.FullName 'pack.json'
+        if (Test-Path $f) {
+            $j = Get-Content $f -Raw | ConvertFrom-Json
+            [pscustomobject]@{ Name = $_.Name; Dir = $_.FullName; Project = $null; Version = $j.version; Pack = $j }
+        }
+    }
+}
+
 function Get-Packages {
+    $packs = @(Get-Packs)
+    $inPack = @($packs | ForEach-Object { $_.Pack.vehicles })
+    $packs
     Get-ChildItem (Join-Path $root 'src'), (Join-Path $root 'vehicles'), (Join-Path $root 'mods') -Directory -ErrorAction SilentlyContinue | ForEach-Object {
         $proj = Join-Path $_.FullName "$($_.Name).csproj"
         $plugin = Join-Path $_.FullName 'Plugin.cs'
+        if ($inPack -contains $_.Name -or (Test-Path (Join-Path $_.FullName 'pack.json'))) { return }
         if (-not (Test-Path $proj)) {
             $json = Get-ChildItem $_.FullName -Filter '*.vehicles.json' | Select-Object -First 1
             if (-not $json) { return }
@@ -45,7 +60,17 @@ function Build-Package($p) {
 function Stage($p, $dll, $into) {
     $dir = Join-Path $into "BepInEx\plugins\$($p.Name)"
     New-Item -ItemType Directory -Force $dir | Out-Null
-    if ($dll) {
+    if ($p.Pack) {
+        foreach ($st in $p.Pack.stats) { Copy-Item (Join-Path $p.Dir $st) $dir }
+        foreach ($v in $p.Pack.vehicles) {
+            $src = Join-Path $root "vehicles\$v"
+            $files = @(Get-ChildItem $src -File | Where-Object { $_.Name -like '*.vehicles.json' -or $_.Extension -eq '.bin' })
+            if (-not ($files | Where-Object Name -like '*.vehicles.json')) { throw "$($p.Name): vehicles\$v has no *.vehicles.json" }
+            $vd = Join-Path $dir $v
+            New-Item -ItemType Directory -Force $vd | Out-Null
+            $files | Copy-Item -Destination $vd
+        }
+    } elseif ($dll) {
         Copy-Item $dll $dir
         Get-ChildItem (Split-Path $dll) -Filter '*.vehicles.json' | Copy-Item -Destination $dir
     } else {
