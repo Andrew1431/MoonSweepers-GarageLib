@@ -34,7 +34,7 @@ namespace GarageLib
             autoOpenMenu = cfg.Bind("Dev", "AutoOpenGarageMenu", -1, "Dev build: open the first garage's menu on this tab (0 vehicles, 1 upgrades, 2 fleet) 20 s into the game. -1 = off.");
             fillers = cfg.Bind("Dev", "FillerVehicles", 0, "Dev build: register this many dummy ride-on clones to stress the garage menu layout.");
             dumpMenu = cfg.Bind("Dev", "DumpGarageMenu", false, "Dev build: after AutoOpenGarageMenu, log the menu's UI hierarchy, then reopen it on the upgrades tab.");
-            infiniteMoney = cfg.Bind("Dev", "InfiniteMoney", false, "Dev build: keep your wallet topped up to $10,000,000 while in game (slot-2 testing). Goes through the game's own DevAddMoney.");
+            infiniteMoney = cfg.Bind("Dev", "InfiniteMoney", false, "Dev build: keep your wallet topped up to $10,000,000 while in game (slot-2 testing). Sets the team wallet through MoonWorld.SetTeamDollars.");
             dumpStats = cfg.Bind("Dev", "DumpVanillaStats", false, "Dev build: 10 s into the game, write every vanilla vehicle's stats and upgrade prices to BepInEx/cache/garagelib/vanilla-stats.json.");
             for (int i = 1; i <= fillers.Value; i++)
                 MoonVehicles.Register(new VehicleDefinition
@@ -63,7 +63,8 @@ namespace GarageLib
                 {
                     string player = MoonWorld.LocalPlayer;
                     decimal wallet = Money.From(w.WalletDollars(player));
-                    if (wallet < 5_000_000m) { w.DevAddMoney(player, Money.To(10_000_000m - wallet)); CoreLog.Info($"[dev] InfiniteMoney: wallet {wallet} -> 10,000,000"); }
+                    // DevAddMoney is a no-op in shipped builds; money is one team wallet with a setter.
+                    if (wallet < 5_000_000m) { w.SetTeamDollars(Money.To(10_000_000m)); CoreLog.Info($"[dev] InfiniteMoney: team wallet {wallet:F0} -> {Money.From(w.WalletDollars(player)):F0}"); }
                 }
             }
             if (dumpStats.Value && !statsDumped && gameT > 10f)

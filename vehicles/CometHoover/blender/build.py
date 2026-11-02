@@ -93,9 +93,9 @@ for sx in (-1, 1):
 kit.lamp("ScoopRimTop", (0, -4.205, 0.83), (mouth_hw * 2 + 0.1, 0.02, 0.025), r, CYAN)
 kit.stripe("ScoopLipStripe", (mouth_hw * 2 + 0.21, 0.08, 0.012), (0, -3.55, 0.985), r)
 # Rollers: a big ground roller and a smaller pickup roller behind it, both full sweep width
-kit.cyl("RollerMain", 0.22, brush, (0, -3.80, 0.24), ORANGE, r, "X", 24, 0.02)
+kit.cyl("RollerMain", 0.22, brush, (0, -3.80, 0.24), ORANGE, r, "X", 24, 0.02)["brush"] = 1.0
 kit.cyl("RollerMain_Core", 0.08, brush + 0.04, (0, -3.80, 0.24), BLACK, r, "X", 12, 0.01)
-kit.cyl("RollerPickup", 0.15, brush, (0, -3.50, 0.58), ORANGE, r, "X", 20, 0.02)
+kit.cyl("RollerPickup", 0.15, brush, (0, -3.50, 0.58), ORANGE, r, "X", 20, 0.02)["brush"] = 1.0
 kit.cyl("RollerPickup_Core", 0.06, brush + 0.04, (0, -3.50, 0.58), BLACK, r, "X", 12, 0.01)
 # intake guide vanes (black) between the rollers, thin so the orange still reads
 for x in (-1.4, 0.0, 1.4):

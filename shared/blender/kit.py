@@ -112,33 +112,43 @@ def rod(name, a, b, radius=0.03, mat=STEEL, parent=None, verts=10):
     return o
 
 
-def wheel(name, loc, radius=0.35, width=0.25, parent=None, hub=STEEL, chunky=True):
-    """Black tyre with a hub, axle along X. Tread blocks when chunky."""
-    tyre = cyl(name, radius, width, loc, BLACK, parent, "X", 32, 0.04)
-    cyl(name + "_Hub", radius * 0.55, width * 1.04, loc, hub, parent, "X", 20, 0.01)
-    cyl(name + "_Cap", radius * 0.18, width * 1.10, loc, BLACK, parent, "X", 12, 0.005)
+def wheel(name, loc, radius=0.35, width=0.25, parent=None, hub=STEEL, chunky=True, spin=True):
+    """Black tyre with a hub, axle along X. Tread blocks when chunky.
+    The parts hang off an empty called `name` at the axle; its `spin` prop (the radius) makes GarageLib roll it with
+    ground speed. Pass spin=False for wheels that shouldn't turn (a spare)."""
+    piv = _link(bpy.data.objects.new(name, None), parent)
+    piv.location = loc
+    if spin:
+        piv["spin"] = float(radius)
+    o = (0, 0, 0)
+    tyre = cyl(name + "_Tyre", radius, width, o, BLACK, piv, "X", 32, 0.04)
+    cyl(name + "_Hub", radius * 0.55, width * 1.04, o, hub, piv, "X", 20, 0.01)
+    cyl(name + "_Cap", radius * 0.18, width * 1.10, o, BLACK, piv, "X", 12, 0.005)
     if chunky:
         n = 14
         for i in range(n):
             a = 2 * math.pi * i / n
-            p = Vector(loc) + Vector((0, math.sin(a) * radius, math.cos(a) * radius))
-            t = box(f"{name}_Tread{i}", (width * 0.9, radius * 0.22, 0.05), p, BLACK, parent, 0)   # unbevelled: 14 per wheel adds up
+            p = Vector((0, math.sin(a) * radius, math.cos(a) * radius))
+            t = box(f"{name}_Tread{i}", (width * 0.9, radius * 0.22, 0.05), p, BLACK, piv, 0)   # unbevelled: 14 per wheel adds up
             t.rotation_euler = (-a, 0, 0)
     return tyre
 
 
 def disc_brush(name, loc, radius=0.3, parent=None, tilt=0.12):
-    """The game's round orange gutter brush: flat bristle disc with a black hub, tilted slightly forward."""
+    """The game's round orange gutter brush: flat bristle disc with a black hub, tilted slightly forward.
+    The `brush` prop makes GarageLib turn it about its own axis while the vehicle cleans."""
     d = cyl(name, radius, 0.06, loc, ORANGE, parent, "Z", 28, 0.02)
     d.rotation_euler = (tilt, 0, 0)
+    d["brush"] = 1.0
     h = cyl(name + "_Hub", radius * 0.45, 0.14, Vector(loc) + Vector((0, 0, 0.08)), BLACK, parent, "Z", 16, 0.02)
     h.rotation_euler = (tilt, 0, 0)
     return d
 
 
 def roller_brush(name, loc, length, radius=0.15, parent=None):
-    """Orange roller brush across the vehicle (axis X) in a black housing."""
+    """Orange roller brush across the vehicle (axis X) in a black housing; turns while cleaning like disc_brush."""
     r = cyl(name, radius, length, loc, ORANGE, parent, "X", 20, 0.02)
+    r["brush"] = 1.0
     box(name + "_Hood", (length + 0.08, radius * 2.0, 0.08), Vector(loc) + Vector((0, 0.02, radius + 0.04)), BLACK, parent, 0.02)
     for s in (-1, 1):
         box(f"{name}_End{'L' if s > 0 else 'R'}", (0.06, radius * 1.8, radius * 2.2), Vector(loc) + Vector((s * (length / 2 + 0.04), 0, 0)), BLACK, parent, 0.01)

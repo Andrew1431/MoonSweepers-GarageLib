@@ -63,7 +63,7 @@ gangs = 4
 glen = W / gangs
 for g in range(gangs):
     cx = -H + glen * (g + 0.5)
-    kit.cyl(f"Roller{g}", 0.4, glen - 0.14, (cx, HY, 0.42), ORANGE, r, "X", 16, 0)
+    kit.cyl(f"Roller{g}", 0.4, glen - 0.14, (cx, HY, 0.42), ORANGE, r, "X", 16, 0)["brush"] = 1.0
     lowcyl(f"Roller{g}_Core", 0.12, glen - 0.06, (cx, HY, 0.42), BLACK, "X", 8)
     kit.box(f"Roller{g}_Hood", (glen - 0.02, 1.05, 0.3), (cx, HY + 0.05, 0.98), BLACK, r, 0.04)
     for e in (-1, 1):

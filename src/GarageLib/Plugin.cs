@@ -24,6 +24,7 @@ namespace GarageLib
             CoreLog.Source = Log;
             VerboseLogging = Config.Bind("Debug", "VerboseLogging", true, "Extra log lines while the core is in early development.");
             CoreLog.Verbose = VerboseLogging.Value;
+            Tweaks.Bind(Config);
 
             if (!MembersPresent()) { CoreLog.Error("Game members the core relies on are missing (game update?). GarageLib is disabled."); return; }
 
@@ -31,6 +32,7 @@ namespace GarageLib
             DataVehicles.RegisterAll();
             ClassInjector.RegisterTypeInIl2Cpp<VehicleController>();
             ClassInjector.RegisterTypeInIl2Cpp<CoreDriver>();
+            ClassInjector.RegisterTypeInIl2Cpp<ModelAnimator>();
 #if DEVBUILD
             DevTools.Bind(Config);
 #endif
@@ -88,6 +90,7 @@ namespace GarageLib
                 {
                     nextEnsure = Time.unscaledTime + 3f;
                     Injection.Ensure();
+                    Tweaks.Ensure();
                 }
                 bool inGame = MoonSession.InGame;
                 if (inGame != wasInGame)

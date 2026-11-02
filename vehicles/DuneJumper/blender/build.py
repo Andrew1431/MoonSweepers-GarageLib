@@ -84,7 +84,7 @@ spare = kit.root("SpareMount")
 spare.parent = r
 spare.location = (0, 1.56, 1.2)
 spare.rotation_euler = (0, 0, math.pi / 2)
-kit.wheel("Spare", (0, 0, 0), 0.4, 0.28, spare, WHITE, chunky=False)
+kit.wheel("Spare", (0, 0, 0), 0.4, 0.28, spare, WHITE, chunky=False, spin=False)
 kit.rod("RackCross", (-0.5, 1.55, 1.2), (0.5, 1.55, 1.2), 0.025, STEEL, r)
 
 # Rocket-booster pod under the spare: white tube, orange fins, glowing orange nozzle

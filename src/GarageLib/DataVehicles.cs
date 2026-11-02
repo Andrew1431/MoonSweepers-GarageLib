@@ -37,6 +37,7 @@ namespace GarageLib
                 }
                 float scale = VehicleStats.TryField(id, "modelScale", out var s, out _) && s.ValueKind == JsonValueKind.Number ? s.GetSingle() : 1f;
                 var def = new VehicleDefinition { Id = id, BaseVehicle = baseVehicle };
+                dataIds.Add(id);
                 if (model != null)
                 {
                     string path = model;
@@ -45,8 +46,102 @@ namespace GarageLib
                 MoonVehicles.Register(def, "data:" + Path.GetFileName(Path.GetDirectoryName(file)));
                 n++;
             }
-            if (n > 0) CoreLog.Info($"Data vehicles: {n} registered from stats files");
+            if (n > 0)
+            {
+                MoonVehicles.Spawned += OnSpawned;
+                CoreLog.Info($"Data vehicles: {n} registered from stats files");
+            }
         }
+
+        static readonly HashSet<string> dataIds = new();
+
+        // After spawn: put the base's driver seat on the model's seat, and start the wheel / brush animator.
+        static void OnSpawned(VehicleSpawn s)
+        {
+            if (s?.Vehicle == null || !dataIds.Contains(s.Definition.Id)) return;
+            try
+            {
+                var vt = s.Vehicle.transform;
+                Transform holder = null;
+                foreach (var tr in vt.GetComponentsInChildren<Transform>(true)) if (tr.name == ModelNode) { holder = tr; break; }
+                if (holder == null) return;
+
+                // Authored bases (the Mega) clean their prefab's strip, not the catalog width: match it to the stat.
+                var view = s.Vehicle.authored;
+                var spec = s.Vehicle.Spec;
+                if (view != null && spec != null && Mathf.Abs(view.cleaningWidth - spec.width) > 0.01f)
+                {
+                    CoreLog.Debug($"'{s.Definition.Id}': cleaning width {view.cleaningWidth:F2} -> {spec.width:F2} (offset {view.cleaningOffset:F2})");
+                    view.cleaningWidth = spec.width;
+                }
+
+                // ...and move the strip to where the model's brushes are (the base's sits at its own intake).
+                if (view != null && animated.TryGetValue(s.Definition.Id, out var bp) && bp.brushes.Count > 0)
+                {
+                    float sum = 0f, weight = 0f;
+                    foreach (var r in holder.GetComponentsInChildren<Renderer>(true))
+                    {
+                        if (!bp.brushes.Contains(r.name)) continue;
+                        float w = Mathf.Max(0.1f, r.bounds.size.x * r.bounds.size.x + r.bounds.size.z * r.bounds.size.z);
+                        sum += vt.InverseTransformPoint(r.bounds.center).z * w;
+                        weight += w;
+                    }
+                    if (weight > 0f)
+                    {
+                        float offset = sum / weight;
+                        CoreLog.Debug($"'{s.Definition.Id}': cleaning offset {view.cleaningOffset:F2} -> {offset:F2}");
+                        view.cleaningOffset = offset;
+                    }
+                }
+
+                var seatNode = FindSeat(holder);
+                var seat = s.Vehicle.seat;
+                if (seatNode != null && seat != null)
+                {
+                    Vector3 target = seatNode.position;
+                    var rend = seatNode.GetComponent<Renderer>();
+                    if (seatNode.name != "DriverSeat" && rend != null) { var b = rend.bounds; target = new Vector3(b.center.x, b.max.y, b.center.z); }
+                    var before = vt.InverseTransformPoint(seat.position);
+                    seat.position = target;
+                    CoreLog.Debug($"'{s.Definition.Id}': seat {before} -> {vt.InverseTransformPoint(seat.position)} (from {seatNode.name})");
+                }
+                else CoreLog.Once("seat-" + s.Definition.Id, $"'{s.Definition.Id}': no seat node in the model (name one DriverSeat); rider uses the base's seat", 1);
+
+                animated.TryGetValue(s.Definition.Id, out var parts);
+                cameraScale.TryGetValue(s.Definition.Id, out float camScale);
+                if (camScale < 1.01f && (parts.wheels == null || parts.wheels.Count + parts.brushes.Count == 0)) return;
+                var anim = s.Vehicle.gameObject.GetComponent<ModelAnimator>() ?? s.Vehicle.gameObject.AddComponent<ModelAnimator>();
+                anim.Vehicle = s.Vehicle;
+                anim.CameraScale = Mathf.Max(1f, camScale);
+                CoreLog.Debug($"'{s.Definition.Id}': chase camera x{anim.CameraScale:F2}");
+                if (parts.wheels == null) return;
+                anim.Wheels.Clear(); anim.Brushes.Clear();
+                foreach (var tr in holder.GetComponentsInChildren<Transform>(true))
+                {
+                    if (parts.wheels.TryGetValue(tr.name, out float r)) anim.Wheels.Add((tr, r));
+                    else if (parts.brushes.Contains(tr.name)) anim.Brushes.Add(tr);
+                }
+            }
+            catch (Exception e) { CoreLog.Once("spawned-" + s.Definition.Id, $"'{s.Definition.Id}': seat / animator setup failed: {e}", 2); }
+        }
+
+        // DriverSeat if the model names one; else the first mesh with "seat" in its name that isn't a backrest.
+        static Transform FindSeat(Transform holder)
+        {
+            Transform best = null;
+            foreach (var tr in holder.GetComponentsInChildren<Transform>(true))
+            {
+                if (tr.name == "DriverSeat") return tr;
+                var n = tr.name.ToLowerInvariant();
+                if (best == null && n.Contains("seat") && !n.Contains("back") && tr.GetComponent<Renderer>() != null) best = tr;
+            }
+            return best;
+        }
+
+        static readonly Dictionary<string, float> cameraScale = new();
+        static float Size(Bounds b) => Mathf.Max(b.size.x, b.size.z) * 0.7f + b.size.y * 0.3f;
+
+        static readonly Dictionary<string, (Dictionary<string, float> wheels, HashSet<string> brushes)> animated = new();
 
         // Hide the base's meshes (its colliders, wheels, brush logic and particles keep working) and put the model on it,
         // standing where the base's wheels touch the ground.
@@ -56,12 +151,15 @@ namespace GarageLib
             {
                 var t = root.transform;
                 float baseBottom = float.PositiveInfinity;
+                var baseBox = new Bounds();
+                bool hasBase = false;
                 int hidden = 0;
                 foreach (var r in root.GetComponentsInChildren<Renderer>(true))
                 {
                     if (r.TryCast<MeshRenderer>() == null && r.TryCast<SkinnedMeshRenderer>() == null) continue;
                     var bnd = r.bounds;
                     baseBottom = Mathf.Min(baseBottom, t.InverseTransformPoint(bnd.min).y, t.InverseTransformPoint(bnd.max).y);
+                    if (hasBase) baseBox.Encapsulate(bnd); else { baseBox = bnd; hasBase = true; }
                     r.enabled = false;
                     hidden++;
                 }
@@ -73,10 +171,31 @@ namespace GarageLib
                 holder.localScale = Vector3.one * scale;
                 var mats = new GameMaterials(ctx.Models);
                 model.Instantiate(holder, _ => false, mats.For);
+                if (!animated.ContainsKey(def.Id))
+                {
+                    var wheels = new Dictionary<string, float>();
+                    var brushes = new HashSet<string>();
+                    foreach (var node in model.Nodes)
+                    {
+                        float r = node.Float("spin", 0f);
+                        if (Mathf.Abs(r) > 0.01f) wheels[node.Name] = r;
+                        else if (node.Props.ContainsKey("brush")) brushes.Add(node.Name);
+                    }
+                    animated[def.Id] = (wheels, brushes);
+                }
 
                 float modelBottom = float.PositiveInfinity;
+                var modelBox = new Bounds();
+                bool hasModel = false;
                 foreach (var r in holder.GetComponentsInChildren<Renderer>(true))
+                {
                     modelBottom = Mathf.Min(modelBottom, t.InverseTransformPoint(r.bounds.min).y);
+                    if (hasModel) modelBox.Encapsulate(r.bounds); else { modelBox = r.bounds; hasModel = true; }
+                }
+                // Chase camera pulls back by how much bigger the model is than the base (world AABB is fine: both are
+                // measured in the same pose).
+                if (hasBase && hasModel)
+                    cameraScale[def.Id] = Mathf.Clamp(Size(modelBox) / Mathf.Max(0.5f, Size(baseBox)), 1f, 4f);
                 if (!float.IsInfinity(modelBottom)) holder.localPosition = new Vector3(0f, baseBottom - modelBottom, 0f);
                 foreach (var tr in holder.GetComponentsInChildren<Transform>(true)) tr.gameObject.layer = root.layer;
                 CoreLog.Debug($"'{def.Id}': model {Path.GetFileName(path)} on base {def.BaseVehicle}, hid {hidden} base meshes, offset {holder.localPosition.y:F2}");
