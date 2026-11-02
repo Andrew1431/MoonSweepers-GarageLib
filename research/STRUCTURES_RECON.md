@@ -73,6 +73,33 @@ Everywhere (catalog, placement, built records, production, power, save), a struc
 - The same snapshot object GarageLib already strips owned vehicles from, so a structure sidecar can hook
   `MoonDepotSave.Write` / `MoonProductionSave.Write` prefixes and `RestoreDepots` / `RestoreProduction` prefixes the
   same way.
+- **Canisters (Task 9, traced in game on slot-2, 2026-11-01).** There is no `MoonCanisterSave`. The save runs on a
+  worker thread: `MoonProgressStore.Write` → `Serialize(states, next, dust)`, which writes the core sections itself,
+  `canisters` / `nextCanisterId` among them (the stream is already past them when the first per-section saver starts),
+  then calls the per-section savers in this order: `MoonDepotSave`, `MoonLoadoutSave`, `MoonVehicleStorageSave`,
+  `MoonConveyorSave`, `MoonStructurePoseSave`, `MoonToolContainerSave`, `MoonUpgradeTreeSave`,
+  `MoonStructureAnchorSave`, `MoonRobotSettingsSave`, `MoonPlayerRecordSave`, `MoonProductionSave`, `MoonScoreSave`,
+  `MoonGarageSave`, `MoonRadioSave`, `MoonRegionTouchSave`, `MoonWaypointSave`, `MoonOwnedVehicleSave`,
+  `MoonLandmarkSave` (each `Write(w, state)`). Then the same thread reads the bytes back with the matching `Read`s. On
+  load, `canisters` is already filled before `MoonDepotSave.Read` starts, so it is read inline by the core reader too.
+- `MoonCanisterSnapshot` has no cargo. A canister's cargo is in `MoonLooseDustSnapshot.cargo`
+  (`List<MoonCargoSnapshot>`: `id` = canister id, `byte cargo`), one entry per non-dust canister, filled by
+  **`SnapshotProduction`** (not `SnapshotCanisters`); a canister set to 250 got the entry `7:250`. Which saver writes
+  that list was not isolated (no non-dust canister existed when the stream offsets were traced); it is written inside
+  `Serialize` either way.
+- On load, a canister injected into `snapshot.canisters` with a `cargo` entry of 250 came back from `RestoreCanisters`
+  as dust, and stayed dust (vanilla never gives a restored canister a cargo above Stone). The library sets it afterwards.
+- `world.canisters` is `Dictionary<int, MoonDroppedCanister>` of value types: `canisters.set_Item(id, c)` (and a
+  setter on a copy) from managed code does **not** stick (read back unchanged). `MoveCanisterRecord(c, local, up,
+  rotation)` stores the canister it is given (cargo, kilograms and pose read back as passed). Do not call
+  `TryGetCanister(id, out c)` (an `out` of a boxed struct, the `TryPanel` crash pattern); use `ContainsKey` + `get_Item`.
+- So StructureLib strips modded-cargo canisters and their `cargo` entries in a `MoonProgressStore.Serialize` prefix
+  (before the `MoonDepotSave.Write` prefix writes the sidecar `.tmp`), puts them back in its finalizer, injects saved
+  ones into the load snapshot in a `RestoreCanisters` prefix and gives them their cargo in a `RestoreProduction`
+  postfix (`MoveCanisterRecord`). Checked end to end on slot-2: sidecar canister → world canister with cargo 250 →
+  next save "moved 1 modded-cargo canisters (1 cargo entries, 1 recorded) ... 6 canisters stay" → sidecar record.
+- `MoonDroppedCanister.IsDust` is false for a canister constructed with cargo 250 (and true for Dust), so it needs no
+  patch.
 
 ## Production (processors)
 
@@ -153,6 +180,10 @@ Everywhere (catalog, placement, built records, production, power, save), a struc
   - Candidate alternative for Task 10 (**untested**): prefix the instance method `MoonWorld.IsProcessorId(int id)`
     (normal prologue, not a tiny leaf), plus a `MoonWorld.Processor(int kind)` prefix that answers the modded
     processor spec, and patch the specific `IsProcessor(kind)` callers only if a path still needs it.
+- The static cargo switches `CargoName`, `CargoShortName`, `UnitKilograms` and the instance `CargoValue` (returning
+  an `Il2CppSystem.Decimal` through `ref __result`) all take Harmony prefixes without trouble (Task 9, 4 runs).
+- `world.canisters` (`Dictionary<int, MoonDroppedCanister>`, value-type values): `set_Item` from managed code does not
+  change the stored canister. Write through `MoveCanisterRecord` instead (see "Built records and save").
 
 ## World-time findings (new game in slot-1, 2026-11-01)
 
@@ -262,7 +293,8 @@ Also answered:
 - `CrewProcessorLoad(player, machine, Dust, kg)` puts the kilograms straight into input slot 0 under the player's
   owner share (10 → `[0:10]`, 20 → `[0:20]`); it does not wait for a canister.
 - `MoonCanisterSnapshot` has no `cargo` field (id, owner, kilograms, capacity, pose only). Every canister in this save
-  was dust, so it was not observed, but a non-dust canister presumably comes back as dust after a save.
+  was dust, so it was not observed, but a non-dust canister presumably comes back as dust after a save. (Task 9: the
+  cargo is in `MoonLooseDustSnapshot.cargo`, see "Built records and save".)
 
 ## Still open
 

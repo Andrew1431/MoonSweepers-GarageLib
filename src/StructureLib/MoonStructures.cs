@@ -114,6 +114,8 @@ namespace StructureLib
         /// <summary>True only for cargo values a mod registered (never for the game's own 0..2).</summary>
         public static bool IsModded(MoonCargo cargo) => byCargoValue.ContainsKey((byte)cargo);
         public static CargoDefinition CargoDefinition(MoonCargo cargo) => byCargoValue.TryGetValue((byte)cargo, out var d) ? d : null;
+        /// <summary>A registered cargo by id (null if unknown, or dropped when the registry froze).</summary>
+        public static CargoDefinition CargoDefinition(string id) => id != null && cargoById.TryGetValue(id, out var d) ? d : null;
 
         // Assigns kinds and validates everything. donorLookup reads the vanilla build definition for a base kind.
         // Validation works on copies; the live tables change only once everything is decided, and Frozen is set last.

@@ -50,7 +50,7 @@ namespace StructureLib
                 Structures = (live.Structures ?? new()).Concat((loaded.Structures ?? new()).Where(s => s != null && Missing(s.Id))).ToList(),
                 Production = (live.Production ?? new()).Concat((loaded.Production ?? new()).Where(p => p != null &&
                     (Missing(p.Id) || (p.Slots ?? new()).Any(s => s != null && SlotMissing(s.Cargo))))).ToList(),
-                Canisters = (live.Canisters ?? new()).Concat((loaded.Canisters ?? new()).Where(c => c != null && Missing(c.Cargo))).ToList(),
+                Canisters = (live.Canisters ?? new()).Concat((loaded.Canisters ?? new()).Where(c => c != null && Missing(c.CargoId))).ToList(),
             };
         }
     }

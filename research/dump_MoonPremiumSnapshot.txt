@@ -1,0 +1,7 @@
+== MoonCleaners.MoonPremiumSnapshot : Il2CppSystem.Object
+  P System.Int32 station
+  P System.String player
+  P Il2CppSystem.Decimal kilograms
+  M Void .ctor()
+  M Void .ctor()
+  M Void .ctor(IntPtr pointer)

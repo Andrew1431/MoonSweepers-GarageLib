@@ -324,6 +324,8 @@ namespace StructureLib
                 WaitForSave();
                 return;
             }
+            CargoChecks();
+            CanisterRoundTrip();
             int expected = KindAllocator.KindOf("ryanhartwig.example-lamp");
             Assert("example-kind-hashed", lamp != null && lamp.Kind == expected,
                 lamp == null ? "'ryanhartwig.example-lamp' is not registered (is ExampleStructure installed?)" : $"kind {lamp.Kind}, expected {expected}");
@@ -715,6 +717,112 @@ namespace StructureLib
                 CoreLog.Info($"[selftest] orphan '{LampId}': sidecar {rewritten}, holds {n} record(s); world loaded with {world.depots.Count} depots");
                 return (n > 0, $"the sidecar no longer holds '{LampId}'");
             });
+        }
+
+        // Example grit (value 250) answers the cargo switches from its CargoDefinition; an unregistered value (251) still
+        // gets vanilla's out-of-range answer (dust); a canister holding grit is not dust.
+        const string GritId = "ryanhartwig.example-grit";
+        const byte GritValue = 250;
+
+        static void CargoChecks()
+        {
+            var world = CoreState.World ?? CoreState.FindWorld();
+            var grit = MoonStructures.AllCargo.FirstOrDefault(c => c.Id == GritId);
+            string noGrit = grit == null ? $"'{GritId}' is not registered (is ExampleStructure installed?)" : null;
+            var g = (MoonCargo)GritValue;
+            Check("cargo-modded-name", noGrit, () =>
+            {
+                string name = MoonWorld.CargoName(g), shortName = MoonWorld.CargoShortName(g);
+                CoreLog.Info($"[selftest] cargo {GritValue}: CargoName '{name}', CargoShortName '{shortName}'");
+                return (name == "example grit" && shortName == "grit", $"CargoName({GritValue}) = '{name}', CargoShortName = '{shortName}'");
+            });
+            Check("cargo-modded-value", noGrit ?? (world == null ? "no MoonWorld found" : null), () =>
+            {
+                decimal value = DecimalOf(world.CargoValue(g));
+                CoreLog.Info($"[selftest] cargo {GritValue}: CargoValue {value} (dust {DecimalOf(world.CargoValue(MoonCargo.Dust))}, sand {DecimalOf(world.CargoValue(MoonCargo.Sand))}, stone {DecimalOf(world.CargoValue(MoonCargo.Stone))})");
+                return (value == 2m, $"CargoValue({GritValue}) = {value}");
+            });
+            Check("cargo-modded-kg", noGrit, () =>
+            {
+                double kg = MoonWorld.UnitKilograms(g);
+                return (kg == 1.0, $"UnitKilograms({GritValue}) = {kg}");
+            });
+            Check("cargo-unregistered-is-vanilla", null, () =>
+            {
+                string name = MoonWorld.CargoName((MoonCargo)251), dust = MoonWorld.CargoName(MoonCargo.Dust);
+                return (name == "moon dust" && dust == "moon dust", $"CargoName(251) = '{name}', CargoName(Dust) = '{dust}'");
+            });
+            Check("cargo-isdust-false", noGrit, () =>
+            {
+                var c = new MoonDroppedCanister(1, "dev-canister", 5.0, 10.0, Vector3.up, Vector3.up, 0f, new Il2CppSystem.Nullable<Quaternion>(), g);
+                var d = new MoonDroppedCanister(2, "dev-canister", 5.0, 10.0, Vector3.up, Vector3.up, 0f, new Il2CppSystem.Nullable<Quaternion>(), MoonCargo.Dust);
+                CoreLog.Info($"[selftest] canister with cargo {(byte)c.cargo}: IsDust={c.IsDust}; with Dust: IsDust={d.IsDust}");
+                return (!c.IsDust && d.IsDust, $"IsDust is {c.IsDust} for cargo {(byte)c.cargo} and {d.IsDust} for Dust");
+            });
+        }
+
+        // The canister strip/put-back on a synthetic save snapshot (no safe runtime API makes a grit canister without a
+        // player): dust 101, grit 102 (cargo record 250) and sand 103 (cargo record 1). The strip leaves only 101 and 103
+        // (and sand's cargo record) for the vanilla save and records 102 as grit; the put-back restores both lists exactly.
+        static void CanisterRoundTrip()
+        {
+            string noGrit = MoonStructures.AllCargo.Any(c => c.Id == GritId) ? null : $"'{GritId}' is not registered";
+            Check("canister-sidecar-roundtrip", noGrit, () =>
+            {
+                var state = new MoonLooseDustSnapshot();
+                state.canisters = new Il2CppSystem.Collections.Generic.List<MoonCanisterSnapshot>();
+                state.cargo = new Il2CppSystem.Collections.Generic.List<MoonCargoSnapshot>();
+                foreach (int id in new[] { 101, 102, 103 })
+                {
+                    var s = new MoonCanisterSnapshot();
+                    s.id = id; s.owner = "dev-canister"; s.kilograms = 7.5; s.capacity = 10;
+                    s.x = 1; s.y = 2; s.z = 3; s.ux = 0; s.uy = 1; s.uz = 0; s.physicalPose = true; s.qx = 0; s.qy = 0; s.qz = 0; s.qw = 1;
+                    state.canisters.Add(s);
+                }
+                foreach (var (id, cargo) in new[] { (102, GritValue), (103, (byte)1) })
+                {
+                    var c = new MoonCargoSnapshot();
+                    c.id = id; c.cargo = cargo;
+                    state.cargo.Add(c);
+                }
+                var canBefore = Pointers(state.canisters);
+                var cargoBefore = Pointers(state.cargo);
+                var stripped = new Sidecar.StrippedCanisters();
+                var records = Sidecar.StripCanisters(state, stripped);
+                string afterStrip = $"canisters [{Ids(state.canisters)}], cargo [{CargoIds(state.cargo)}]";
+                bool clean = Ids(state.canisters) == "101,103" && CargoIds(state.cargo) == "103:1";
+                var r = records?.FirstOrDefault();
+                bool recorded = records != null && records.Count == 1 && r.Id == 102 && r.CargoId == GritId && r.Kilograms == 7.5 && r.Capacity == 10 &&
+                                r.Position != null && r.Position.SequenceEqual(new[] { 1f, 2f, 3f }) && r.Rotation != null && r.Rotation.SequenceEqual(new[] { 0f, 0f, 0f, 1f }) && r.PhysicalPose;
+                var json = SidecarCodec.Deserialize(SidecarCodec.Serialize(new SidecarFile { Canisters = records ?? new() })).Canisters.FirstOrDefault();
+                bool jsonOk = json != null && json.CargoId == GritId && json.Up != null && json.Up.SequenceEqual(new[] { 0f, 1f, 0f });
+                int back = Sidecar.PutBackCanisters(state, stripped);
+                bool identical = Pointers(state.canisters).SequenceEqual(canBefore) && Pointers(state.cargo).SequenceEqual(cargoBefore);
+                CoreLog.Info($"[selftest] canister round trip: after strip {afterStrip}, {records?.Count ?? 0} record(s) ({r?.Id}:{r?.CargoId}), json cargo '{json?.CargoId}', put back {back}; now canisters [{Ids(state.canisters)}], cargo [{CargoIds(state.cargo)}]");
+                return (clean && recorded && jsonOk && identical,
+                    $"clean={clean} ({afterStrip}), recorded={recorded}, json={jsonOk}, identical after put-back={identical} (canisters [{Ids(state.canisters)}], cargo [{CargoIds(state.cargo)}])");
+            });
+        }
+
+        static List<IntPtr> Pointers<T>(Il2CppSystem.Collections.Generic.List<T> l) where T : Il2CppSystem.Object
+        {
+            var r = new List<IntPtr>();
+            for (int i = 0; i < l.Count; i++) r.Add(l.get_Item(i)?.Pointer ?? IntPtr.Zero);
+            return r;
+        }
+
+        static string Ids(Il2CppSystem.Collections.Generic.List<MoonCanisterSnapshot> l)
+        {
+            var r = new List<string>();
+            for (int i = 0; i < l.Count; i++) r.Add(l.get_Item(i)?.id.ToString() ?? "null");
+            return string.Join(",", r);
+        }
+
+        static string CargoIds(Il2CppSystem.Collections.Generic.List<MoonCargoSnapshot> l)
+        {
+            var r = new List<string>();
+            for (int i = 0; i < l.Count; i++) { var c = l.get_Item(i); r.Add(c == null ? "null" : $"{c.id}:{c.cargo}"); }
+            return string.Join(",", r);
         }
 
         // A modded kind answers BuildDefinition with its own clone, the build menu answers for it, and an unregistered

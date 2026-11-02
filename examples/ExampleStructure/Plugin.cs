@@ -6,7 +6,8 @@ using UnityEngine;
 
 namespace ExampleStructure
 {
-    // Example consumer: a floodlight clone sold in the Services tab, tagged with a small cube so tests can find its model.
+    // Example consumer: a floodlight clone sold in the Services tab, tagged with a small cube so tests can find its model,
+    // and one modded cargo kind, example grit.
     [BepInPlugin(Guid, "StructureLib Example Structure", "0.1.0")]
     [BepInDependency(StructureLib.Plugin.Guid)]
     public class Plugin : BasePlugin
@@ -34,6 +35,17 @@ namespace ExampleStructure
                     tag.transform.localScale = Vector3.one * 0.2f;
                     L.LogInfo($"Decorated {go.name}: added ExampleLampTag");
                 },
+            }, Guid);
+
+            // A modded cargo kind. Value 250 is what the world holds; structurelib.json records the id.
+            MoonStructures.RegisterCargo(new CargoDefinition
+            {
+                Id = "ryanhartwig.example-grit",
+                Value = 250,
+                Name = "example grit",
+                ShortName = "grit",
+                UnitKilograms = 1,
+                Price = 2m,
             }, Guid);
         }
     }

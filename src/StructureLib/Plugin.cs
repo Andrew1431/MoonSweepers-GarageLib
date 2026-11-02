@@ -25,6 +25,9 @@ namespace StructureLib
             "MoonCleaners.MoonWorld:BuildDefinition", "MoonCleaners.MoonWorld:RestoreDepots", "MoonCleaners.MoonWorld:TryBuildDepot",
             "MoonCleaners.MoonWorld:IsProcessor", "MoonCleaners.MoonWorld:IsPowerNode", "MoonCleaners.MoonWorld:Processor",
             "MoonCleaners.MoonWorld:InputSlot", "MoonCleaners.MoonWorld:CargoName", "MoonCleaners.MoonWorld:CargoValue",
+            "MoonCleaners.MoonWorld:CargoShortName", "MoonCleaners.MoonWorld:UnitKilograms", "MoonCleaners.MoonWorld:RestoreCanisters",
+            "MoonCleaners.MoonWorld:RestoreProduction", "MoonCleaners.MoonWorld:MoveCanisterRecord", "MoonCleaners.MoonWorld:RemoveCanister",
+            "MoonCleaners.MoonProgressStore:Serialize", "MoonCleaners.MoonLooseDustSnapshot:cargo",
             "MoonCleaners.MoonDepotSave:Write", "MoonCleaners.MoonProductionSave:Write",
             "MoonCleaners.MoonDepotBuilder:baseStructures", "MoonCleaners.MoonDepotBuilder:catalogCategories",
             "MoonCleaners.MoonDepotBuilder:BuildCatalog", "MoonCleaners.MoonDepotBuilder:CardArt", "MoonCleaners.MoonDepotBuilder:ProductionNote",
@@ -50,7 +53,7 @@ namespace StructureLib
             ClassInjector.RegisterTypeInIl2Cpp<CoreDriver>();
             var h = new Harmony(Guid);
             int ok = 0, failed = 0;
-            foreach (var t in new[] { typeof(FreezePatches), typeof(DefinitionPatches), typeof(KindRules), typeof(CatalogPatches), typeof(ModelPatches), typeof(BuildPatches), typeof(SavePatches) })
+            foreach (var t in new[] { typeof(FreezePatches), typeof(DefinitionPatches), typeof(KindRules), typeof(CatalogPatches), typeof(ModelPatches), typeof(BuildPatches), typeof(SavePatches), typeof(CargoPatches) })
             {
                 try { h.CreateClassProcessor(t).Patch(); ok++; CoreLog.Debug($"Patched {t.Name}"); }
                 catch (Exception e) { failed++; CoreLog.Error($"Patching {t.Name} failed: {e}"); }

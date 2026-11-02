@@ -14,9 +14,9 @@ namespace StructureLib
         /// <summary>Local time of the write, ISO 8601 ("s" format).</summary>
         public string Written { get; set; }
         public List<StructureRecord> Structures { get; set; } = new();
-        /// <summary>Production state of modded processors (Task 9).</summary>
+        /// <summary>Production state of modded processors (Task 10).</summary>
         public List<ProductionRecord> Production { get; set; } = new();
-        /// <summary>Canisters holding modded cargo (Task 10).</summary>
+        /// <summary>Canisters holding modded cargo.</summary>
         public List<CanisterRecord> Canisters { get; set; } = new();
     }
 
@@ -52,7 +52,7 @@ namespace StructureLib
         public double Pending { get; set; }
     }
 
-    /// <summary>Production state of one modded processor (MoonProductionSnapshot). Used from Task 9.</summary>
+    /// <summary>Production state of one modded processor (MoonProductionSnapshot). Used from Task 10.</summary>
     public sealed class ProductionRecord
     {
         /// <summary>Structure id of the machine.</summary>
@@ -72,24 +72,24 @@ namespace StructureLib
         public List<ShareRecord> Shares { get; set; } = new();
     }
 
-    /// <summary>A canister holding modded cargo (MoonCanisterSnapshot plus its cargo id). Used from Task 10.</summary>
+    /// <summary>
+    /// A canister holding modded cargo: a MoonCanisterSnapshot (id, owner, kilograms, capacity, pose) plus the cargo id
+    /// that replaces the cargo byte the vanilla save keeps in a separate MoonCargoSnapshot list.
+    /// </summary>
     public sealed class CanisterRecord
     {
         public int Id { get; set; }
         public string Owner { get; set; }
-        public string Cargo { get; set; }
+        /// <summary>Registered cargo id (CargoDefinition.Id), never the byte value.</summary>
+        public string CargoId { get; set; }
         public double Kilograms { get; set; }
         public double Capacity { get; set; }
-        public float X { get; set; }
-        public float Y { get; set; }
-        public float Z { get; set; }
-        public float Ux { get; set; }
-        public float Uy { get; set; }
-        public float Uz { get; set; }
+        /// <summary>x, y, z.</summary>
+        public float[] Position { get; set; }
+        /// <summary>ux, uy, uz.</summary>
+        public float[] Up { get; set; }
+        /// <summary>qx, qy, qz, qw.</summary>
+        public float[] Rotation { get; set; }
         public bool PhysicalPose { get; set; }
-        public float Qx { get; set; }
-        public float Qy { get; set; }
-        public float Qz { get; set; }
-        public float Qw { get; set; }
     }
 }
