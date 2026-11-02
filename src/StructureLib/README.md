@@ -185,7 +185,9 @@ MoonStructures.Register(new StructureDefinition
   prefabs carry `MoonMachineBelt` and ten colliders.
 - **Vanilla still sees a router.** `MoonWorld.Routes(def, kind)` keys on the definition's ports, so any clone with three
   or four ports answers true whatever the donor (the floodlight answers false, its 4-port router clone true). The hop is
-  still StructureLib's: the `HandOff` prefix answers for a router's input belt before vanilla's routing runs. Other
+  still StructureLib's: the `HandOff` prefix answers for a router's input belt before vanilla's routing runs, and never
+  hands it on: with the input port unresolved (no view yet during a load, none within tolerance) or a resolve that
+  throws, the canister waits. Other
   `Routes`-gated vanilla paths on a placed box, cut-in offers from the belt tool among them, are untested (by-hand list);
   `Routes` itself must not be prefixed (a static leaf like `IsProcessor`).
 - **Ports.** A splitter has exactly one input and one to three outputs; a merger one to three inputs and exactly one

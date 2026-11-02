@@ -79,6 +79,8 @@ namespace StructureLib
         static string restoreLine = "none", goneText = "";
         static bool restoredAll, goneExplained;
         static bool savedS, savedM;
+        static Dictionary<int, int> savedOn = new();
+        static HashSet<int> outAtLoad = new();
 
         internal static bool BoxPending => boxPhase != 0;
 
@@ -678,6 +680,27 @@ namespace StructureLib
 
         static int[] mergerIns = { -1, -1, -1 };
 
+        // The belt (of those given) whose path passes nearest the point, within 0.5 m; else -1.
+        static int NearestBelt(MoonWorld world, float[] at, int[] belts)
+        {
+            if (at == null || at.Length < 3) return -1;
+            var p = new Vector3(at[0], at[1], at[2]);
+            int best = -1;
+            float bestD = 0.5f;
+            foreach (int b in belts.Where(x => x >= 0).Distinct())
+            {
+                var path = world.BeltPath(b);
+                if (path == null) continue;
+                for (int i = 0; i <= 64; i++)
+                {
+                    // Bezier takes the curve parameter, Point a distance along the belt (either way the samples cover it).
+                    float d = Mathf.Min(Vector3.Distance(path.Bezier(i / 64f), p), Vector3.Distance(path.Point(path.Length * i / 64f), p));
+                    if (d < bestD) { bestD = d; best = b; }
+                }
+            }
+            return best;
+        }
+
         static void ReloadStart(MoonWorld world, StructureDefinition s, StructureDefinition m)
         {
             var saved = Sidecar.LoadedIds();
@@ -690,20 +713,33 @@ namespace StructureLib
             bR = StartingAt(world, PortPoint(s, spl, "Right"));
             mergerIns = new[] { EndingAt(world, PortPoint(m, mrg, "Back")), EndingAt(world, PortPoint(m, mrg, "Left")), EndingAt(world, PortPoint(m, mrg, "Right")) };
             bOut = StartingAt(world, PortPoint(m, mrg, "Out"));
-            loadedBoxGrit = Sidecar.LoadedCanisters().Where(c => c.CargoId == GritId).Select(c => c.Id).ToList();
+            var loadedRecords = Sidecar.LoadedCanisters().Where(c => c.CargoId == GritId).ToList();
+            loadedBoxGrit = loadedRecords.Select(c => c.Id).ToList();
             backAtStart = loadedBoxGrit.Where(id => world.canisters.ContainsKey(id) && (byte)world.canisters.get_Item(id).cargo == GritValue).ToList();
+            // The belt each saved grit canister lay on at the save (the nearest chain belt to its saved position).
+            savedOn = loadedRecords.ToDictionary(c => c.Id, c => NearestBelt(world, c.Position, new[] { bIn, bF, bL, bR, bOut }));
             // The load restored every saved grit canister (the sidecar's own count), and the chain moves in the ~20 s before
             // the self-test starts: a saved canister gone by now must have hopped through a box (RouterHop's "canister N ->"
-            // line) or gone into the burner ("Belt canister N: ... into"); any other loss fails.
+            // line). Only one saved on the merger's Out belt (the one belt that ends at no router) may instead have gone into
+            // the burner ("Belt canister N: ... into"): such an intake of a canister saved at a router input means it went
+            // through vanilla's routing, not a hop. Any other loss fails.
             string log = ReadWholeLog() ?? "";
             var restore = System.Text.RegularExpressions.Regex.Matches(log, @"Sidecar: ([0-9]+) of ([0-9]+) restored canisters hold their modded cargo");
             var last = restore.Count > 0 ? restore[restore.Count - 1] : null;
             restoreLine = last?.Value ?? "none";
             restoredAll = last != null && last.Groups[1].Value == last.Groups[2].Value && int.Parse(last.Groups[1].Value) >= loadedBoxGrit.Count;
             var gone = loadedBoxGrit.Except(backAtStart).ToList();
-            var why = gone.Select(id => (id, how: log.Contains($"canister {id} -> ") ? "hopped" : log.Contains($"Belt canister {id}: ") ? "into a machine" : null)).ToList();
-            goneExplained = why.All(x => x.how != null);
-            goneText = string.Join(", ", why.Select(x => $"{x.id} {x.how ?? "unexplained"}"));
+            var why = gone.Select(id =>
+            {
+                int on = savedOn.TryGetValue(id, out int b) ? b : -1;
+                bool intake = log.Contains($"Belt canister {id}: ");
+                string how = log.Contains($"canister {id} -> ") ? "hopped"
+                    : intake && on == bOut && bOut >= 0 ? "into the burner from the Out belt"
+                    : null;
+                return (id, on, how: how ?? (intake ? "into a machine without a hop (saved on belt " + on + ")" : null), ok: how != null);
+            }).ToList();
+            goneExplained = why.All(x => x.ok);
+            goneText = string.Join(", ", why.Select(x => $"{x.id} (saved on belt {x.on}) {x.how ?? "unexplained"}"));
             CoreLog.Info($"[selftest] beltboxes-reload: the sidecar held splitter {savedS}, merger {savedM}; restored splitter depot {spl}, merger depot {mrg}, burner depot {brn}; belt into the splitter's In {bIn}; out of its Forward/Left/Right {bF}/{bL}/{bR}; into the merger's Back/Left/Right {mergerIns[0]}/{mergerIns[1]}/{mergerIns[2]}; out of its Out {bOut} ({world.conveyors.Count} belts); sidecar grit canisters {loadedBoxGrit.Count}, back with cargo {GritValue} now {backAtStart.Count}; load: '{restoreLine}'; gone since the load: [{goneText}]");
             foreach (int b in new[] { bIn, bF, bL, bR, bOut }.Where(x => x >= 0))
                 CoreLog.Info($"[selftest] beltboxes-reload: riders on belt {b}: {RidersText(world, b)}");
@@ -715,6 +751,7 @@ namespace StructureLib
                         world.RemoveCanister(id);
                         CoreLog.Info($"[selftest] beltboxes-reload: removed the sand canister {id} holding the merger's output belt {bOut}");
                     }
+            outAtLoad = bOut >= 0 ? RiderIds(world, bOut).Where(id => world.canisters.ContainsKey(id) && (byte)world.canisters.get_Item(id).cargo == GritValue).ToHashSet() : new HashSet<int>();
             boxMark = boxRouted.Count;
             enteredBoxMark = entered.Count;
             boxUntil = Time.unscaledTime + 20f;
@@ -729,11 +766,23 @@ namespace StructureLib
             bool boxes = spl >= 0 && mrg >= 0 && builtViews.Contains(spl) && builtViews.Contains(mrg);
             bool belts = bIn >= 0 && bF >= 0 && bL >= 0 && bR >= 0 && bOut >= 0 && mergerIns[0] == bF && mergerIns[1] == bL && mergerIns[2] == bR && bOut != bIn;
             bool canisters = loadedBoxGrit.Count > 0 && restoredAll && goneExplained;
-            bool moved = hop != null || intake != null;
+            // Moved: a merger CargoRouted, or a burner intake of a canister that was on the Out belt at the self-test start
+            // (an intake of anything else, such as a canister vanilla routed through the merger, does not count).
+            var outGone = intake == null ? new List<int>() : outAtLoad.Where(id => !world.canisters.ContainsKey(id)).ToList();
+            bool moved = hop != null || outGone.Count > 0;
             bool ok = both && boxes && belts && canisters && moved;
             if (!ok && now < boxUntil) return;
-            CoreLog.Info($"[selftest] beltboxes-reload: first merger hop {(hop == null ? "none" : Hop(hop))}, first burner intake {(intake == null ? "none" : $"{intake.Kilograms} kg")} within {now - (boxUntil - 20f):F1} s");
-            Assert("beltboxes-reload", ok, $"the sidecar held both boxes {both} (splitter {savedS}, merger {savedM}); both back with views {boxes} (splitter {spl}, merger {mrg}); belts at their ports {belts} (In {bIn}; Forward/Left/Right {bF}/{bL}/{bR} into Back/Left/Right {string.Join("/", mergerIns)}; Out {bOut}); sidecar grit canisters {loadedBoxGrit.Count}: load '{restoreLine}', in the world at the self-test {backAtStart.Count}, gone since [{goneText}] all explained {goneExplained}; a merger hop or burner intake within 20 s {moved}");
+            string outIntake = "none";
+            if (hop == null && outGone.Count > 0)
+            {
+                string log = ReadWholeLog() ?? "";
+                var taken = outGone.Where(id => log.Contains($"Belt canister {id}: ")).ToList();
+                outIntake = taken.Count > 0 ? $"canister {string.Join(", ", taken)} (on the Out belt at the start)" : $"none logged for [{string.Join(", ", outGone)}]";
+                moved = taken.Count > 0;
+                ok = ok && moved;
+            }
+            CoreLog.Info($"[selftest] beltboxes-reload: first merger hop {(hop == null ? "none" : Hop(hop))}, first burner intake {(intake == null ? "none" : $"{intake.Kilograms} kg")}, intake of an Out-belt canister {outIntake} (Out belt grit at the start [{string.Join(", ", outAtLoad)}]) within {now - (boxUntil - 20f):F1} s");
+            Assert("beltboxes-reload", ok, $"the sidecar held both boxes {both} (splitter {savedS}, merger {savedM}); both back with views {boxes} (splitter {spl}, merger {mrg}); belts at their ports {belts} (In {bIn}; Forward/Left/Right {bF}/{bL}/{bR} into Back/Left/Right {string.Join("/", mergerIns)}; Out {bOut}); sidecar grit canisters {loadedBoxGrit.Count}: load '{restoreLine}', in the world at the self-test {backAtStart.Count}, gone since [{goneText}] all explained {goneExplained}; a merger hop or the intake of an Out-belt canister within 20 s {moved}");
             StartRemoveWait(world);
         }
 

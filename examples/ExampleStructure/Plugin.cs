@@ -128,7 +128,8 @@ namespace ExampleStructure
 
             // Dev builds of StructureLib only ([Dev] RegisterBoxProbe): a router, a 1.4 m box splitter on the floodlight
             // (kind 4: no game script, one collider; MoonWorld.Routes answers true for this 4-port clone, as for any 3-4
-            // port definition, but the HandOff prefix answers first, so the hop is StructureLib's). One input on -X,
+            // port definition, but the HandOff prefix answers first and never hands a router's belt to vanilla, even
+            // with its port unresolved during a load, so the hop is StructureLib's). One input on -X,
             // outputs on the other three faces, all flowing outward; round-robin in this port order (Forward, Left,
             // Right). Router ports carry no cargo (any cargo passes), so Cargo here is ignored. DevBelts.cs BoxSpike logs
             // its definition and view and belts to it.

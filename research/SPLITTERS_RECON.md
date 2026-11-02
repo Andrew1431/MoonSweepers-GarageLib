@@ -318,7 +318,8 @@ inactive included) and `MoonWorld.Routes(def, kind)` (called, never patched):
   question 1). `CutIn` itself was not called, because it has an `out Vector3` (the interop hazard rule). That rules 11
   out by the spec's own test ("no vanilla routing"). It also carries `MoonMachineBelt` and ten root colliders.
 - The packager carries a `MoonPackagerView` (a stray view) and the solar post a `MoonSolarPanelView`. **The floodlight
-  is the only candidate with no game script, one collider and `Routes` False.** Its footprint is 1.46 m square, close to
+  is the only candidate with no game script, one collider and `Routes` False** (the floodlight itself; its 4-port clone
+  answers True). Its footprint is 1.46 m square, close to
   the box's 1.4 m, and the example lamp already clones it.
 - The probe's runtime ports keep the splitter's names and +Z flow (`'Box probe input'`, `'Box probe output A'`,
   `'Box probe output B'`). `MachineJoins(kind, port)` answers True for each free port, and False for the input once a
@@ -439,3 +440,10 @@ From the BeltBoxes self-test runs (`.superpowers/sdd/2026-11-02-belt-boxes/task-
     1 kg / capacity 1) and every non-whole `CargoEmitted` logged (none), no fractional canister appeared. The likely
     source is a remainder in the grinder's output slot, filled by `belt-in-waits-when-full`'s `10 - Stored` top-ups.
     That is not proven.
+- Final review: in the fix-round-1 reload, canister 79 waited at the end of belt 5 (merger Right) at the save. After
+  the load the merger had no view yet and three inputs, so the prefix resolved no port and returned true, and
+  vanilla's `HandOff` ran. `Routes` is true for the 4-port clone, so vanilla routing took the canister. It was on no
+  belt at the self-test start and entered the burner about 20 s later under its own id, with no `CargoRouted`. The
+  guard: a belt ending at a router never runs vanilla. An unresolved port (no view, none within tolerance) or a
+  resolve that throws makes the canister wait, and the no-view case is not cached, so the port resolves on a later
+  frame. The reload check now accepts a saved canister at a router input as gone only through a hop line.
