@@ -16,10 +16,10 @@ namespace StructureLib
     internal static class DevTools
     {
         internal static ConfigEntry<int> AutoLoadSlot;
-        internal static ConfigEntry<bool> AllowSlot1, RunSelfTest;
+        internal static ConfigEntry<bool> AllowSlot1, RunSelfTest, ScreenshotMenu;
         internal static ConfigEntry<string> AutoBuild, AutoFeed;
         static float menuT, gameT;
-        static bool loadRequested, selfTestRan;
+        static bool loadRequested, selfTestRan, menuShot;
 
         internal static void Bind(ConfigFile cfg)
         {
@@ -28,7 +28,8 @@ namespace StructureLib
             RunSelfTest = cfg.Bind("Dev", "SelfTest", false, "Dev build: run the in-game self-test 20 s after a world loads and log [selftest] lines.");
             AutoBuild = cfg.Bind("Dev", "AutoBuild", "", "Dev build: comma-separated structure ids or vanilla kind numbers to build once in game. (Not used yet.)");
             AutoFeed = cfg.Bind("Dev", "AutoFeed", "", "Dev build: '<structureId>:<cargoId|Dust|Sand|Stone>:<kg>' to load into a built structure. (Not used yet.)");
-            CoreLog.Info($"[dev] AutoLoadSlot={AutoLoadSlot.Value} AllowSlot1={AllowSlot1.Value} SelfTest={RunSelfTest.Value} AutoBuild='{AutoBuild.Value}' AutoFeed='{AutoFeed.Value}'");
+            ScreenshotMenu = cfg.Bind("Dev", "ScreenshotMenu", false, "Dev build: 5 s after the self-test, open the build menu on the example lamp and save a screenshot to BepInEx/cache/structurelib/menu.png.");
+            CoreLog.Info($"[dev] AutoLoadSlot={AutoLoadSlot.Value} AllowSlot1={AllowSlot1.Value} SelfTest={RunSelfTest.Value} ScreenshotMenu={ScreenshotMenu.Value} AutoBuild='{AutoBuild.Value}' AutoFeed='{AutoFeed.Value}'");
             // MoonStructures.Register reads this static at plugin Load time; prove the interop read works that early.
             try { CoreLog.Info($"[dev] MoonProductionSave.MaxSlots at Load = {MoonProductionSave.MaxSlots}"); }
             catch (Exception e) { CoreLog.Error("[dev] reading MoonProductionSave.MaxSlots at Load threw: " + e); }
@@ -51,6 +52,8 @@ namespace StructureLib
                 if (refusal != null) CoreLog.Warn("[dev] SelfTest skipped: " + refusal);
                 else SelfTest.Run();
             }
+            SelfTest.Tick();
+            if (ScreenshotMenu.Value && !menuShot && SelfTest.FinishedAt > 0f && Time.unscaledTime > SelfTest.FinishedAt + 5f) { menuShot = true; MenuShot.Start(); }
         }
 
         static string ActiveFolder() => (MoonSaveSlots.SlotFolder(MoonSaveSlots.Active) ?? "").Replace('\\', '/').TrimEnd('/');
@@ -84,6 +87,63 @@ namespace StructureLib
         }
     }
 
+    // Evidence for the build-menu check without a screen: open the first builder's menu on the example lamp's tab,
+    // select the lamp, and save a screenshot to BepInEx/cache/structurelib/menu.png.
+    internal static class MenuShot
+    {
+        internal static void Start()
+        {
+            if (CoreDriver.Instance == null) return;
+            CoreDriver.Instance.StartCoroutine(BepInEx.Unity.IL2CPP.Utils.Collections.CollectionExtensions.WrapToIl2Cpp(Run()));
+        }
+
+        static System.Collections.IEnumerator Run()
+        {
+            var lamp = MoonStructures.Definition("ryanhartwig.example-lamp");
+            var builder = UnityEngine.Object.FindFirstObjectByType<MoonDepotBuilder>();
+            if (lamp == null || builder == null) { CoreLog.Warn($"[dev] menu shot: lamp {(lamp != null)}, builder {(builder != null)}"); yield break; }
+            Step("SetOpen(true)", () => builder.SetOpen(true));
+            CoreLog.Info($"[dev] menu shot: IsOpen={builder.IsOpen} after SetOpen(true)");
+            if (!builder.IsOpen)
+            {
+                Step("ToggleBuildMode()", () => builder.ToggleBuildMode());
+                CoreLog.Info($"[dev] menu shot: IsOpen={builder.IsOpen} after ToggleBuildMode()");
+            }
+            if (!builder.IsOpen)
+            {
+                // Both refuse unless the build tool is in hand; show the menu's own UI objects instead.
+                Step("EnsureBuildUI()", () => builder.EnsureBuildUI());
+                Step("ui/menu SetActive(true)", () => { builder.ui?.SetActive(true); builder.menu?.SetActive(true); });
+                Step("RefreshMenu()", () => builder.RefreshMenu());
+                CoreLog.Info($"[dev] menu shot: menu active={builder.menu != null && builder.menu.activeInHierarchy}, IsOpen={builder.IsOpen}");
+            }
+            yield return null;
+            int tab = Array.IndexOf(MoonDepotBuilder.catalogCategories?.ToArray() ?? Array.Empty<string>(), lamp.Category);
+            if (tab >= 0) Step($"FilterCatalog({tab})", () => builder.FilterCatalog(tab));
+            Step($"SelectStructure({lamp.Kind})", () => builder.SelectStructure(lamp.Kind));
+            yield return null;
+            yield return null;
+            yield return new WaitForEndOfFrame();
+            try
+            {
+                var tex = ScreenCapture.CaptureScreenshotAsTexture();
+                string dir = Path.Combine(BepInEx.Paths.CachePath, "structurelib");
+                Directory.CreateDirectory(dir);
+                string path = Path.Combine(dir, "menu.png");
+                File.WriteAllBytes(path, ImageConversion.EncodeToPNG(tex));
+                UnityEngine.Object.Destroy(tex);
+                CoreLog.Info($"[dev] menu shot saved to {path} (selected {builder.selectedStructure}, category {builder.selectedCategory}, open {builder.IsOpen})");
+            }
+            catch (Exception e) { CoreLog.Warn("[dev] menu shot: capture failed: " + e.Message); }
+        }
+
+        static void Step(string what, Action a)
+        {
+            try { a(); CoreLog.Info("[dev] menu shot: " + what); }
+            catch (Exception e) { CoreLog.Warn($"[dev] menu shot: {what} threw {e.GetType().Name}: {e.Message}"); }
+        }
+    }
+
     // In-game assertions. Line formats are fixed; tooling greps them.
     internal static class SelfTest
     {
@@ -101,7 +161,79 @@ namespace StructureLib
             Assert("example-kind-hashed", lamp != null && lamp.Kind == expected,
                 lamp == null ? "'ryanhartwig.example-lamp' is not registered (is ExampleStructure installed?)" : $"kind {lamp.Kind}, expected {expected}");
             DefinitionChecks(lamp);
+            // Finishes the run (Done) itself, possibly a few frames later.
+            CatalogChecks(lamp);
+        }
+
+        // The build menu lists the lamp under Services, in the static catalog and in the menu's own copy of it. Its card
+        // art is polled for up to 5 s (the renderer needs a few frames) before the run finishes.
+        const string LampImage = "structurelib:ryanhartwig.example-lamp";
+        static MoonDepotBuilder artBuilder;
+        static StructureDefinition artLamp;
+        static float artUntil = -1f;
+
+        /// <summary>Unscaled time at which the last run printed its done line; -1 until then.</summary>
+        internal static float FinishedAt = -1f;
+
+        static void CatalogChecks(StructureDefinition lamp)
+        {
+            var builder = UnityEngine.Object.FindFirstObjectByType<MoonDepotBuilder>();
+            string noLamp = lamp == null ? "example lamp not registered" : null;
+            string noBuilder = builder == null ? "no MoonDepotBuilder found" : noLamp;
+            Check("catalog-has-modded", noLamp, () =>
+            {
+                var entries = MoonDepotBuilder.baseStructures;
+                if (entries == null) return (false, "baseStructures is null");
+                bool ok = entries.Any(e => e != null && e.kind == lamp.Kind && e.category == "Services");
+                return (ok, $"no Services entry for kind {lamp.Kind} among {entries.Length} baseStructures");
+            });
+            Check("catalog-instance-has-modded", noBuilder, () =>
+            {
+                builder.RefreshCatalog();
+                var entries = builder.structureEntries;
+                if (entries == null) return (false, "structureEntries is null after RefreshCatalog");
+                return (entries.Any(e => e != null && e.kind == lamp.Kind), $"no entry for kind {lamp.Kind} among {entries.Length} structureEntries");
+            });
+            if (noBuilder != null) { Assert("cardart-modded", false, noBuilder); Finish(); return; }
+            artBuilder = builder;
+            artLamp = lamp;
+            artUntil = Time.unscaledTime + 5f;
+        }
+
+        // Every frame in game: answers the pending card art check once the art is there or 5 s have passed.
+        internal static void Tick()
+        {
+            if (artUntil < 0f) return;
+            Sprite art = null;
+            string error = null;
+            bool timedOut = Time.unscaledTime >= artUntil;
+            try
+            {
+                if (!(artBuilder != null && artBuilder.Pointer != IntPtr.Zero && artBuilder)) error = "the MoonDepotBuilder went away";
+                else if (ArtSettled(artLamp) || timedOut) art = artBuilder.CardArt(LampImage);
+            }
+            catch (Exception e) { error = "threw " + e.GetType().Name + ": " + e.Message; }
+            if (art == null && error == null && !timedOut) return;
+            artUntil = -1f;
+            Assert("cardart-modded", art != null, error ?? $"CardArt(\"{LampImage}\") returned null after 5 s");
+            if (art != null)
+            {
+                var rendered = IconRenderer.Get(artLamp);
+                string source = rendered != null && rendered.Pointer == art.Pointer ? "the rendered picture" : "fallback art";
+                CoreLog.Info($"[selftest] card art for '{artLamp.Id}': sprite '{art.name}' {art.rect.width}x{art.rect.height} ({source})");
+            }
+            artBuilder = null;
+            artLamp = null;
+            Finish();
+        }
+
+        // True once nothing more is coming for this structure's card art (no render pending).
+        static bool ArtSettled(StructureDefinition d) => !IconRenderer.Pending(d);
+
+        static void Finish()
+        {
             Done();
+            FinishedAt = Time.unscaledTime;
         }
 
         // A modded kind answers BuildDefinition with its own clone, the build menu answers for it, and an unregistered

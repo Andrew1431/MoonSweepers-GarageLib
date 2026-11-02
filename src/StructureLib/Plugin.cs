@@ -26,7 +26,8 @@ namespace StructureLib
             "MoonCleaners.MoonWorld:IsProcessor", "MoonCleaners.MoonWorld:IsPowerNode", "MoonCleaners.MoonWorld:Processor",
             "MoonCleaners.MoonWorld:InputSlot", "MoonCleaners.MoonWorld:CargoName", "MoonCleaners.MoonWorld:CargoValue",
             "MoonCleaners.MoonDepotSave:Write", "MoonCleaners.MoonProductionSave:Write",
-            "MoonCleaners.MoonDepotBuilder:baseStructures", "MoonCleaners.MoonDepotBuilder:CardArt", "MoonCleaners.MoonDepotBuilder:ProductionNote",
+            "MoonCleaners.MoonDepotBuilder:baseStructures", "MoonCleaners.MoonDepotBuilder:catalogCategories",
+            "MoonCleaners.MoonDepotBuilder:BuildCatalog", "MoonCleaners.MoonDepotBuilder:CardArt", "MoonCleaners.MoonDepotBuilder:ProductionNote",
         };
 
         public override void Load()
@@ -48,7 +49,7 @@ namespace StructureLib
             ClassInjector.RegisterTypeInIl2Cpp<CoreDriver>();
             var h = new Harmony(Guid);
             int ok = 0, failed = 0;
-            foreach (var t in new[] { typeof(FreezePatches), typeof(DefinitionPatches), typeof(KindRules) })
+            foreach (var t in new[] { typeof(FreezePatches), typeof(DefinitionPatches), typeof(KindRules), typeof(CatalogPatches) })
             {
                 try { h.CreateClassProcessor(t).Patch(); ok++; CoreLog.Debug($"Patched {t.Name}"); }
                 catch (Exception e) { failed++; CoreLog.Error($"Patching {t.Name} failed: {e}"); }
@@ -93,9 +94,11 @@ namespace StructureLib
                     {
                         var world = CoreState.FindWorld();
                         if (world != null) Injection.Ensure(world);
+                        IconRenderer.QueueAll();
                     }
                     else CoreState.World = null;
                 }
+                IconRenderer.Tick();
 #if DEVBUILD
                 DevTools.Tick();
 #endif

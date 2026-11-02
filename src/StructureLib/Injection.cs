@@ -1,13 +1,17 @@
 using System;
 using System.Collections.Generic;
+using System.Linq;
+using Il2CppInterop.Runtime.InteropTypes.Arrays;
 using MoonCleaners;
+using StructureLib.Patches;
 using UnityEngine;
 
 namespace StructureLib
 {
     // One cloned MoonDepotBuildDefinition per modded structure per world: the donor's definition copied with the
     // structure's name and price. A new world gets new clones. Ensure() is idempotent and runs at world load and every
-    // few seconds; DefinitionFor() also builds a missing clone on demand.
+    // few seconds; DefinitionFor() also builds a missing clone on demand. Ensure() also keeps the build menu's static
+    // catalog complete (EnsureCatalog).
     internal static class Injection
     {
         static IntPtr cacheWorld = IntPtr.Zero;
@@ -18,6 +22,61 @@ namespace StructureLib
             if (!MoonStructures.Frozen || MoonStructures.Disabled || world == null || world.Pointer == IntPtr.Zero || !world) return;
             foreach (var d in MoonStructures.All)
                 if (d.Kind > 0) DefinitionFor(d, world);
+            EnsureCatalog();
+        }
+
+        static bool catalogReady;
+
+        // The build menu's static catalog: one entry per modded structure (image "structurelib:<id>", which the CardArt
+        // prefix answers) and any category the vanilla tabs lack, appended in registration order. Idempotent: only
+        // kinds and categories not already present are added, so a repeat call (or another world) changes nothing.
+        internal static void EnsureCatalog()
+        {
+            if (!MoonStructures.Frozen || MoonStructures.Disabled) return;
+            var live = MoonStructures.All.Where(d => d.Kind > 0 && MoonStructures.IsModded(d.Kind)).ToList();
+            if (live.Count == 0) return;
+
+            var entries = MoonDepotBuilder.baseStructures;
+            if (entries == null) { CoreLog.Once("catalog-null", "MoonDepotBuilder.baseStructures is null, will retry", 1); return; }
+            var missing = live.Where(d => !entries.Any(e => e != null && e.kind == d.Kind)).ToList();
+            if (missing.Count > 0)
+            {
+                var grown = new Il2CppReferenceArray<MoonDepotBuilder.CatalogEntry>(entries.Length + missing.Count);
+                for (int i = 0; i < entries.Length; i++) grown[i] = entries[i];
+                int k = entries.Length;
+                foreach (var d in missing)
+                {
+                    grown[k++] = new MoonDepotBuilder.CatalogEntry(d.Kind, d.Name, d.Category, CatalogPatches.ImagePrefix + d.Id);
+                    CoreLog.Info($"Catalog entry added: kind {d.Kind} '{d.Name}' in '{d.Category}', image '{CatalogPatches.ImagePrefix}{d.Id}'");
+                }
+                MoonDepotBuilder.baseStructures = grown;
+                var check = MoonDepotBuilder.baseStructures;
+                CoreLog.Info($"Catalog grown {entries.Length} -> {check?.Length} (setter {(check?.Length == grown.Length ? "worked" : "DID NOT stick")})");
+            }
+
+            var categories = MoonDepotBuilder.catalogCategories;
+            if (categories == null) { CoreLog.Once("categories-null", "MoonDepotBuilder.catalogCategories is null, will retry", 1); return; }
+            var known = new HashSet<string>(categories, StringComparer.Ordinal);
+            var newCategories = new List<string>();
+            foreach (var d in live)
+                if (!string.IsNullOrEmpty(d.Category) && known.Add(d.Category)) newCategories.Add(d.Category);
+            if (newCategories.Count > 0)
+            {
+                var grown = new Il2CppStringArray(categories.Length + newCategories.Count);
+                for (int i = 0; i < categories.Length; i++) grown[i] = categories[i];
+                for (int i = 0; i < newCategories.Count; i++) grown[categories.Length + i] = newCategories[i];
+                MoonDepotBuilder.catalogCategories = grown;
+                var check = MoonDepotBuilder.catalogCategories;
+                CoreLog.Info($"Catalog categories grown {categories.Length} -> {check?.Length}: added {string.Join(", ", newCategories.Select(c => "'" + c + "'"))} (setter {(check?.Length == grown.Length ? "worked" : "DID NOT stick")})");
+            }
+
+            // First time the catalog is complete: render the card pictures (no-op if already queued at session start).
+            var now = MoonDepotBuilder.baseStructures;
+            if (!catalogReady && now != null && live.All(d => now.Any(e => e != null && e.kind == d.Kind)))
+            {
+                catalogReady = true;
+                IconRenderer.QueueAll();
+            }
         }
 
         internal static MoonDepotBuildDefinition DefinitionFor(StructureDefinition d, MoonWorld world)
