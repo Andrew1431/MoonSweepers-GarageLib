@@ -6,7 +6,7 @@
       "register": true,
       "baseVehicle": 21,
       "model": "mare_harvester.bin",
-      "summary": "A combine harvester for the Moon: a 16 m brush header, a towering silo and an unloading auger."
+      "summary": "A combine harvester for the Moon: a 16 m brush header and a towering silo hopper."
     }
   }
 }
