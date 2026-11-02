@@ -21,9 +21,10 @@ namespace BeltBoxes
 
         public override void Load()
         {
-            // Flow runs along structure +X like every vanilla production donor. Left and right are as seen looking along
-            // +X with Y up. Router ports carry no cargo (any cargo passes): the Cargo here is ignored. The round-robin
-            // order is the port order below.
+            // The ports come from the models' Port_* nodes (box_splitter.bin, box_merger.bin, built by the scripts in
+            // blender/). Flow runs along structure +X like every vanilla production donor. Left and right are as seen
+            // looking along +X with Y up. Router ports carry no cargo (any cargo passes). The round-robin order is the
+            // resolved port order: a model's nodes in file order, which the exporter writes alphabetically.
             MoonStructures.Register(new StructureDefinition
             {
                 Id = "ryanhartwig.box-splitter",
@@ -34,13 +35,12 @@ namespace BeltBoxes
                 BaseStructure = FloodlightKind,
                 Router = new RouterDefinition { Mode = RouterMode.Splitter },
                 Footprint = new Vector2(1.4f, 1.4f),
-                Ports = new()
-                {
-                    PortDefinition.In("In", Cargo.Dust, new Vector3(-0.70f, 0.85f, 0f), Vector3.right),
-                    PortDefinition.Out("Forward", Cargo.Dust, new Vector3(0.70f, 0.85f, 0f), Vector3.right),
-                    PortDefinition.Out("Left", Cargo.Dust, new Vector3(0f, 0.85f, 0.70f), Vector3.forward),
-                    PortDefinition.Out("Right", Cargo.Dust, new Vector3(0f, 0.85f, -0.70f), Vector3.back),
-                },
+                // The model's ports (structure-local metres; the belt's flow), in round-robin order:
+                //   Port_Forward  output  (0.70, 0.85, 0.00)   +X
+                //   Port_In       input   (-0.70, 0.85, 0.00)  +X
+                //   Port_Left     output  (0.00, 0.85, 0.70)   +Z
+                //   Port_Right    output  (0.00, 0.85, -0.70)  -Z
+                Model = "box_splitter.bin",
             }, Guid);
 
             MoonStructures.Register(new StructureDefinition
@@ -53,13 +53,12 @@ namespace BeltBoxes
                 BaseStructure = FloodlightKind,
                 Router = new RouterDefinition { Mode = RouterMode.Merger },
                 Footprint = new Vector2(1.4f, 1.4f),
-                Ports = new()
-                {
-                    PortDefinition.In("Left", Cargo.Dust, new Vector3(0f, 0.85f, 0.70f), Vector3.back),
-                    PortDefinition.In("Back", Cargo.Dust, new Vector3(-0.70f, 0.85f, 0f), Vector3.right),
-                    PortDefinition.In("Right", Cargo.Dust, new Vector3(0f, 0.85f, -0.70f), Vector3.forward),
-                    PortDefinition.Out("Out", Cargo.Dust, new Vector3(0.70f, 0.85f, 0f), Vector3.right),
-                },
+                // The model's ports (structure-local metres; the belt's flow), in round-robin order:
+                //   Port_Back   input   (-0.70, 0.85, 0.00)  +X
+                //   Port_Left   input   (0.00, 0.85, 0.70)   -Z
+                //   Port_Out    output  (0.70, 0.85, 0.00)   +X
+                //   Port_Right  input   (0.00, 0.85, -0.70)  +Z
+                Model = "box_merger.bin",
             }, Guid);
 
             Log.LogInfo($"Belt Boxes {Version} loaded");

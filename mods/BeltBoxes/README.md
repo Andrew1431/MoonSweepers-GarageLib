@@ -24,20 +24,24 @@ belt's entrance spacing.
 
 ## Ports
 
-Flow runs along the box's +X axis (the way the game's own machines run). Left and right are as seen looking along +X,
-standing up. Positions are structure-local, in metres, on the footprint edge at belt height. The turn order is the
-order below.
+The ports come from the models: each is a `Port_<name>` node in `box_splitter.bin` or `box_merger.bin`, not a list in
+the code. Flow runs along the box's +X axis (the way the game's own machines run). Left and right are as seen looking
+along +X, standing up. Positions are structure-local, in metres, on the footprint edge at belt height.
+
+The turn order is the order StructureLib resolves the ports in, which for a model's ports is their order in the file,
+and the exporter writes them alphabetically. So the splitter's outputs take turns Forward, Left, Right, and the merger
+serves its inputs Back, Left, Right. The table is in that order.
 
 | Box | Port | Where (x, y, z) | Belt flows |
 |---|---|---|---|
-| Box splitter | `In` (input) | (−0.70, 0.85, 0.00), the back face | +X, into the box |
 | Box splitter | `Forward` (output, 1st) | (0.70, 0.85, 0.00), the front face | +X, away from the box |
+| Box splitter | `In` (input) | (−0.70, 0.85, 0.00), the back face | +X, into the box |
 | Box splitter | `Left` (output, 2nd) | (0.00, 0.85, 0.70), the left face | +Z, away from the box |
 | Box splitter | `Right` (output, 3rd) | (0.00, 0.85, −0.70), the right face | −Z, away from the box |
-| Box merger | `Left` (input, 1st) | (0.00, 0.85, 0.70), the left face | −Z, into the box |
-| Box merger | `Back` (input, 2nd) | (−0.70, 0.85, 0.00), the back face | +X, into the box |
-| Box merger | `Right` (input, 3rd) | (0.00, 0.85, −0.70), the right face | +Z, into the box |
+| Box merger | `Back` (input, 1st) | (−0.70, 0.85, 0.00), the back face | +X, into the box |
+| Box merger | `Left` (input, 2nd) | (0.00, 0.85, 0.70), the left face | −Z, into the box |
 | Box merger | `Out` (output) | (0.70, 0.85, 0.00), the front face | +X, away from the box |
+| Box merger | `Right` (input, 3rd) | (0.00, 0.85, −0.70), the right face | +Z, into the box |
 
 ## Two differences from the vanilla splitter and merger
 
@@ -67,7 +71,9 @@ join when the two players' mods differ, so both players need Belt Boxes.
 ## What works, and what does not yet
 
 Checked in game (StructureLib's dev self-test with its example grinder and burner, single player):
-- both boxes register with four ports each and build;
+- both boxes register and build with their own models, and the four ports of each come from the model at the
+  positions in the table;
+- both build-menu cards show the box;
 - belts were joined at the splitter's `In` and `Forward` and at the merger's `Back` and `Out`;
 - grit was routed through both boxes, from a grinder into a burner (12 canisters reached the burner in the run);
 - any cargo passes: a sand canister was routed through both boxes too, and then waited at the burner, which takes only
@@ -87,9 +93,20 @@ Not checked yet, worth a look before a release:
 
 ## The models
 
-Both boxes are shown as the vanilla floodlight for now. Their own models, `box_splitter.bin` and `box_merger.bin`
-(built from the scripts in [`blender/`](blender)), already sit in this folder and ship next to `BeltBoxes.dll`. The
-next version switches the boxes to them and adds preview images.
+Each box has its own model: `box_splitter.bin` and `box_merger.bin`, which ship next to `BeltBoxes.dll`. They are built
+from the scripts in [`blender/`](blender) (`box_splitter.py`, `box_merger.py` and the shared `box_common.py`).
+
+The box is a white body on a dark skid, with a dark lid. Every ported face has a short belt stub at deck height. An
+input's mouth has an orange lip, and an output's has a steel lip. The orange arrows on the lid show the flow: one in and
+three out on the splitter, three in and one out on the merger. The model fits the 1.4 m footprint and stands about 1.0 m
+tall.
+
+| | Hero | Side | Front | Rear |
+|---|---|---|---|---|
+| Box splitter | ![Box splitter, hero view](blender/preview_splitter_hero.png) | ![Box splitter, side view](blender/preview_splitter_side.png) | ![Box splitter, front view](blender/preview_splitter_front.png) | ![Box splitter, rear view](blender/preview_splitter_rear.png) |
+| Box merger | ![Box merger, hero view](blender/preview_merger_hero.png) | ![Box merger, side view](blender/preview_merger_side.png) | ![Box merger, front view](blender/preview_merger_front.png) | ![Box merger, rear view](blender/preview_merger_rear.png) |
+
+The model's ports are its `Port_*` nodes (see [Ports](#ports)).
 
 ## Saves
 
@@ -98,4 +115,4 @@ the canisters ride the belts. Remove Belt Boxes and the boxes wait in that file 
 
 ## Changelog
 
-- 0.1.0: first version: the box splitter and box merger, with declared ports.
+- 0.1.0: first version: the box splitter and box merger, with their own models.
