@@ -13,7 +13,9 @@
    ```
 
 4. Build everything once: `dotnet build GarageLib.slnx -c Release`. Each build copies the DLLs into
-   `BepInEx/plugins/<Name>/`, so you only need to launch the game afterwards (close it first: Windows locks the DLLs).
+   `BepInEx/plugins/<Name>/`, so you only need to launch the game afterwards (close it first: Windows locks the DLLs). If you used the player
+installer, BepInEx is off for plain Steam starts: launch modded with the desktop shortcut or
+`steam.exe -applaunch 5335510 --doorstop-enabled true`, or set `enabled = true` in the game's `doorstop_config.ini`.
 
 ## New vehicle
 

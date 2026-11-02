@@ -9,6 +9,8 @@
 # What it does: BepInEx 6 IL2CPP be.791 (downloaded from builds.bepinex.dev if missing), the MoonSweepers.ModEngine
 # patcher (only on Nexus, so it opens the page and picks the zip up from Downloads), then the newest modpack release
 # from GitHub. It remembers which plugin folders it installed and replaces only those on update.
+# Like r2modman, BepInEx stays switched off in doorstop_config.ini: starting the game from Steam is the plain game,
+# and only -Launch (the desktop shortcut) starts it with --doorstop-enabled true, i.e. modded.
 param([switch]$Launch, [string]$GameDir, [string]$Zip, [switch]$Uninstall, [switch]$Vanilla)
 $ErrorActionPreference = 'Stop'
 $ProgressPreference = 'SilentlyContinue'   # Invoke-WebRequest's progress bar makes downloads 10x slower in PS 5.1
@@ -118,6 +120,14 @@ if ($freshLoader) {
     Expand-Into $bz $GameDir
 } else { Say "BepInEx $BepInExVersion already installed" }
 
+# Off unless launched through this script, so a normal Steam start is vanilla.
+$ini = Join-Path $GameDir 'doorstop_config.ini'
+if (Test-Path $ini) {
+    $text = Get-Content $ini -Raw
+    $off = $text -replace '(?m)^enabled\s*=.*$', 'enabled = false'
+    if ($off -ne $text) { Set-Content $ini $off -NoNewline -Encoding ASCII; Say 'BepInEx loads only from the modded shortcut; Steam starts the plain game' }
+}
+
 # ---------------------------------------------------------------- ModEngine (Nexus only: can't be downloaded for you)
 $engineDir = Join-Path $GameDir 'BepInEx\patchers\MoonSweepers.ModEngine'
 if (-not (Test-Path (Join-Path $engineDir 'MoonSweepers.ModEngine.dll'))) {
@@ -195,4 +205,11 @@ if ((Test-Path $bat) -and -not (Test-Path $lnk)) {
 }
 
 if ($freshLoader) { Say 'First launch with mods takes a minute or two while BepInEx prepares the game. Later launches are quick.' 'Yellow' }
-if ($Launch) { Start-Process "steam://rungameid/$SteamAppId" }
+if ($Launch) {
+    # Through Steam (overlay, cloud saves) with Doorstop's own switch, like r2modman. -applaunch passes the arguments
+    # without Steam's "launch with custom arguments?" prompt that steam://run shows.
+    $steam = (Get-ItemProperty 'HKCU:\Software\Valve\Steam' -ErrorAction SilentlyContinue).SteamExe
+    if ($steam -and (Test-Path $steam)) { Start-Process $steam -ArgumentList '-applaunch', $SteamAppId, '--doorstop-enabled', 'true' }
+    else { Start-Process "steam://run/$SteamAppId//--doorstop-enabled true/" }
+    Say 'Starting Moon Sweepers with mods...' 'Green'
+}
