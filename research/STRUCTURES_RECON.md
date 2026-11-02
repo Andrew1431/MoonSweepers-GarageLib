@@ -5,6 +5,8 @@ this folder (`tools/dump-types.ps1`) and the runtime probe in `spike-structures/
 build with metadata v108, BepInEx be.791 + ModEngine 1.0.2). Read with `VEHICLE_CORE_PLAN.md`: the same patterns
 apply, and most of the choke points are static per-kind switches on `MoonWorld`.
 
+Belt splitters and mergers (routers, the BeltBoxes mod) have their own notes: [SPLITTERS_RECON.md](SPLITTERS_RECON.md).
+
 ## Identity: a structure is an `int` kind
 
 Everywhere (catalog, placement, built records, production, power, save), a structure type is an `int kind`.
