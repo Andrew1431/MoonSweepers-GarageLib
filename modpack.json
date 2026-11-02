@@ -2,5 +2,5 @@
   "name": "MoonSweepers-GarageModpack",
   "version": "0.1.0",
   "description": "GarageLib plus every vehicle in this repo, ready to drop into BepInEx/plugins.",
-  "packages": ["GarageLib", "MsChoppa"]
+  "packages": ["GarageLib"]
 }

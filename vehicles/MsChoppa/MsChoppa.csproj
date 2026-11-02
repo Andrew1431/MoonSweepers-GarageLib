@@ -2,6 +2,8 @@
   <PropertyGroup>
     <AssemblyName>MsChoppa</AssemblyName>
     <RootNamespace>MsChoppa</RootNamespace>
+    <!-- Paused (2026-11-01): builds, but dev builds no longer install it into the game. Remove this line to bring it back. -->
+    <InstallToGame>false</InstallToGame>
   </PropertyGroup>
 
   <ItemGroup>

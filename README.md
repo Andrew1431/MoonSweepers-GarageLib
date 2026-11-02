@@ -11,7 +11,7 @@ Maintainers: Andrew (Andrew1431) and Ryan (ryanhartwig), with equal say on what 
 | Package | What | Folder |
 |---|---|---|
 | GarageLib | The library. Required by every vehicle. | [`src/GarageLib`](src/GarageLib) |
-| Ms Choppa | Flying utility helicopter, $12,000. | [`vehicles/MsChoppa`](vehicles/MsChoppa) |
+| Ms Choppa | Flying utility helicopter, $12,000. Paused: not in the modpack or dev installs for now. | [`vehicles/MsChoppa`](vehicles/MsChoppa) |
 | Modpack | GarageLib + every vehicle in one zip. | [`modpack.json`](modpack.json) |
 
 ## Installing (players)
