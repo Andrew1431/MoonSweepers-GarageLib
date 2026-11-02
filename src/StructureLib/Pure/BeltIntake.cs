@@ -19,6 +19,12 @@ namespace StructureLib
         public const string Full = "full";
 
         /// <summary>
+        /// Whether a cached belt-end resolution still holds: the cached depot (id -1 = none) must still exist
+        /// (<paramref name="liveKind"/> non-null) with the kind it had when cached.
+        /// </summary>
+        public static bool CacheValid(int cachedDepot, int cachedKind, int? liveKind) => cachedDepot >= 0 && liveKind == cachedKind;
+
+        /// <summary>
         /// The slot that takes the canister and the kilograms it takes (<c>min(canisterKg, room)</c>), with a null
         /// refusal; or slot -1, 0 kg and the refusal: <see cref="NotHere"/> when no Input slot holds the cargo,
         /// <see cref="Full"/> when none has room.

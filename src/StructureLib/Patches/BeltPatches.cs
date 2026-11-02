@@ -29,7 +29,7 @@ namespace StructureLib.Patches
         sealed class Joined
         {
             internal Vector3 End;
-            internal int Depot = -1;
+            internal int Depot = -1, Kind = -1;
             internal StructureDefinition Definition;
             internal PortDefinition Port;
             internal string WaitingText;
@@ -71,16 +71,26 @@ namespace StructureLib.Patches
             if (path != null) end = path.end;
             else if (world.conveyors != null && world.conveyors.ContainsKey(belt)) end = world.conveyors.get_Item(belt).end;
             else return null;
-            if (cache.TryGetValue(belt, out var j) && j.End == end) return j;
+            if (cache.TryGetValue(belt, out var j) && j.End == end)
+            {
+                // The machine at the end may have been replaced between two calls with the counts unchanged (one removed,
+                // another placed): the cached depot must still exist with the same kind.
+                int? liveKind = world.depots != null && world.depots.ContainsKey(j.Depot) ? world.depots.get_Item(j.Depot)?.kind : null;
+                if (BeltIntake.CacheValid(j.Depot, j.Kind, liveKind)) return j;
+                CoreLog.Info($"Belt {belt}: cached depot {j.Depot} (kind {j.Kind}) is now {(liveKind == null ? "gone" : "kind " + liveKind)}; resolving its machine again");
+                cache.Remove(belt);
+            }
 
             j = new Joined { End = end };
-            bool keep = true;
             int depot = world.MachineWithPort(end, false);
             var rec = depot >= 0 && world.depots != null && world.depots.ContainsKey(depot) ? world.depots.get_Item(depot) : null;
             var def = rec == null ? null : Remap.Live(rec.kind);
+            // No machine record at the end: nothing to cache (HandOff is only called with a machine input there).
+            bool keep = rec != null;
+            j.Depot = rec == null ? -1 : depot;
+            j.Kind = rec?.kind ?? -1;
             if (def != null)
             {
-                j.Depot = depot;
                 j.Definition = def;
                 var inputs = (MoonStructures.PortsOf(def) ?? new List<PortDefinition>()).Where(p => p != null && !p.Output).ToList();
                 var view = UnityEngine.Object.FindFirstObjectByType<MoonDepotConstruction>()?.ViewOf(depot);
