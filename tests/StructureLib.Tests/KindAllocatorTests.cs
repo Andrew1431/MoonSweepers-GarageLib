@@ -34,8 +34,10 @@ namespace StructureLib.Tests
         public void Assign_Collision_NamesBothIds()
         {
             var e = Assert.Throws<KindCollisionException>(() => KindAllocator.Assign(new[] { "a", "b" }, _ => 1_000_001));
-            Assert.Contains("a", e.Message);
-            Assert.Contains("b", e.Message);
+            Assert.Equal("a", e.IdA);
+            Assert.Equal("b", e.IdB);
+            Assert.Contains("'a'", e.Message);
+            Assert.Contains("'b'", e.Message);
             Assert.Equal(1_000_001, e.Kind);
         }
 
