@@ -112,6 +112,15 @@ Deferred minor findings of this plan: the `Minor deferred:` lines in the ledger
   the join coroutine; whether `why` is shown as a dialog; whether the host streams `SendWorld` to a departed client.
 - **Balance (Ryan, mechanics)**: each generator burn adds 3 kWh (two burns fill the 6 kWh battery) against 10 kW peak
   output; $7 per 2 kg briquette; compactor 12 kW / 8 s.
+- **Before release: the native crash at load during the card render.** Twice in roughly 40 loads (first plan Task 7,
+  2026-11-01 20:57; second plan Task 6, 2026-11-02 04:52) the game died with `0xC0000005`, a null read at
+  `UnityPlayer.dll+0x10a652f` (dumps `%LOCALAPPDATA%\CrashDumps\MoonSweepers.exe.492412.dmp` and `.874884.dmp`), with
+  the BepInEx log ending inside `IconRenderer`'s first or second icon-camera render, both times after a relaunch 5–9 s
+  after a forced kill. The first time no custom model existed, so the load-time card render (first-plan code) is the
+  suspect, not the SandPower models. Reproduce with about 20 launches per arm, varying one thing at a time: relaunch
+  delay (under 10 s vs 30 s or more), card rendering on vs off or delayed a few frames after "Session in game", the
+  icon camera's MSAA (8x vs 1x), SandPower vs the example only; read the native stack with WinDbg and Unity's symbol
+  server. Evidence: `research/STRUCTURES_RECON.md`, the Task 6 chain paragraph.
 - Optional: install .NET SDK 9.0.200+ so `GarageLib.slnx` builds in one command (not buildable here, SDK 8.0.421).
 
 ## Known limitations shipped as documented (both READMEs say so)

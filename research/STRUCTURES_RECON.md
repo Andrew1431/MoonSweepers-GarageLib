@@ -811,10 +811,25 @@ Belt output and save with belts (Task 4, 2026-11-02; logs `task-4-logs/`, run1 =
     stores [8 2] kg, charge 3.000), no `Moon save failed`. The reload restored it on the sand belt at `d 2.98` with
     cargo 3, both belts between the restored machines, and both production states as saved (the generator's batch then
     finished: charge 6.0).
-  - **Native crash once at load.** One launch of the same build died natively about 12 s after the world loaded,
-    while rendering the compactor's card picture (the last log line `Card art for 'ryanhartwig.sand-compactor': bounds
-    (8.50, 5.95, 4.70), ortho 5.03`; `task-6-logs/run1a-crash-at-load-LogOutput.log`). The launches before and after
-    rendered the same card. Not reproduced; cause unknown.
+  - **Native crash at load (the load-time card render is the suspect).** One launch of the same build died natively
+    about 12 s after the world loaded, while rendering the compactor's card picture (the last log line `Card art for
+    'ryanhartwig.sand-compactor': bounds (8.50, 5.95, 4.70), ortho 5.03`; `task-6-logs/run1a-crash-at-load-LogOutput.log`).
+    The launches before and after rendered the same card. Evidence found by the Task 6 review:
+    - Crash dump `%LOCALAPPDATA%\CrashDumps\MoonSweepers.exe.874884.dmp` (04:52:24) and the game's own `Crash
+      reports\crash 2026-11-02 04-52-11.txt` ("no sign of life written").
+    - Exception `0xC0000005`, a null read at `UnityPlayer.dll+0x10a652f`.
+    - `MoonSweepers.exe.492412.dmp` (2026-11-01 20:57) has the **identical** signature. It was the first plan's Task 7
+      silent load death, when no `Model`, no `.bin`, no stand-in materials and no large mesh existed.
+    - In both, the BepInEx log ended inside `IconRenderer`'s first or second icon-camera render (after the `bounds …
+      ortho` line or after the reframe line), and the game's log ended just after "Unloading … unused Assets".
+    - Both followed a relaunch 5–9 s after a forced kill.
+    - The other dumps on the machine do not match: the known `IsProcessor` crash (`GameAssembly.dll+0x6ef5d4`) and two
+      `coreclr.dll+0x1d1fdd` faults.
+    Conclusion: the load-time card render (first-plan code, `IconRenderer`) is the suspect, not the SandPower models; 2
+    occurrences in roughly 40 loads. To reproduce, vary one thing per arm, about 20 launches each: the relaunch delay
+    after a kill (under 10 s vs 30 s or more); card rendering on vs off, or delayed a few frames after "Session in
+    game"; the icon camera's MSAA (8x vs 1x); SandPower installed vs the example only. Read the native stack with
+    WinDbg and Unity's symbol server.
 
 ## Still open
 
