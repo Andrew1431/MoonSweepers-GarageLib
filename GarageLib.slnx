@@ -2,6 +2,9 @@
   <Folder Name="/examples/">
     <Project Path="examples/ExampleVehicle/ExampleVehicle.csproj" />
   </Folder>
+  <Folder Name="/mods/">
+    <Project Path="mods/SharedUpgrades/SharedUpgrades.csproj" />
+  </Folder>
   <Folder Name="/src/">
     <Project Path="src/GarageLib/GarageLib.csproj" />
   </Folder>
