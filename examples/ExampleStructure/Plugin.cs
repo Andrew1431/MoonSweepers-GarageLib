@@ -125,9 +125,24 @@ namespace ExampleStructure
                     },
                     Ports = new() { PortDefinition.In("Sand in", Cargo.Sand, new Vector3(-2.95f, 0.85f, 0f), Vector3.right) },
                 }, Guid);
+
+            // Dev builds of StructureLib only ([Dev] RegisterBoxProbe): a clone of the vanilla splitter (kind 11) with no
+            // processor and no declared ports, so the donor's IN / OUT_A / OUT_B stay. The box spike (DevBelts.cs BoxSpike)
+            // reads its donor facts and belts to it.
+            if (StructureLibDevFlag("RegisterBoxProbe"))
+                MoonStructures.Register(new StructureDefinition
+                {
+                    Id = BoxProbeId,
+                    Name = "Box probe",
+                    Category = "Logistics",
+                    Note = "StructureLib dev probe: a splitter clone.",
+                    Price = 5m,
+                    BaseStructure = 11, // vanilla splitter
+                }, Guid);
         }
 
         public const string BadPortsId = "ryanhartwig.example-bad-ports";
+        public const string BoxProbeId = "ryanhartwig.example-box-probe";
 
         // A [Dev] bool from StructureLib's own config (it loads first, as our dependency). False when absent (release builds).
         static bool StructureLibDevFlag(string key)

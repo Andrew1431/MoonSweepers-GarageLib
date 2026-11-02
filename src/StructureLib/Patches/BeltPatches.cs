@@ -56,6 +56,13 @@ namespace StructureLib.Patches
                 return true;
             }
             if (j?.Definition == null || j.Port == null) return true;
+#if DEVBUILD
+            // [Dev] HopProbe / PrefixProbe (DevBelts.cs BoxSpike): modded machines only, past the vanilla early-out above.
+            bool? spike = null;
+            try { spike = BoxSpike.InPrefix(__instance, belt, path, id, j.Depot, j.Definition); }
+            catch (Exception e) { CoreLog.Once("handoff-spike", $"[spike] HandOff probe threw: {e}", 1); }
+            if (spike.HasValue) { __result = spike.Value; return false; }
+#endif
             __result = Intake(__instance, j, id);
             return false;
         }
