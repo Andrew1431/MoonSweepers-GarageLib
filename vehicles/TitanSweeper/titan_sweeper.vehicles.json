@@ -1,0 +1,12 @@
+{
+  "comment": "Registers Titan sweeper as a data vehicle. Balance numbers come from data/lines.vehicles.json (the scaling sheet); this file adds what the sheet doesn't know.",
+  "version": "0.1.0",
+  "vehicles": {
+    "andrew1431.titan-sweeper": {
+      "register": true,
+      "baseVehicle": 21,
+      "model": "titan_sweeper.bin",
+      "summary": "A three-axle street sweeper with outrigger disc brushes. Sweeps a strip twice its width."
+    }
+  }
+}

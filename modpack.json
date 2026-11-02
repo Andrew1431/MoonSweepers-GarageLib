@@ -1,6 +1,12 @@
 {
   "name": "MoonSweepers-GarageModpack",
-  "version": "0.1.0",
-  "description": "GarageLib, StructureLib, every vehicle and SandPower in this repo, ready to drop into BepInEx/plugins.",
-  "packages": ["GarageLib", "MsChoppa", "StructureLib", "SandPower"]
+  "version": "0.3.0",
+  "description": "GarageLib, Late Game Vehicles, StructureLib, SandPower and the other mods in this repo, ready to drop into the game folder.",
+  "packages": [
+    "GarageLib",
+    "SharedUpgrades",
+    "LateGameVehicles",
+    "StructureLib",
+    "SandPower"
+  ]
 }

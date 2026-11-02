@@ -1,0 +1,12 @@
+{
+  "comment": "Registers Lunar buggy as a data vehicle. Balance numbers come from data/lines.vehicles.json (the scaling sheet); this file adds what the sheet doesn't know.",
+  "version": "0.1.0",
+  "vehicles": {
+    "andrew1431.lunar-buggy": {
+      "register": true,
+      "baseVehicle": 1,
+      "model": "lunar_buggy.bin",
+      "summary": "An open-frame runabout with a roll cage and balloon tyres. Tiny hopper, very fast, very twitchy."
+    }
+  }
+}

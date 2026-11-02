@@ -1,0 +1,12 @@
+{
+  "comment": "Registers Colossus vacuum as a data vehicle. Balance numbers come from data/lines.vehicles.json (the scaling sheet); this file adds what the sheet doesn't know.",
+  "version": "0.1.0",
+  "vehicles": {
+    "andrew1431.colossus-vacuum": {
+      "register": true,
+      "baseVehicle": 21,
+      "model": "colossus_vacuum.bin",
+      "summary": "A folding 7.8 m suction head and a drum tank the size of a house. Slow, heavy, thorough."
+    }
+  }
+}

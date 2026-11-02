@@ -8,3 +8,4 @@ obj/
 dist/
 Directory.Build.local.props
 *.local.md
+__pycache__/

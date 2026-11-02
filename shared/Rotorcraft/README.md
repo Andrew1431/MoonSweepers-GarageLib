@@ -18,7 +18,7 @@ compiled DLL can't serve several games.
 Export a model from Blender with:
 
 ```bash
-blender --background model.blend --python shared/Rotorcraft/tools/export_mesh_model.py -- RootObject out.bin
+blender --background model.blend --python shared/blender/export_mesh_model.py -- RootObject out.bin
 ```
 
 Embed the output as an `EmbeddedResource`.

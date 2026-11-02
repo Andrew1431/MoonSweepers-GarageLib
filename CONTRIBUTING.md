@@ -38,8 +38,8 @@ Things to know:
 - **Custom controllers apply gravity themselves.** The moon is a sphere centred on the origin, so "up" is
   `position.normalized`, and gravity is `MoonSettings.gravity`. See `examples/ExampleVehicle` (hover) and
   `vehicles/MsChoppa` (flight).
-- **Models from Blender:** `shared/Rotorcraft/MeshModel.cs` loads a mesh exported with
-  `shared/Rotorcraft/tools/export_mesh_model.py` from an embedded resource and maps Blender material names onto the
+- **Models from Blender:** `src/GarageLib/MeshModel.cs` loads a mesh exported with
+  `shared/blender/export_mesh_model.py` from an embedded resource and maps Blender material names onto the
   game's materials. Ms Choppa is the worked example.
 - **Bump `Version`** in your `Plugin.cs` and add a changelog line to your README when you change something players
   will get.

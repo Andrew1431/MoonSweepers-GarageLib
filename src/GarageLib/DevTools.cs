@@ -14,8 +14,9 @@ namespace GarageLib
         static ConfigEntry<bool> autoLoad, autoBringOut, autoSave, autoQuit;
         static ConfigEntry<string> autoBuy;
         static ConfigEntry<int> autoOpenMenu, fillers;
-        static ConfigEntry<bool> dumpMenu;
-        static bool menuOpened;
+        static ConfigEntry<bool> dumpMenu, dumpStats, infiniteMoney;
+        static float moneyAt;
+        static bool menuOpened, statsDumped;
         static float menuT, gameT, dumpAt = -1;
         static float tabAt = -1, shotAt = -1, pickAt = -1;
         static bool pickedLast;
@@ -33,6 +34,8 @@ namespace GarageLib
             autoOpenMenu = cfg.Bind("Dev", "AutoOpenGarageMenu", -1, "Dev build: open the first garage's menu on this tab (0 vehicles, 1 upgrades, 2 fleet) 20 s into the game. -1 = off.");
             fillers = cfg.Bind("Dev", "FillerVehicles", 0, "Dev build: register this many dummy ride-on clones to stress the garage menu layout.");
             dumpMenu = cfg.Bind("Dev", "DumpGarageMenu", false, "Dev build: after AutoOpenGarageMenu, log the menu's UI hierarchy, then reopen it on the upgrades tab.");
+            infiniteMoney = cfg.Bind("Dev", "InfiniteMoney", false, "Dev build: keep your wallet topped up to $10,000,000 while in game (slot-2 testing). Sets the team wallet through MoonWorld.SetTeamDollars.");
+            dumpStats = cfg.Bind("Dev", "DumpVanillaStats", false, "Dev build: 10 s into the game, write every vanilla vehicle's stats and upgrade prices to BepInEx/cache/garagelib/vanilla-stats.json.");
             for (int i = 1; i <= fillers.Value; i++)
                 MoonVehicles.Register(new VehicleDefinition
                 {
@@ -52,6 +55,23 @@ namespace GarageLib
             }
             if (!MoonSession.InGame) { gameT = 0; return; }
             gameT += dt;
+            if (infiniteMoney.Value && gameT > 5f && Time.unscaledTime >= moneyAt)
+            {
+                moneyAt = Time.unscaledTime + 2f;
+                var w = CoreState.World ?? CoreState.FindWorld();
+                if (w != null)
+                {
+                    string player = MoonWorld.LocalPlayer;
+                    decimal wallet = Money.From(w.WalletDollars(player));
+                    // DevAddMoney is a no-op in shipped builds; money is one team wallet with a setter.
+                    if (wallet < 5_000_000m) { w.SetTeamDollars(Money.To(10_000_000m)); CoreLog.Info($"[dev] InfiniteMoney: team wallet {wallet:F0} -> {Money.From(w.WalletDollars(player)):F0}"); }
+                }
+            }
+            if (dumpStats.Value && !statsDumped && gameT > 10f)
+            {
+                statsDumped = true;
+                try { DevStatsDump.Write(); } catch (Exception e) { CoreLog.Error("[dev] vanilla stats dump failed: " + e); }
+            }
             if (autoOpenMenu.Value >= 0 && !menuOpened && gameT > 20f)
             {
                 menuOpened = true;

@@ -4,9 +4,10 @@ using System.IO;
 using Il2CppInterop.Runtime.InteropTypes.Arrays;
 using UnityEngine;
 
-namespace Rotorcraft;
+namespace GarageLib;
 
-// Reads a model exported by tools/export_mesh_model.py (embedded in the DLL) and rebuilds it as GameObjects.
+// Reads a model exported by shared/blender/export_mesh_model.py (embedded in a DLL or a file next to it) and rebuilds
+// it as GameObjects.
 // Coordinates are already converted to Unity's; see the exporter for the format. Game-agnostic: materials come from
 // the caller's factory so each game can use its own shaders.
 public sealed class MeshModel
@@ -21,7 +22,7 @@ public sealed class MeshModel
         public Vector3[] Vertices, Normals;
         public int[] SubMaterials;
         public int[][] SubIndices;
-        public Mesh Mesh; // built on first use, shared by every choppa
+        public Mesh Mesh; // built on first use, shared by every spawn
         public bool HasMesh => Vertices != null;
 
         public float Float(string key, float fallback) => Props.TryGetValue(key, out var v) && v is float f ? f : fallback;
@@ -46,6 +47,17 @@ public sealed class MeshModel
         m = Read(r);
         cache[resource] = m;
         Log($"Loaded model {resource}: {m.Nodes.Length} nodes, {m.MaterialNames.Length} materials.");
+        return m;
+    }
+
+    /// <summary>Load a model from a file (data vehicles ship their .bin next to their .vehicles.json).</summary>
+    public static MeshModel LoadFile(string path)
+    {
+        if (cache.TryGetValue(path, out var m)) return m;
+        using var r = new BinaryReader(File.OpenRead(path));
+        m = Read(r);
+        cache[path] = m;
+        Log($"Loaded model {path}: {m.Nodes.Length} nodes, {m.MaterialNames.Length} materials.");
         return m;
     }
 

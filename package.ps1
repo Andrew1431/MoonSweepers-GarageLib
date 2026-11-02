@@ -3,6 +3,8 @@
 #   .\package.ps1 -Only MsChoppa       one package
 #   .\package.ps1 -Release             also create GitHub releases for versions that don't have one yet
 # Each package zip unpacks into the game folder: BepInEx/plugins/<Name>/<Name>.dll.
+# Data vehicles (a folder with *.vehicles.json + model .bin and no csproj; version in the json) zip the same way.
+# Data packs (mods/<Name>/pack.json) bundle several data vehicles into one package; their vehicles aren't released alone.
 # Tags: <name>-v<version> per package (garagelib-v0.1.0), modpack-v<version> for the bundle (version in modpack.json).
 param([string[]]$Only, [switch]$Release)
 $ErrorActionPreference = 'Stop'
@@ -11,11 +13,32 @@ $dist = Join-Path $root 'dist'
 $stage = Join-Path $dist 'stage'
 Add-Type -AssemblyName System.IO.Compression.FileSystem
 
+function Get-Packs {
+    Get-ChildItem (Join-Path $root 'mods') -Directory -ErrorAction SilentlyContinue | ForEach-Object {
+        $f = Join-Path $_.FullName 'pack.json'
+        if (Test-Path $f) {
+            $j = Get-Content $f -Raw | ConvertFrom-Json
+            [pscustomobject]@{ Name = $_.Name; Dir = $_.FullName; Project = $null; Version = $j.version; Pack = $j }
+        }
+    }
+}
+
 function Get-Packages {
+    $packs = @(Get-Packs)
+    $inPack = @($packs | ForEach-Object { $_.Pack.vehicles })
+    $packs
     Get-ChildItem (Join-Path $root 'src'), (Join-Path $root 'vehicles'), (Join-Path $root 'mods') -Directory -ErrorAction SilentlyContinue | ForEach-Object {
         $proj = Join-Path $_.FullName "$($_.Name).csproj"
         $plugin = Join-Path $_.FullName 'Plugin.cs'
-        if (-not (Test-Path $proj) -or -not (Test-Path $plugin)) { return }
+        if ($inPack -contains $_.Name -or (Test-Path (Join-Path $_.FullName 'pack.json'))) { return }
+        if (-not (Test-Path $proj)) {
+            $json = Get-ChildItem $_.FullName -Filter '*.vehicles.json' | Select-Object -First 1
+            if (-not $json) { return }
+            $v = (Get-Content $json.FullName -Raw | ConvertFrom-Json).version
+            if (-not $v) { throw "$($json.FullName) has no version" }
+            return [pscustomobject]@{ Name = $_.Name; Dir = $_.FullName; Project = $null; Version = $v }
+        }
+        if (-not (Test-Path $plugin)) { return }
         $m = Select-String -Path $plugin -Pattern 'const string Version = "([^"]+)"'
         if (-not $m) { throw "$plugin has no 'const string Version'" }
         [pscustomobject]@{ Name = $_.Name; Dir = $_.FullName; Project = $proj; Version = $m.Matches[0].Groups[1].Value }
@@ -24,6 +47,7 @@ function Get-Packages {
 
 function Build-Package($p) {
     Write-Host "Building $($p.Name) $($p.Version)"
+    if (-not $p.Project) { return $null }   # data vehicle: nothing to compile
     dotnet build $p.Project -c Release -p:DevBuild=false -p:InstallToGame=false -nologo -v q | Out-Host
     if ($LASTEXITCODE) { throw "build failed: $($p.Name)" }
     $dll = Join-Path $p.Dir "bin\Release\$($p.Name).dll"
@@ -36,7 +60,22 @@ function Build-Package($p) {
 function Stage($p, $dll, $into) {
     $dir = Join-Path $into "BepInEx\plugins\$($p.Name)"
     New-Item -ItemType Directory -Force $dir | Out-Null
-    Copy-Item $dll $dir
+    if ($p.Pack) {
+        foreach ($st in $p.Pack.stats) { Copy-Item (Join-Path $p.Dir $st) $dir }
+        foreach ($v in $p.Pack.vehicles) {
+            $src = Join-Path $root "vehicles\$v"
+            $files = @(Get-ChildItem $src -File | Where-Object { $_.Name -like '*.vehicles.json' -or $_.Extension -eq '.bin' })
+            if (-not ($files | Where-Object Name -like '*.vehicles.json')) { throw "$($p.Name): vehicles\$v has no *.vehicles.json" }
+            $vd = Join-Path $dir $v
+            New-Item -ItemType Directory -Force $vd | Out-Null
+            $files | Copy-Item -Destination $vd
+        }
+    } elseif ($dll) {
+        Copy-Item $dll $dir
+        Get-ChildItem (Split-Path $dll) -Filter '*.vehicles.json' | Copy-Item -Destination $dir
+    } else {
+        Get-ChildItem $p.Dir -File | Where-Object { $_.Name -like '*.vehicles.json' -or $_.Extension -eq '.bin' } | Copy-Item -Destination $dir
+    }
     $readme = Join-Path $p.Dir 'README.md'
     if (Test-Path $readme) { Copy-Item $readme $dir }
 }
@@ -54,7 +93,7 @@ function Zip($from, $zip) {
     Write-Host "  -> $zip"
 }
 
-function Publish($tag, $title, $notes, $zip) {
+function Publish($tag, $title, $notes, [string[]]$zip) {
     # Not `gh release view`: its "not found" goes to stderr, which Windows PowerShell turns into a terminating error.
     $existing = gh release list --limit 1000 --json tagName --jq '.[].tagName'
     if ($existing -contains $tag) { Write-Host "  $tag already released, skipped"; return }
@@ -87,8 +126,19 @@ if (-not $Only) {
         Stage $built[$n].P $built[$n].Dll $s
         $lines += "- $n $($built[$n].P.Version)"
     }
+    # The installer rides along in the modpack (MoonSweepersMods/ in the game folder), so updating the pack updates it,
+    # and is also its own small zip for first installs.
+    $inst = Join-Path $root 'installer'
+    New-Item -ItemType Directory -Force (Join-Path $s 'MoonSweepersMods') | Out-Null
+    Get-ChildItem $inst -File | Copy-Item -Destination (Join-Path $s 'MoonSweepersMods')
+    $si = Join-Path $stage 'installer'
+    New-Item -ItemType Directory -Force $si | Out-Null
+    Get-ChildItem $inst -File | Copy-Item -Destination $si
+    $instZip = Join-Path $dist 'MoonSweepersMods-Installer.zip'
+    Zip $si $instZip
     $zip = Join-Path $dist "$($pack.name)-$($pack.version).zip"
     Zip $s $zip
-    if ($Release) { Publish "modpack-v$($pack.version)" "Modpack $($pack.version)" ("Unzip into the Moon Sweepers game folder (needs BepInEx + ModEngine).`n`n" + ($lines -join "`n")) $zip }
+    $notes = "Easiest: download MoonSweepersMods-Installer.zip, unzip, run 'Install or update.bat'. It installs BepInEx, walks you through ModEngine and keeps the mods updated.`n`nManual: unzip $(Split-Path $zip -Leaf) into the Moon Sweepers game folder (needs BepInEx + ModEngine).`n`n" + ($lines -join "`n")
+    if ($Release) { Publish "modpack-v$($pack.version)" "Modpack $($pack.version)" $notes @($zip, $instZip) }
 }
 Remove-Item $stage -Recurse -Force

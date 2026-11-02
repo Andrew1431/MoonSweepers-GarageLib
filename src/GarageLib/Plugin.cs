@@ -15,20 +15,24 @@ namespace GarageLib
     public class Plugin : BasePlugin
     {
         public const string Guid = "com.andrew1431.garagelib";
-        public const string Version = "0.1.0";
+        public const string Version = "0.2.0";
 
         internal static ConfigEntry<bool> VerboseLogging;
 
         public override void Load()
         {
             CoreLog.Source = Log;
-            VerboseLogging = Config.Bind("Debug", "VerboseLogging", true, "Extra log lines while the core is in early development.");
+            VerboseLogging = Config.Bind("Debug", "VerboseLogging", false, "Extra log lines for troubleshooting.");
             CoreLog.Verbose = VerboseLogging.Value;
+            Tweaks.Bind(Config);
 
             if (!MembersPresent()) { CoreLog.Error("Game members the core relies on are missing (game update?). GarageLib is disabled."); return; }
 
+            VehicleStats.Load();
+            DataVehicles.RegisterAll();
             ClassInjector.RegisterTypeInIl2Cpp<VehicleController>();
             ClassInjector.RegisterTypeInIl2Cpp<CoreDriver>();
+            ClassInjector.RegisterTypeInIl2Cpp<ModelAnimator>();
 #if DEVBUILD
             DevTools.Bind(Config);
 #endif
@@ -86,6 +90,7 @@ namespace GarageLib
                 {
                     nextEnsure = Time.unscaledTime + 3f;
                     Injection.Ensure();
+                    Tweaks.Ensure();
                 }
                 bool inGame = MoonSession.InGame;
                 if (inGame != wasInGame)

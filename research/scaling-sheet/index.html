@@ -1,0 +1,378 @@
+<title>Moon Sweepers Vehicle Scaling</title>
+<meta name="claude:viewport-fit-sides" content="cover">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Barlow+Condensed:wght@500;700&family=IBM+Plex+Sans:wght@400;500;600&family=IBM+Plex+Mono:wght@400;500&display=swap">
+<style>
+/* Layout: a garage spec ledger. The vanilla sheet on top, the patterns it shows, then a tier generator whose rows continue the sheet. */
+:root {
+  --bg: #e9ecef; --panel: #f7f8f9; --ink: #1d2733; --muted: #5d6875; --line: #c9cfd6; --zebra: #eef1f3;
+  --accent: #c8541b; --accent-ink: #fff; --proj: #2f6f8f; --dim: #8b949e;
+  --c1: #c8541b; --c2: #2f6f8f; --c3: #7a4fa8; --c4: #3d7a4f; --c5: #a8761a; --c6: #b0336b;
+  --display: "Barlow Condensed", "Arial Narrow", sans-serif;
+  --body: "IBM Plex Sans", system-ui, sans-serif;
+  --mono: "IBM Plex Mono", ui-monospace, Consolas, monospace;
+}
+@media (prefers-color-scheme: dark) { :root:not([data-theme="light"]) {
+  --bg: #151a20; --panel: #1e252d; --ink: #e3e8ee; --muted: #9aa5b1; --line: #33404c; --zebra: #222a33;
+  --accent: #e8743a; --accent-ink: #1a0d05; --proj: #7fbfdf; --dim: #6b7682; --c1: #e8743a; --c2: #7fbfdf; --c3: #b994e0; --c4: #6fbf86; --c5: #d9b25a; --c6: #e57aa8; color-scheme: dark } }
+:root[data-theme="dark"] {
+  --bg: #151a20; --panel: #1e252d; --ink: #e3e8ee; --muted: #9aa5b1; --line: #33404c; --zebra: #222a33;
+  --accent: #e8743a; --accent-ink: #1a0d05; --proj: #7fbfdf; --dim: #6b7682; --c1: #e8743a; --c2: #7fbfdf; --c3: #b994e0; --c4: #6fbf86; --c5: #d9b25a; --c6: #e57aa8; color-scheme: dark }
+body { background: var(--bg); color: var(--ink); font-family: var(--body); font-size: 14px; line-height: 1.5; }
+.wrap { padding-left: max(16px, env(safe-area-inset-left, 0px)); padding-right: max(16px, env(safe-area-inset-right, 0px)); padding-block: 20px 48px; max-width: 1200px; margin: 0 auto; display: grid; gap: 28px; }
+header { border-bottom: 3px solid var(--ink); padding-bottom: 10px; }
+h1 { font-family: var(--display); font-weight: 700; font-size: 34px; text-transform: uppercase; letter-spacing: .02em; margin: 0; line-height: 1; text-wrap: balance; }
+h1 span { color: var(--accent); }
+h2 { font-family: var(--display); font-weight: 700; font-size: 22px; text-transform: uppercase; letter-spacing: .06em; margin: 0 0 10px; }
+p { margin: 0; max-width: 70ch; }
+.sub { color: var(--muted); margin-top: 6px; }
+section { display: grid; gap: 12px; min-width: 0; }
+.tablebox { overflow-x: auto; border: 1px solid var(--line); background: var(--panel); }
+table { border-collapse: collapse; width: 100%; font-variant-numeric: tabular-nums; }
+th, td { padding: 6px 10px; text-align: right; white-space: nowrap; border-bottom: 1px solid var(--line); }
+th { font-family: var(--display); font-weight: 500; text-transform: uppercase; letter-spacing: .06em; font-size: 13px; color: var(--muted); background: var(--panel); position: sticky; top: 0; }
+th:first-child, td:first-child, th.l, td.l { text-align: left; }
+tbody tr:nth-child(even) td { background: var(--zebra); }
+tr.unsold td { color: var(--dim); }
+tr.sold td:first-child { font-weight: 600; }
+tr.proj td { color: var(--proj); }
+tr.proj td:first-child { font-weight: 600; }
+.tag { font-family: var(--display); font-size: 12px; text-transform: uppercase; letter-spacing: .06em; padding: 0 6px; border: 1px solid currentColor; border-radius: 2px; margin-left: 6px; }
+.findings { display: grid; grid-template-columns: repeat(auto-fit, minmax(260px, 1fr)); gap: 12px; }
+.finding { background: var(--panel); border: 1px solid var(--line); padding: 12px 14px; display: grid; gap: 4px; min-width: 0; }
+.finding b { font-family: var(--display); font-size: 26px; font-weight: 700; color: var(--accent); line-height: 1; }
+.finding span { font-size: 13px; color: var(--muted); }
+.gen { display: grid; grid-template-columns: minmax(240px, 300px) minmax(0, 1fr); gap: 18px; align-items: start; }
+@media (max-width: 820px) { .gen { grid-template-columns: minmax(0, 1fr); } }
+.knobs { background: var(--panel); border: 1px solid var(--line); padding: 14px; display: grid; gap: 12px; }
+.knob { display: grid; gap: 4px; }
+.knob label { display: flex; justify-content: space-between; font-size: 13px; }
+.knob label output { font-family: var(--mono); color: var(--accent); }
+.knob small { color: var(--muted); font-size: 12px; }
+input[type=range] { width: 100%; accent-color: var(--accent); }
+button { font: inherit; cursor: pointer; border: 1px solid var(--ink); background: transparent; color: var(--ink); border-radius: 3px; padding: 5px 10px; }
+button:focus-visible, input:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
+.out { display: grid; gap: 14px; min-width: 0; }
+svg { width: 100%; height: auto; display: block; background: var(--panel); border: 1px solid var(--line); }
+svg text { fill: var(--muted); font-family: var(--mono); font-size: 11px; }
+pre { background: var(--panel); border: 1px solid var(--line); padding: 12px; overflow-x: auto; font-family: var(--mono); font-size: 12px; margin: 0; max-height: 360px; }
+.row { display: flex; flex-wrap: wrap; gap: 8px; align-items: center; justify-content: space-between; }
+.note { font-size: 13px; color: var(--muted); }
+.tabs { display: flex; flex-wrap: wrap; gap: 6px; }
+.tab { border: 1px solid var(--line); background: var(--panel); border-bottom: 3px solid var(--lc, var(--line)); font-weight: 500; }
+.tab.on { border-color: var(--lc); background: var(--bg); box-shadow: inset 0 -3px 0 var(--lc); }
+.tab.ghost { border-style: dashed; color: var(--muted); }
+.btns { display: flex; flex-wrap: wrap; gap: 6px; }
+input[type=text], select { font: inherit; color: var(--ink); background: var(--bg); border: 1px solid var(--line); border-radius: 3px; padding: 5px 8px; width: 100%; min-width: 0; }
+i.sw { display: inline-block; width: 10px; height: 10px; background: var(--lc); margin-right: 6px; }
+tr.proj td { color: var(--ink); }
+tr.proj td:first-child { box-shadow: inset 4px 0 0 var(--lc); padding-left: 12px; }
+.legend { display: flex; flex-wrap: wrap; gap: 6px 16px; font-size: 13px; }
+.charts { display: grid; grid-template-columns: repeat(auto-fit, minmax(300px, 1fr)); gap: 12px; }
+figure { margin: 0; min-width: 0; }
+svg text.ct { fill: var(--ink); font-family: var(--display); font-size: 14px; text-transform: uppercase; letter-spacing: .06em; }
+
+</style>
+
+<div class="wrap">
+  <header>
+    <h1>Moon Sweepers <span>Vehicle Scaling</span></h1>
+    <p class="sub">Every vehicle in the base game's catalog, read from the running game (build of 2026-11-01), and vehicle lines that branch off it into end-game tiers, each with its own scaling. Prices in $, speed in m/s, turn in °/s, width in m.</p>
+  </header>
+
+  <section>
+    <h2>Vanilla catalog</h2>
+    <p class="note">Bold rows are sold at the garage. Grey rows are prototypes the developers left in the catalog with no model; they show how the designers think about trade-offs, but have no price.</p>
+    <div class="tablebox"><table id="vanilla"><thead><tr>
+      <th>#</th><th class="l">Vehicle</th><th class="l">Role</th><th>Price</th><th>Width</th><th>Speed</th><th>Turn</th><th>Cargo</th><th>Hopper kg</th><th>Upg. ×</th><th>m²/s</th><th>kg per $</th>
+    </tr></thead><tbody></tbody></table></div>
+  </section>
+
+  <section>
+    <h2>Patterns in the sweeper line</h2>
+    <div class="findings" id="findings"></div>
+    <p class="note">Sweep rate (width × speed) barely moves after the Lunar sweeper, while the hopper keeps growing at the price's rate. Past the mid-game, money buys capacity, not speed. The prototypes follow the same rule: bigger cargo always costs speed and turning.</p>
+  </section>
+
+  <section>
+    <h2>Upgrade prices</h2>
+    <p class="note">Every upgrade costs its base price × the vehicle's upgrade multiplier. Crew transport skips the sweeper-only upgrades.</p>
+    <div class="tablebox"><table id="upgrades"><thead></thead><tbody></tbody></table></div>
+  </section>
+
+  <section>
+    <h2>Vehicle lines</h2>
+    <p class="note">Each line branches off a vanilla vehicle and multiplies its stats every tier. Pick a line to tune it; every chart below compares all lines against the vanilla sweepers. Changes stay in your browser until you save them for everyone.</p>
+    <div class="tabs" id="tabs" role="tablist"></div>
+    <div class="gen">
+      <div class="knobs" id="knobs"></div>
+      <div class="out">
+        <div class="tablebox"><table id="proj"><thead><tr>
+          <th class="l">Vehicle</th><th class="l">Line</th><th>Price</th><th>Width</th><th>Speed</th><th>Turn</th><th>Cargo</th><th>Hopper kg</th><th>Upg. ×</th><th>m²/s</th>
+        </tr></thead><tbody></tbody></table></div>
+        <div class="row"><span class="note" id="save-status">Lines shown are the built-in presets.</span>
+          <span class="btns"><button type="button" id="save">Save lines for everyone</button><button type="button" id="copy">Copy stats JSON</button></span></div>
+      </div>
+    </div>
+  </section>
+
+  <section>
+    <h2>Growth by line</h2>
+    <p class="note">The x axis is price on a log scale, so each chart shows what a dollar buys in that line. Filled dots are vanilla vehicles.</p>
+    <div class="legend" id="legend"></div>
+    <div class="charts" id="charts"></div>
+  </section>
+
+  <section>
+    <h2>Stats file</h2>
+    <p class="note">The game reads these numbers. Save the lines here, then have Claude sync them (or paste this into <code>data/lines.vehicles.json</code>), rebuild, and every vehicle with a matching id picks them up. A vehicle mod only needs <code>Id</code>, its model and its controller in code.</p>
+    <pre id="code"></pre>
+  </section>
+</div>
+
+<script>
+const VEH=[{"i":0,"n":"Push sweeper","w":"Clean","p":300,"wd":0.9,"s":2.8,"t":145,"c":1,"kg":100,"sc":0.5,"sw":true},{"i":1,"n":"Ride-on sweeper","w":"Clean","p":1000,"wd":1.5,"s":7.2,"t":100,"c":2,"kg":500,"sc":1,"sw":true},{"i":2,"n":"Compact utility rover","w":"Transport","p":null,"wd":1,"s":9,"t":85,"c":2},{"i":3,"n":"Long-range scout","w":"Scan","p":null,"wd":1,"s":14,"t":72,"c":1},{"i":4,"n":"Crew transport","w":"Transport","p":2000,"wd":1,"s":7,"t":55,"c":4,"kg":400,"sc":2,"sw":false},{"i":5,"n":"Cargo buggy","w":"Transport","p":null,"wd":1,"s":8,"t":80,"c":3},{"i":6,"n":"Capsule carrier","w":"Transport","p":null,"wd":1,"s":6,"t":65,"c":8},{"i":7,"n":"Heavy dust hauler","w":"Transport","p":null,"wd":1,"s":5,"t":40,"c":12},{"i":8,"n":"Articulated hauler","w":"Transport","p":null,"wd":1,"s":6,"t":55,"c":10},{"i":9,"n":"Tracked sweeper","w":"Clean","p":null,"wd":2,"s":4,"t":95,"c":4},{"i":10,"n":"Wide-area sweeper","w":"Clean","p":null,"wd":3.2,"s":5.5,"t":45,"c":4},{"i":11,"n":"Vacuum tanker","w":"Clean","p":null,"wd":2.4,"s":4.5,"t":50,"c":8},{"i":12,"n":"Regolith loader","w":"Clean","p":null,"wd":1.8,"s":4,"t":65,"c":4},{"i":13,"n":"Excavator crawler","w":"Clean","p":null,"wd":1.1,"s":2.8,"t":85,"c":3},{"i":14,"n":"Crane rover","w":"Lift","p":null,"wd":1,"s":4,"t":55,"c":2},{"i":15,"n":"Forklift rover","w":"Lift","p":null,"wd":1,"s":3.5,"t":90,"c":2},{"i":16,"n":"Mobile workshop","w":"Service","p":null,"wd":1,"s":6,"t":50,"c":4},{"i":17,"n":"Battery tender","w":"Power","p":null,"wd":1,"s":5,"t":60,"c":4},{"i":18,"n":"Survey crawler","w":"Scan","p":null,"wd":1,"s":3.5,"t":100,"c":1},{"i":19,"n":"Autonomous sweeper","w":"Auto","p":null,"wd":0.95,"s":3,"t":90,"c":1},{"i":20,"n":"Lunar sweeper","w":"Clean","p":2500,"wd":2.8,"s":6.5,"t":70,"c":4,"kg":1200,"sc":2.5,"sw":true},{"i":21,"n":"Mega vacuum rover","w":"Clean","p":6000,"wd":3.7,"s":5,"t":48,"c":6,"kg":3000,"sc":3,"sw":true}];
+const UPG=[{"k":"Speed","t":"Tuned Motors","b":[250,600,1500],"so":false},{"k":"Hopper","t":"Big Hopper","b":[200,500,1200],"so":true},{"k":"Turbo","t":"Turbo Kit","b":[400,1200],"so":false},{"k":"Cruise","t":"Cruise Control","b":[500],"so":false},{"k":"Suction","t":"Suction Control","b":[400,900,2000],"so":true},{"k":"Unload","t":"Quick Release","b":[150,400],"so":true},{"k":"Lights","t":"Floodlights","b":[100,300],"so":false}];
+
+const $ = id => document.getElementById(id);
+const fmt = (x, d = 0) => x == null ? "–" : Number(x).toLocaleString("en-US", { maximumFractionDigits: d, minimumFractionDigits: d });
+const money = x => x == null ? "–" : "$" + fmt(x);
+const td = (t, cls) => { const e = document.createElement("td"); e.textContent = t; if (cls) e.className = cls; return e; };
+
+// Vanilla table
+for (const v of VEH) {
+  const tr = document.createElement("tr"); tr.className = v.p ? "sold" : "unsold";
+  const rate = v.w === "Clean" ? v.wd * v.s : null;
+  tr.append(td(v.i), td(v.n, "l"), td(v.w, "l"), td(money(v.p)), td(fmt(v.wd, 2)), td(fmt(v.s, 1)), td(fmt(v.t)), td(v.c),
+    td(fmt(v.kg)), td(v.sc == null ? "–" : fmt(v.sc, 1)), td(rate == null ? "–" : fmt(rate, 1)), td(v.kg && v.p ? fmt(v.kg / v.p, 2) : "–"));
+  $("vanilla").tBodies[0].append(tr);
+}
+
+// Findings
+const line = VEH.filter(v => v.p && v.sw);
+const ratio = (k, a, b) => b[k] / a[k];
+const tail = line.slice(1);
+const geo = k => Math.pow(tail[tail.length - 1][k] / tail[0][k], 1 / (tail.length - 1));
+const F = [
+  ["×" + fmt(geo("p"), 2), "price per tier (Ride-on → Lunar → Mega: ×2.5, ×2.4)"],
+  ["0.5 kg/$", "hopper per dollar, flat from the Ride-on up (100, 500, 1200, 3000 kg)"],
+  ["×" + fmt(geo("t"), 2), "turn rate per tier (100 → 70 → 48 °/s)"],
+  ["×" + fmt(ratio("wd", line[2], line[3]), 2), "width at the last step, shrinking from ×1.87"],
+  ["+2", "cargo slots per tier (2, 4, 6)"],
+  ["base × mult.", "upgrade prices; multiplier 0.5, 1, 2.5, 3 flattens at the top"],
+];
+for (const [b, s] of F) { const d = document.createElement("div"); d.className = "finding"; const bb = document.createElement("b"); bb.textContent = b; const ss = document.createElement("span"); ss.textContent = s; d.append(bb, ss); $("findings").append(d); }
+
+// Upgrade price table
+{
+  const sold = VEH.filter(v => v.p);
+  const hr = document.createElement("tr"); hr.append(Object.assign(document.createElement("th"), { textContent: "Upgrade", className: "l" }), Object.assign(document.createElement("th"), { textContent: "Lvl" }));
+  sold.forEach(v => hr.append(Object.assign(document.createElement("th"), { textContent: v.n })));
+  $("upgrades").tHead.append(hr);
+  for (const u of UPG) u.b.forEach((b, l) => {
+    const tr = document.createElement("tr");
+    tr.append(td(l === 0 ? u.t : "", "l"), td(l + 1));
+    sold.forEach(v => tr.append(td(u.so && !v.sw ? "–" : money(b * v.sc))));
+    $("upgrades").tBodies[0].append(tr);
+  });
+}
+
+// Vehicle lines
+const PRESETS = [
+  { id: "wide", name: "Wide line", color: "var(--c1)", from: 21, tiers: 4, price: 2.5, kgPer: 0.5, width: 1.45, speed: 0.88, speedMin: 3, speedMax: 20, turn: 0.75, turnMin: 25, turnMax: 150, cargo: 2, scale: 1.25,
+    names: ["Titan sweeper", "Colossus vacuum", "Regolith leviathan", "Mare harvester", "Basin dredger", "Selene mothership"],
+    blurb: "Slow, enormous intakes. Each tier sweeps a much wider strip and carries the biggest hopper." },
+  { id: "fast", name: "Fast line", color: "var(--c2)", from: 21, tiers: 4, price: 2.5, kgPer: 0.35, width: 1.08, speed: 1.22, speedMin: 3, speedMax: 18, turn: 1.0, turnMin: 40, turnMax: 150, cargo: 1, scale: 1.25,
+    names: ["Sprint vacuum", "Streak sweeper", "Comet hoover", "Orbital polisher", "Meteor scrubber", "Lightspeed broom"],
+    blurb: "Barely wider than the Mega, much quicker. A smaller hopper per dollar means more trips to the silo." },
+  { id: "buggy", name: "Lunar buggy", color: "var(--c3)", from: 1, tiers: 2, price: 3.5, kgPer: 0.15, width: 0.85, speed: 1.7, speedMin: 3, speedMax: 16, turn: 1.25, turnMin: 40, turnMax: 160, cargo: 0, scale: 1.1,
+    names: ["Lunar buggy", "Dune jumper", "Crater hopper", "Rille racer"],
+    blurb: "A fun runabout off the Ride-on: narrow brush, tiny hopper, very fast and twitchy." },
+];
+const KNOBS = [
+  ["tiers", "Tiers", 1, 6, 1, "", ""],
+  ["price", "Price per tier", 1.5, 4, 0.05, "×", "Vanilla: ×2.5"],
+  ["kgPer", "Hopper kg per $", 0.05, 1, 0.05, "", "Vanilla: 0.5"],
+  ["width", "Width per tier", 0.7, 1.7, 0.01, "×", "Vanilla last step: ×1.32"],
+  ["speed", "Speed per tier", 0.7, 1.8, 0.01, "×", "Vanilla: ×0.90, then ×0.77"],
+  ["speedMin", "Speed floor (m/s)", 2, 8, 0.5, "", ""],
+  ["speedMax", "Speed cap (m/s)", 6, 25, 0.5, "", "Fastest vanilla catalog entry: 14 (unused scout)"],
+  ["turn", "Turn per tier", 0.5, 1.4, 0.01, "×", "Vanilla: ×0.70"],
+  ["turnMin", "Turn floor (°/s)", 15, 80, 1, "", ""],
+  ["turnMax", "Turn cap (°/s)", 80, 200, 5, "", "Push sweeper: 145"],
+  ["cargo", "Cargo per tier", 0, 4, 1, "+", "Vanilla: +2"],
+  ["scale", "Upgrade multiplier per tier", 0.8, 2.5, 0.05, "×", "Vanilla: ×2.5, then ×1.2"],
+];
+const clone = o => JSON.parse(JSON.stringify(o));
+let lines = clone(PRESETS), active = 0, db = null;
+try { const l = JSON.parse(localStorage.getItem("scaling-lines") || "null"); if (Array.isArray(l) && l.length) lines = l; } catch {}
+const keepLocal = () => { try { localStorage.setItem("scaling-lines", JSON.stringify(lines)); } catch {} };
+
+const round = (x, to) => Math.round(x / to) * to;
+const clamp = (x, lo, hi) => Math.min(hi, Math.max(lo, x));
+function project(L) {
+  const b = VEH[L.from], rows = [];
+  let p = b.p, w = b.wd, s = b.s, t = b.t, c = b.c, sc = b.sc;
+  for (let n = 0; n < L.tiers; n++) {
+    p *= L.price; w *= L.width; s = clamp(s * L.speed, L.speedMin, L.speedMax); t = clamp(t * L.turn, L.turnMin, L.turnMax);
+    c = Math.max(1, c + L.cargo); sc *= L.scale;
+    const price = p >= 100000 ? round(p, 5000) : p >= 10000 ? round(p, 500) : round(p, 100);
+    const name = (L.names && L.names[n]) || `${L.name} ${n + 1}`;
+    rows.push({ n: name, id: `${L.owner || "andrew1431"}.${name.toLowerCase().replace(/[^a-z0-9]+/g, "-").replace(/^-|-$/g, "")}`, line: L, tier: n + 1, p: price, wd: +w.toFixed(2), s: +s.toFixed(1), t: Math.round(t), c, kg: round(price * L.kgPer, 50), sc: +sc.toFixed(2) });
+  }
+  return rows;
+}
+
+function tabs() {
+  const box = $("tabs"); box.replaceChildren();
+  lines.forEach((L, i) => {
+    const b = Object.assign(document.createElement("button"), { type: "button", textContent: L.name, className: "tab" + (i === active ? " on" : "") });
+    b.setAttribute("role", "tab"); b.setAttribute("aria-selected", i === active); b.style.setProperty("--lc", L.color);
+    b.onclick = () => { active = i; tabs(); knobs(); };
+    box.append(b);
+  });
+  const add = Object.assign(document.createElement("button"), { type: "button", textContent: "+ Copy this line", className: "tab ghost" });
+  add.onclick = () => { const c = clone(lines[active]); c.id = c.id + "-" + Date.now().toString(36); c.name = c.name + " copy"; c.color = `var(--c${(lines.length % 6) + 1})`; lines.push(c); active = lines.length - 1; changed(); tabs(); knobs(); };
+  box.append(add);
+}
+
+function knobs() {
+  const L = lines[active], box = $("knobs"); box.replaceChildren();
+  const nm = document.createElement("div"); nm.className = "knob";
+  const nl = Object.assign(document.createElement("label"), { htmlFor: "k-name", textContent: "Line name" });
+  const ni = Object.assign(document.createElement("input"), { type: "text", id: "k-name", value: L.name, maxLength: 40 });
+  ni.addEventListener("change", () => { L.name = ni.value || "Line"; changed(); tabs(); });
+  nm.append(nl, ni); box.append(nm);
+  const ow = document.createElement("div"); ow.className = "knob";
+  const ol = Object.assign(document.createElement("label"), { htmlFor: "k-owner", textContent: "Id prefix (vehicle ids are forever once released)" });
+  const oi = Object.assign(document.createElement("input"), { type: "text", id: "k-owner", value: L.owner || "andrew1431", maxLength: 40 });
+  oi.addEventListener("change", () => { L.owner = oi.value.trim().toLowerCase().replace(/[^a-z0-9_-]/g, "") || "andrew1431"; oi.value = L.owner; changed(); });
+  ow.append(ol, oi); box.append(ow);
+  const fr = document.createElement("div"); fr.className = "knob";
+  const fl = Object.assign(document.createElement("label"), { htmlFor: "k-from", textContent: "Branches off" });
+  const fs = Object.assign(document.createElement("select"), { id: "k-from" });
+  VEH.filter(v => v.p).forEach(v => fs.append(new Option(`${v.n} (${money(v.p)})`, v.i)));
+  fs.value = L.from; fs.onchange = () => { L.from = +fs.value; changed(); };
+  fr.append(fl, fs); box.append(fr);
+  if (L.blurb) box.append(Object.assign(document.createElement("p"), { className: "note", textContent: L.blurb }));
+  for (const [k, label, min, max, step, pre, hint] of KNOBS) {
+    const wrap = document.createElement("div"); wrap.className = "knob";
+    const lab = Object.assign(document.createElement("label"), { htmlFor: "k-" + k, textContent: label });
+    const out = document.createElement("output"); out.textContent = pre + L[k]; lab.append(out);
+    const inp = Object.assign(document.createElement("input"), { type: "range", id: "k-" + k, min, max, step, value: L[k] });
+    inp.addEventListener("input", () => { L[k] = +inp.value; out.textContent = pre + L[k]; changed(); });
+    wrap.append(lab, inp); if (hint) wrap.append(Object.assign(document.createElement("small"), { textContent: hint }));
+    box.append(wrap);
+  }
+  const row = document.createElement("div"); row.className = "btns";
+  const preset = PRESETS.find(p => L.id === p.id || L.id.startsWith(p.id + "-"));
+  if (preset) { const r = Object.assign(document.createElement("button"), { type: "button", textContent: "Reset to preset" }); r.onclick = () => { const id = L.id, nm2 = L.name, col = L.color; Object.assign(L, clone(preset), { id, name: nm2, color: col }); changed(); knobs(); }; row.append(r); }
+  if (lines.length > 1) { const d = Object.assign(document.createElement("button"), { type: "button", textContent: "Remove line" }); d.onclick = () => { lines.splice(active, 1); active = 0; changed(); tabs(); knobs(); }; row.append(d); }
+  box.append(row);
+}
+
+let dirty = false;
+function changed() { dirty = true; keepLocal(); $("save-status").textContent = db ? "Unsaved changes (only in your browser)." : "Changes are kept in this browser."; render(); }
+
+function render() {
+  const all = lines.map(project);
+  const tb = $("proj").tBodies[0]; tb.replaceChildren();
+  all.forEach(rows => rows.forEach(v => {
+    const tr = document.createElement("tr"); tr.className = "proj"; tr.style.setProperty("--lc", v.line.color);
+    const ln = td(v.line.name, "l"); ln.prepend(Object.assign(document.createElement("i"), { className: "sw" }));
+    tr.append(td(v.n, "l"), ln, td(money(v.p)), td(fmt(v.wd, 1)), td(fmt(v.s, 1)), td(fmt(v.t)), td(v.c), td(fmt(v.kg)), td(fmt(v.sc, 2)), td(fmt(v.wd * v.s, 1)));
+    tb.append(tr);
+  }));
+  charts(all);
+  $("code").textContent = JSON.stringify(statsFile(all), null, 2);
+}
+
+// The shape GarageLib's VehicleStats reads (data/lines.vehicles.json). Keep the field names in sync with VehicleStats.Apply.
+function statsFile(all = lines.map(project)) {
+  const vehicles = {};
+  for (const v of all.flat())
+    vehicles[v.id] = { name: v.n, line: v.line.id, tier: v.tier, baseVehicle: v.line.from, price: v.p, width: v.wd, speed: v.s, turn: v.t, capacity: v.c, storageKg: v.kg, upgradePriceScale: v.sc };
+  return { comment: "Generated by the Moon Sweepers Vehicle Scaling sheet. Edit the lines there, then paste this file to data/lines.vehicles.json.", version: 1, lines, vehicles };
+}
+
+const CHARTS = [
+  ["wd", "Width (m)", false], ["s", "Speed (m/s)", false], ["rate", "Sweep rate (m²/s)", false],
+  ["kg", "Hopper (kg)", true], ["t", "Turn (°/s)", false], ["perK", "m²/s per $1,000", false],
+];
+const ns = "http://www.w3.org/2000/svg";
+const el = (tag, a) => { const e = document.createElementNS(ns, tag); for (const k in a) e.setAttribute(k, a[k]); return e; };
+const val = (d, k) => k === "rate" ? d.wd * d.s : k === "perK" ? d.wd * d.s / (d.p / 1000) : d[k];
+function niceTicks(lo, hi, n) {
+  const step0 = (hi - lo) / n, mag = Math.pow(10, Math.floor(Math.log10(step0))), f = step0 / mag;
+  const step = (f < 1.5 ? 1 : f < 3 ? 2 : f < 7 ? 5 : 10) * mag, out = [];
+  for (let v = Math.ceil(lo / step) * step; v <= hi + 1e-9; v += step) out.push(+v.toFixed(6));
+  return out;
+}
+function charts(all) {
+  const box = $("charts"); box.replaceChildren();
+  const series = [{ name: "Vanilla sweepers", color: "var(--ink)", pts: line, vanilla: true },
+    ...lines.map((L, i) => ({ name: L.name, color: L.color, pts: [VEH[L.from], ...all[i]] }))];
+  const lg = $("legend"); lg.replaceChildren();
+  series.forEach(s => { const sp = document.createElement("span"); sp.style.setProperty("--lc", s.color); sp.append(Object.assign(document.createElement("i"), { className: "sw" }), s.name); lg.append(sp); });
+  const allPts = series.flatMap(s => s.pts);
+  const pLo = Math.min(...allPts.map(d => d.p)) / 1.3, pHi = Math.max(...allPts.map(d => d.p)) * 1.3;
+  for (const [k, label, logY] of CHARTS) {
+    const W = 360, H = 220, Lm = 46, R = 12, T = 26, B = 28;
+    const fig = document.createElement("figure");
+    const svg = el("svg", { viewBox: `0 0 ${W} ${H}`, role: "img", "aria-label": label + " against price" });
+    const vals = allPts.map(d => val(d, k)).filter(v => v > 0);
+    const lo = logY ? Math.min(...vals) / 1.5 : 0, hi = Math.max(...vals) * 1.12;
+    const x = p => Lm + (W - Lm - R) * (Math.log10(p) - Math.log10(pLo)) / (Math.log10(pHi) - Math.log10(pLo));
+    const y = v => logY ? T + (H - T - B) * (1 - (Math.log10(v) - Math.log10(lo)) / (Math.log10(hi) - Math.log10(lo)))
+                        : T + (H - T - B) * (1 - (v - lo) / (hi - lo));
+    const t0 = el("text", { x: Lm, y: 14, class: "ct" }); t0.textContent = label; svg.append(t0);
+    const yt = logY ? [100, 1000, 10000, 100000, 1000000].filter(v => v >= lo && v <= hi) : niceTicks(lo, hi, 4);
+    for (const v of yt) {
+      svg.append(el("line", { x1: Lm, x2: W - R, y1: y(v), y2: y(v), stroke: "var(--line)", "stroke-width": 1, fill: "none" }));
+      const t = el("text", { x: Lm - 5, y: y(v) + 4, "text-anchor": "end" }); t.textContent = v >= 1e6 ? v / 1e6 + "M" : v >= 1e3 ? v / 1e3 + "k" : v; svg.append(t);
+    }
+    for (const v of [1000, 10000, 100000, 1000000].filter(v => v >= pLo && v <= pHi)) {
+      const t = el("text", { x: x(v), y: H - 9, "text-anchor": "middle" }); t.textContent = "$" + (v >= 1e6 ? v / 1e6 + "M" : v / 1e3 + "k"); svg.append(t);
+      svg.append(el("line", { x1: x(v), x2: x(v), y1: H - B, y2: H - B + 4, stroke: "var(--muted)", "stroke-width": 1, fill: "none" }));
+    }
+    svg.append(el("line", { x1: Lm, x2: W - R, y1: H - B, y2: H - B, stroke: "var(--muted)", "stroke-width": 1, fill: "none" }));
+    for (const s of series) {
+      svg.append(el("polyline", { points: s.pts.map(d => `${x(d.p)},${y(val(d, k))}`).join(" "), fill: "none", stroke: s.color, "stroke-width": s.vanilla ? 2.5 : 2 }));
+      s.pts.forEach((d, i) => { const isV = s.vanilla || i === 0; svg.append(el("circle", { cx: x(d.p), cy: y(val(d, k)), r: isV ? 3.5 : 3, fill: isV ? s.color : "var(--panel)", stroke: s.color, "stroke-width": 1.8 })); });
+    }
+    fig.append(svg); box.append(fig);
+  }
+}
+
+$("copy").addEventListener("click", async () => {
+  const b = $("copy");
+  try { await navigator.clipboard.writeText($("code").textContent); b.textContent = "Copied"; }
+  catch { const r = document.createRange(); r.selectNodeContents($("code")); const s = getSelection(); s.removeAllRanges(); s.addRange(r); b.textContent = "Selected, press Ctrl+C"; }
+  setTimeout(() => b.textContent = "Copy stats JSON", 2000);
+});
+
+$("save").addEventListener("click", async () => {
+  const b = $("save");
+  if (!db) { $("save-status").textContent = "Saving for everyone isn't available in this view."; return; }
+  b.disabled = true;
+  try { await db.doc("sheet/lines").set({ ...statsFile(), savedAt: new Date().toISOString() }); dirty = false; $("save-status").textContent = "Saved. Everyone opening the sheet now sees these lines."; }
+  catch (e) { $("save-status").textContent = "Couldn't save (" + (e.code || e.message) + ")."; }
+  b.disabled = false;
+});
+
+tabs(); knobs(); render();
+(async () => {
+  db = await window.claude?.use?.("db");
+  if (!db) { $("save").hidden = true; return; }
+  const user = await window.claude.use("user");
+  if (user && (await user.can("data.write")) === false) $("save").hidden = true;
+  db.doc("sheet/lines").onSnapshot(snap => {
+    const d = snap.data();
+    if (!d || !Array.isArray(d.lines) || !d.lines.length) { $("save-status").textContent = "Showing the built-in presets. Save to share your lines."; return; }
+    if (dirty) { $("save-status").textContent = "Someone saved new shared lines. Reload to see them (your unsaved changes would be lost)."; return; }
+    lines = d.lines; active = Math.min(active, lines.length - 1); keepLocal();
+    $("save-status").textContent = "Shared lines, saved " + new Date(d.savedAt).toLocaleString();
+    tabs(); knobs(); render();
+  }, () => {});
+})();
+</script>

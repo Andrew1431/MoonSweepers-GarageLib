@@ -1,0 +1,6 @@
+<Project Sdk="Microsoft.NET.Sdk">
+  <PropertyGroup>
+    <AssemblyName>SharedUpgrades</AssemblyName>
+    <RootNamespace>SharedUpgrades</RootNamespace>
+  </PropertyGroup>
+</Project>

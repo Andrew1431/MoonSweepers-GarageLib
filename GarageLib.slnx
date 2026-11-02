@@ -5,6 +5,7 @@
   </Folder>
   <Folder Name="/mods/">
     <Project Path="mods/SandPower/SandPower.csproj" />
+    <Project Path="mods/SharedUpgrades/SharedUpgrades.csproj" />
   </Folder>
   <Folder Name="/src/">
     <Project Path="src/GarageLib/GarageLib.csproj" />
