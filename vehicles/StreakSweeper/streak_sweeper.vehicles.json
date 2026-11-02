@@ -1,0 +1,12 @@
+{
+  "comment": "Registers Streak sweeper as a data vehicle. Balance numbers come from data/lines.vehicles.json (the scaling sheet); this file adds what the sheet doesn't know.",
+  "version": "0.1.0",
+  "vehicles": {
+    "andrew1431.streak-sweeper": {
+      "register": true,
+      "baseVehicle": 21,
+      "model": "streak_sweeper.bin",
+      "summary": "A rally-raid sweeper with a rear wing, big rear wheels and a plough-wide roller."
+    }
+  }
+}

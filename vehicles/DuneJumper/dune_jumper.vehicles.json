@@ -1,0 +1,12 @@
+{
+  "comment": "Registers Dune jumper as a data vehicle. Balance numbers come from data/lines.vehicles.json (the scaling sheet); this file adds what the sheet doesn't know.",
+  "version": "0.1.0",
+  "vehicles": {
+    "andrew1431.dune-jumper": {
+      "register": true,
+      "baseVehicle": 1,
+      "model": "dune_jumper.bin",
+      "summary": "A long-travel trophy truck for the Moon: huge tyres, orange coilovers and a rocket pod for show."
+    }
+  }
+}

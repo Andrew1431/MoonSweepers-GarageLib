@@ -1,0 +1,12 @@
+{
+  "comment": "Registers Sprint vacuum as a data vehicle. Balance numbers come from data/lines.vehicles.json (the scaling sheet); this file adds what the sheet doesn't know.",
+  "version": "0.1.0",
+  "vehicles": {
+    "andrew1431.sprint-vacuum": {
+      "register": true,
+      "baseVehicle": 21,
+      "model": "sprint_vacuum.bin",
+      "summary": "The Mega vacuum rover, hot-rodded: lower, quicker, with a 4 m brush wing out front."
+    }
+  }
+}

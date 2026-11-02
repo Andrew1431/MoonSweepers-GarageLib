@@ -1,0 +1,12 @@
+{
+  "comment": "Registers Orbital polisher as a data vehicle. Balance numbers come from data/lines.vehicles.json (the scaling sheet); this file adds what the sheet doesn't know.",
+  "version": "0.1.0",
+  "vehicles": {
+    "andrew1431.orbital-polisher": {
+      "register": true,
+      "baseVehicle": 21,
+      "model": "orbital_polisher.bin",
+      "summary": "A land-speed-record needle dragging a 5 m vacuum blade. Absurdly fast."
+    }
+  }
+}

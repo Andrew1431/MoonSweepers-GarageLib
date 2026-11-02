@@ -1,0 +1,12 @@
+{
+  "comment": "Registers Comet hoover as a data vehicle. Balance numbers come from data/lines.vehicles.json (the scaling sheet); this file adds what the sheet doesn't know.",
+  "version": "0.1.0",
+  "vehicles": {
+    "andrew1431.comet-hoover": {
+      "register": true,
+      "baseVehicle": 21,
+      "model": "comet_hoover.bin",
+      "summary": "A prototype racer whose jet-intake mouth is the vacuum head."
+    }
+  }
+}

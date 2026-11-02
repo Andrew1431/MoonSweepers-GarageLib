@@ -47,7 +47,7 @@ namespace GarageLib
                 {
                     if (v.Value.ValueKind != JsonValueKind.Object) continue;
                     if (!byId.TryGetValue(v.Name, out var fields)) byId[v.Name] = fields = new(StringComparer.Ordinal);
-                    foreach (var f in v.Value.EnumerateObject()) fields[f.Name] = (f.Value.Clone(), Path.GetFileName(path));
+                    foreach (var f in v.Value.EnumerateObject()) fields[f.Name] = (f.Value.Clone(), path);
                     n++;
                 }
                 CoreLog.Debug($"Vehicle stats: {n} from {path}");
@@ -55,13 +55,22 @@ namespace GarageLib
             catch (Exception e) { CoreLog.Error($"Vehicle stats: couldn't read {path}: {e.Message}"); }
         }
 
+        /// <summary>A raw field of an entry and the full path of the file that set it, or false.</summary>
+        internal static bool TryField(string id, string field, out JsonElement value, out string file)
+        {
+            value = default; file = null;
+            if (!byId.TryGetValue(id, out var e) || !e.TryGetValue(field, out var f)) return false;
+            (value, file) = f;
+            return true;
+        }
+
         /// <summary>Overwrite the definition's numbers with its stats entry, if it has one. Returns the fields changed.</summary>
         internal static string Apply(VehicleDefinition d)
         {
             if (!byId.TryGetValue(d.Id, out var e)) return null;
             var changed = new List<string>();
-            void Str(string k, Action<string> set) { if (e.TryGetValue(k, out var p) && p.value.ValueKind == JsonValueKind.String) { set(p.value.GetString()); changed.Add($"{k} ({p.file})"); } }
-            void Num(string k, Action<double> set) { if (e.TryGetValue(k, out var p) && p.value.ValueKind == JsonValueKind.Number) { set(p.value.GetDouble()); changed.Add($"{k} ({p.file})"); } }
+            void Str(string k, Action<string> set) { if (e.TryGetValue(k, out var p) && p.value.ValueKind == JsonValueKind.String) { set(p.value.GetString()); changed.Add($"{k} ({Path.GetFileName(p.file)})"); } }
+            void Num(string k, Action<double> set) { if (e.TryGetValue(k, out var p) && p.value.ValueKind == JsonValueKind.Number) { set(p.value.GetDouble()); changed.Add($"{k} ({Path.GetFileName(p.file)})"); } }
             Str("name", v => d.Name = v);
             Str("summary", v => d.Summary = v);
             Num("price", v => d.Price = (decimal)v);

@@ -277,7 +277,7 @@ def save(path):
 
 def export(obj, out_path):
     """Write the mesh model (.bin) the loader reads, via the shared exporter."""
-    exporter = os.path.join(REPO, "shared", "Rotorcraft", "tools", "export_mesh_model.py")
+    exporter = os.path.join(REPO, "shared", "blender", "export_mesh_model.py")
     argv = sys.argv
     sys.argv = [argv[0]]
     try:

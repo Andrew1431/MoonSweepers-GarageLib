@@ -1,0 +1,12 @@
+{
+  "comment": "Registers Mare harvester as a data vehicle. Balance numbers come from data/lines.vehicles.json (the scaling sheet); this file adds what the sheet doesn't know.",
+  "version": "0.1.0",
+  "vehicles": {
+    "andrew1431.mare-harvester": {
+      "register": true,
+      "baseVehicle": 21,
+      "model": "mare_harvester.bin",
+      "summary": "A combine harvester for the Moon: a 16 m brush header, a towering silo and an unloading auger."
+    }
+  }
+}

@@ -21,7 +21,7 @@ When a garage brings the choppa out it moves it to open ground nearby (garage ba
 - `ChoppaModel.cs`: swaps the van's renderers for the Blender mesh, with game materials and box colliders.
 - `Helipad.cs`: finds a landing spot near the garage.
 - `blender/ms_choppa.blend`: source model. Export to `Resources/ms_choppa.bin` with
-  `shared/Rotorcraft/tools/export_mesh_model.py`.
+  `shared/blender/export_mesh_model.py`.
 
 ## Changelog
 

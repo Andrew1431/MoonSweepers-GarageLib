@@ -1,4 +1,4 @@
-# Exports one object hierarchy to the mesh model format read by MeshModel.cs (shared Rotorcraft package).
+# Exports one object hierarchy to the mesh model format read by GarageLib's MeshModel.cs.
 #   blender --background some.blend --python export_mesh_model.py -- <root object> <output .bin>
 # Inside an open Blender, set ROOT_NAME / OUT_PATH in the text editor (or exec with those globals defined).
 # Meshes and curves (evaluated, so bevelled curves become geometry) are exported; empties keep their transforms.
