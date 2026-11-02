@@ -12,7 +12,8 @@
    <Project><PropertyGroup><GameDir>D:\SteamLibrary\steamapps\common\Moon Sweepers</GameDir></PropertyGroup></Project>
    ```
 
-4. Build everything once: `dotnet build GarageLib.slnx -c Release`. Each build copies the DLLs into
+4. Build everything once: `dotnet build GarageLib.slnx -c Release` (the `.slnx` needs .NET SDK 9.0.200 or newer; on an
+   older SDK build per project, `dotnet build src\GarageLib -c Release`, or use `dev.ps1`). Each build copies the DLLs into
    `BepInEx/plugins/<Name>/`, so you only need to launch the game afterwards (close it first: Windows locks the DLLs).
 
 ## Dev loop
@@ -21,7 +22,15 @@
 .\dev.ps1 -Only GarageLib -Tail
 ```
 
-That closes the game if it is running, builds the named projects (all of them without `-Only`), installs them into the game, launches `MoonSweepers.exe` and tails the log for your projects and BepInEx. `-Release` builds without the `[Dev]` helpers; `-NoLaunch` stops after the build; `-WhatIf` prints the plan. It builds per project because `GarageLib.slnx` needs .NET SDK 9.0.200 or newer; on an older SDK, build per project or use `dev.ps1`.
+That closes the game if a build or launch needs it closed, builds the named projects (all of them without `-Only`), installs them into the game, launches `MoonSweepers.exe` and tails the log for your projects (by plugin name and folder name) and BepInEx. The game folder is `MOONSWEEPERS_DIR`, else `GameDir` from `Directory.Build.local.props`, else the default Steam folder. Switches:
+
+- `-Only A,B`: build just those projects.
+- `-Release`: build without the `[Dev]` helpers.
+- `-NoBuild`: skip the build (relaunch or tail only).
+- `-NoLaunch`: stop after the build; with `-NoBuild -Tail` it follows the running game's log and leaves the game running.
+- `-Tail`: follow the log for your projects and BepInEx.
+- `-TailTimeoutSeconds N`: how long to wait for the log file to appear (default 60).
+- `-WhatIf`: print the plan and do nothing.
 
 ## New package
 
