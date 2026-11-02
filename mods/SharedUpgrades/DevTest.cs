@@ -1,27 +1,22 @@
 #if DEVBUILD
 using System;
 using System.Linq;
-using System.Reflection;
 using BepInEx.Configuration;
-using Il2CppInterop.Common.XrefScans;
-using Il2CppInterop.Runtime;
-using Il2CppInterop.Runtime.XrefScans;
 using MoonCleaners;
 using UnityEngine;
 
 namespace SharedUpgrades
 {
-    // Dev-build test steps, run once per launch in this order: probe, seed, buy, save, quit.
+    // Dev-build test steps, run once per launch in this order: seed, buy, save, quit.
     internal static class DevTest
     {
-        static ConfigEntry<bool> probe, save, quit;
+        static ConfigEntry<bool> save, quit;
         static ConfigEntry<string> seed, buy;
         static float gameT, saveAt = -1;
-        static bool probed, seeded, bought, saved, quitting;
+        static bool seeded, bought, saved, quitting;
 
         internal static void Bind(ConfigFile cfg)
         {
-            probe = cfg.Bind("Dev", "Probe", false, "Dev build: log what the vanilla upgrade methods call and who calls them.");
             seed = cfg.Bind("Dev", "Seed", "", "Dev build: set levels directly at 18 s, e.g. '1:Speed=2,Lights=1;20:Speed=0' (vehicle index:kind=level, my vehicles).");
             buy = cfg.Bind("Dev", "Buy", "", "Dev build: at 22 s buy one level of this kind ('Speed' or 'Speed@20' for vehicle #20), adding money if short.");
             save = cfg.Bind("Dev", "Save", false, "Dev build: save at 30 s.");
@@ -34,7 +29,6 @@ namespace SharedUpgrades
             gameT += Time.unscaledDeltaTime;
             var w = Shared.FindWorld();
             if (w == null) return;
-            if (probe.Value && !probed && gameT > 15f) { probed = true; Probe(); }
             if (seed.Value != "" && !seeded && gameT > 18f) { seeded = true; Seed(w); }
             if (buy.Value != "" && !bought && gameT > 22f) { bought = true; Buy(w); }
             if (save.Value && !saved && gameT > 30f) { saved = true; saveAt = gameT; Plugin.L.LogInfo("[dev] RequestSave()"); w.RequestSave(); }
@@ -89,47 +83,6 @@ namespace SharedUpgrades
             bool ok = w.TryUpgradeVehicle(me, v.Storage, kind, level, out msg);
             decimal after = Money.From(w.WalletDollars(me));
             Plugin.L.LogInfo($"[dev] TryUpgradeVehicle -> {ok} '{msg}', charged ${wallet - after}, level now {MoonWorld.VehicleUpgradeLevel(v, kind)}");
-        }
-
-        static void Probe()
-        {
-            string[] scan = { "TryUpgradeVehicle", "TryGetVehicleUpgradePrice", "CrewVehicleUpgrade", "ApplyCrewUpgrades", "EnsureUpgrades" };
-            foreach (var n in scan) Dump(typeof(MoonWorld).GetMethod(n), true);
-            foreach (var n in new[] { "HandleOwnedVehicles", "TickOwnedVehicles", "WriteVehicle" }) Dump(typeof(MoonCrewSession).GetMethod(n), true);
-            Dump(typeof(MoonVehicleUpgrades).GetMethod("Price"), false);
-            Dump(typeof(MoonGarageMenu).GetMethod("UpgradeDetails"), true);
-            Dump(typeof(MoonGarageMenu).GetMethod("ClickUpgrade"), true);
-        }
-
-        static void Dump(MethodBase m, bool callees)
-        {
-            if (m == null) return;
-            try
-            {
-                if (callees)
-                {
-                    var calls = XrefScanner.XrefScan(m).Select(Describe).Where(s => s != null).Distinct();
-                    Plugin.L.LogInfo($"[probe] {m.DeclaringType.Name}.{m.Name} calls: {string.Join(" | ", calls)}");
-                }
-                var users = XrefScanner.UsedBy(m).Select(x => x.TryResolve()).Where(r => r != null).Select(r => $"{r.DeclaringType?.Name}.{r.Name}").Distinct();
-                Plugin.L.LogInfo($"[probe] {m.DeclaringType.Name}.{m.Name} used by: {string.Join(", ", users)}");
-            }
-            catch (Exception e) { Plugin.L.LogWarning($"[probe] {m.Name}: {e.Message}"); }
-        }
-
-        static string Describe(XrefInstance x)
-        {
-            try
-            {
-                if (x.Type == XrefType.Global)
-                {
-                    var o = x.ReadAsObject();
-                    return o == null || o.GetIl2CppType().FullName != "System.String" ? null : "\"" + IL2CPP.Il2CppStringToManaged(o.Pointer) + "\"";
-                }
-                var r = x.TryResolve();
-                return r == null ? null : $"{r.DeclaringType?.Name}.{r.Name}";
-            }
-            catch { return null; }
         }
     }
 }

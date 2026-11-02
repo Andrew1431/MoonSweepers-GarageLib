@@ -117,13 +117,13 @@ namespace SharedUpgrades
             return best;
         }
 
-        /// <summary>A vanilla price for <paramref name="vehicle"/>, re-scaled to the shared price.</summary>
-        internal static decimal Reprice(decimal vanilla, int vehicle, MoonVehicleUpgrades.Kind kind)
+        /// <summary>Shared price of the next level after <paramref name="level"/>, rounded to $10 like vanilla.</summary>
+        internal static decimal SharedPrice(MoonVehicleUpgrades.Def def, int vehicle, int level)
         {
-            decimal own = Money.From(MoonVehicleUpgrades.PriceScale(vehicle));
-            if (own <= 0) return vanilla;
-            decimal price = vanilla / own * TeamScale(kind, vehicle) * (decimal)Plugin.PriceMultiplier.Value;
-            return Math.Max(0, Math.Round(price, MidpointRounding.AwayFromZero));
+            var prices = def.prices;
+            if (prices == null || level < 0 || level >= prices.Length) return 0;
+            decimal price = prices[level] * TeamScale(def.kind, vehicle) * (decimal)Plugin.PriceMultiplier.Value;
+            return Math.Max(0, Math.Round(price / 10, MidpointRounding.AwayFromZero) * 10);
         }
 
         internal static string Table(List<MoonOwnedVehicle> owned)
