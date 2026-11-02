@@ -1,5 +1,5 @@
 <Project>
-  <Target Name="CheckGameDir" BeforeTargets="ResolveAssemblyReferences">
+  <Target Name="CheckGameDir" BeforeTargets="ResolveAssemblyReferences" Condition="'$(SkipGameDirCheck)' != 'true'">
     <Error Condition="!Exists('$(InteropDir)')"
            Text="No BepInEx interop assemblies at '$(InteropDir)'. Install BepInEx + ModEngine, launch the game once, and set MOONSWEEPERS_DIR (or GameDir in Directory.Build.local.props) if the game isn't in the default Steam folder." />
   </Target>
