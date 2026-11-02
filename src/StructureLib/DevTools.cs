@@ -745,7 +745,7 @@ namespace StructureLib
             Check("cargo-modded-kg", noGrit, () =>
             {
                 double kg = MoonWorld.UnitKilograms(g);
-                return (kg == 1.0, $"UnitKilograms({GritValue}) = {kg}");
+                return (kg == 3.0, $"UnitKilograms({GritValue}) = {kg}, expected 3 (vanilla answers 1 for an unknown value)");
             });
             Check("cargo-unregistered-is-vanilla", null, () =>
             {

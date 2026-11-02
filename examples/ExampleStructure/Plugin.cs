@@ -44,7 +44,7 @@ namespace ExampleStructure
                 Value = 250,
                 Name = "example grit",
                 ShortName = "grit",
-                UnitKilograms = 1,
+                UnitKilograms = 3,
                 Price = 2m,
             }, Guid);
         }

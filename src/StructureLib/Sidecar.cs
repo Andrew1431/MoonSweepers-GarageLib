@@ -31,8 +31,6 @@ namespace StructureLib
         static IntPtr injectedFor;
         // True once a load (RestoreDepots) happened since the last session start; see BeginSession.
         static bool sessionLoaded;
-        // Latest stripped records (what the world holds now).
-        static List<StructureRecord> live = new();
 
         /// <summary>Path of the sidecar for a save root, or null when the root is unknown.</summary>
         internal static string PathFor(string root) => string.IsNullOrEmpty(root) ? null : Path.Combine(root, FileName);
@@ -52,11 +50,37 @@ namespace StructureLib
             internal bool MainThread;
         }
 
-        /// <summary>A sidecar written to its .tmp by the Write prefix, committed by the finalizer.</summary>
+        /// <summary>A sidecar written to its own .tmp by the depot Write prefix, committed once the whole vanilla write is through.</summary>
         internal sealed class PendingWrite
         {
             internal string Tmp, Path;
+            /// <summary>Order of the save snapshot it was built from (see NoteSaveSnapshot); commits never go backwards.</summary>
+            internal long Order;
             internal int Structures, Kept, Canisters, KeptCanisters;
+        }
+
+        // Save snapshot order: every save snapshot is numbered on the main thread when SnapshotCanisters fills it, so
+        // overlapping writes can be committed in snapshot order. A snapshot that was not numbered gets the next number at write.
+        static long saveOrder;
+        static readonly Dictionary<IntPtr, long> snapshotOrder = new();
+        static readonly Dictionary<string, long> lastCommitted = new(StringComparer.OrdinalIgnoreCase);
+        static long tmpSeq;
+
+        /// <summary>SnapshotCanisters postfix (main thread): numbers a save snapshot.</summary>
+        internal static void NoteSaveSnapshot(MoonLooseDustSnapshot snapshot)
+        {
+            if (snapshot == null) return;
+            lock (gate)
+            {
+                if (snapshotOrder.Count > 64) snapshotOrder.Clear();
+                snapshotOrder[snapshot.Pointer] = Interlocked.Increment(ref saveOrder);
+            }
+        }
+
+        static long OrderOf(MoonLooseDustSnapshot state)
+        {
+            lock (gate)
+                return state != null && snapshotOrder.TryGetValue(state.Pointer, out long o) ? o : Interlocked.Increment(ref saveOrder);
         }
 
         static int writeSeq;
@@ -83,7 +107,7 @@ namespace StructureLib
         }
 
         // Session entered the game. Without a load since the last session (a new game), nothing of the previous save
-        // may leak into this one: forget its root, records and live list.
+        // may leak into this one: forget its root and records.
         internal static void BeginSession()
         {
             lock (gate)
@@ -94,10 +118,8 @@ namespace StructureLib
                 loaded = new SidecarFile();
                 inWorld.Clear();
                 Orphans.Clear();
-                live = new();
                 canistersInWorld.Clear();
                 CanisterOrphans.Clear();
-                liveCanisters = new();
                 cargoPending.Clear();
             }
         }
@@ -113,10 +135,8 @@ namespace StructureLib
                 loaded = new SidecarFile();
                 inWorld.Clear();
                 Orphans.Clear();
-                live = new();
                 canistersInWorld.Clear();
                 CanisterOrphans.Clear();
-                liveCanisters = new();
                 cargoPending.Clear();
                 string path = PathFor(root);
                 if (path == null) { CoreLog.Warn("Sidecar load: save root unknown, starting empty"); return; }
@@ -277,7 +297,9 @@ namespace StructureLib
         // back by the finalizer even if this throws halfway.
         // Pass 1 builds every record without changing the snapshot: a throw there leaves the save untouched (the game's
         // read-back then refuses it, which loses nothing). Pass 2 only removes. The .tmp is written last, in its own try.
-        internal static PendingWrite StripDepots(MoonLooseDustSnapshot state, List<MoonDepotSnapshot> removed)
+        // `canisters` are the records the canister strip of this same save produced (null: that strip failed or did not
+        // run, so every loaded canister record is written back verbatim).
+        internal static PendingWrite StripDepots(MoonLooseDustSnapshot state, List<MoonDepotSnapshot> removed, List<CanisterRecord> canisters)
         {
             var list = state?.depots;
             if (list == null) return null;
@@ -315,8 +337,7 @@ namespace StructureLib
 
             try
             {
-                lock (gate) live = records;
-                return WriteTmp();
+                return WriteTmp(records, canisters, OrderOf(state));
             }
             catch (Exception e)
             {
@@ -366,48 +387,60 @@ namespace StructureLib
         // replaced by the live records on write; every other loaded canister record is written back verbatim.
         static readonly Dictionary<CanisterRecord, int> canistersInWorld = new(ReferenceEqualityComparer.Instance);
         static IntPtr canistersInjectedFor;
-        // Latest stripped canister records (what the world holds now).
-        static List<CanisterRecord> liveCanisters = new();
 
         /// <summary>Cargo ids of loaded canister records kept as orphans at the last inject.</summary>
         internal static readonly List<string> CanisterOrphans = new();
 
         /// <summary>
         /// Takes every canister whose cargo is in the modded range out of <paramref name="state"/>, with its state.cargo
-        /// entry (and any other state.cargo entry holding a modded value), into <paramref name="stripped"/>. Returns the
-        /// records of the registered ones. Pass 1 builds every record without touching the snapshot; pass 2 only removes.
+        /// entry (and any other state.cargo entry holding a modded value), into <paramref name="stripped"/>, and returns the
+        /// records of the registered ones. Canisters whose id is in <paramref name="pendingIds"/> (injected at load but never
+        /// given their cargo, so dust now) are taken out too, without a record: their loaded record is still unclaimed and
+        /// is written back verbatim. Pass 1 builds every record without touching the snapshot; pass 2 only removes.
         /// Touches nothing but the snapshot and the frozen registry, so it may run off the main thread.
         /// </summary>
-        internal static List<CanisterRecord> StripCanisters(MoonLooseDustSnapshot state, StrippedCanisters stripped)
+        internal static List<CanisterRecord> StripCanisters(MoonLooseDustSnapshot state, StrippedCanisters stripped, ICollection<int> pendingIds = null)
         {
             var records = new List<CanisterRecord>();
             var canisters = state?.canisters;
             var cargo = state?.cargo;
-            if (cargo == null || cargo.Count == 0) return records;
+            bool anyPending = pendingIds != null && pendingIds.Count > 0;
+            if ((cargo == null || cargo.Count == 0) && !anyPending) return records;
 
             // No Frozen/Disabled guard on the strip itself (as for depots): a value in the modded range can only come
             // from a working registry, and stripping every one of them can never let one reach the vanilla save.
             var cargoOf = new Dictionary<int, byte>();
             var takeCargo = new List<int>();
-            for (int i = 0; i < cargo.Count; i++)
+            for (int i = 0; cargo != null && i < cargo.Count; i++)
             {
                 var c = cargo.get_Item(i);
                 if (c == null || c.cargo < Rules.FirstModdedCargoValue) continue;
                 takeCargo.Add(i);
                 cargoOf.TryAdd(c.id, c.cargo);
             }
-            if (takeCargo.Count == 0) return records;
+            if (takeCargo.Count == 0 && !anyPending) return records;
 
             var takeCanisters = new List<int>();
             var unknown = new List<(int id, byte value)>();
+            var pendingTaken = new List<int>();
+            var matched = new HashSet<int>();
             for (int i = 0; canisters != null && i < canisters.Count; i++)
             {
                 var s = canisters.get_Item(i);
-                if (s == null || !cargoOf.TryGetValue(s.id, out byte value)) continue;
-                takeCanisters.Add(i);
-                var d = CargoPatches.Live((MoonCargo)value);
-                if (d == null) unknown.Add((s.id, value));
-                else records.Add(ToCanisterRecord(d.Id, s));
+                if (s == null) continue;
+                if (cargoOf.TryGetValue(s.id, out byte value))
+                {
+                    takeCanisters.Add(i);
+                    matched.Add(s.id);
+                    var d = CargoPatches.Live((MoonCargo)value);
+                    if (d == null) unknown.Add((s.id, value));
+                    else records.Add(ToCanisterRecord(d.Id, s));
+                }
+                else if (anyPending && pendingIds.Contains(s.id))
+                {
+                    takeCanisters.Add(i);
+                    pendingTaken.Add(s.id);
+                }
             }
 
             for (int k = takeCanisters.Count - 1; k >= 0; k--)
@@ -426,6 +459,10 @@ namespace StructureLib
             }
             foreach (var (id, value) in unknown)
                 CoreLog.Warn($"Save: canister {id} holds unregistered modded cargo {value}; left out of the vanilla save and not recorded");
+            foreach (var id in cargoOf.Keys.Where(id => !matched.Contains(id)))
+                CoreLog.Warn($"Save: modded cargo entry {id}:{cargoOf[id]} has no canister in the save snapshot; left out of the vanilla save");
+            foreach (var id in pendingTaken)
+                CoreLog.Error($"Save: canister {id} was restored from the sidecar but never got its modded cargo (no RestoreProduction after the load?); left out of the vanilla save, its sidecar record is kept as it was");
             return records;
         }
 
@@ -449,19 +486,24 @@ namespace StructureLib
             return n;
         }
 
-        // The Serialize prefix: strip, then hand the records to the next sidecar write (the MoonDepotSave.Write prefix
-        // inside the same Serialize).
-        internal static void StripCanistersForSave(MoonLooseDustSnapshot state, StrippedCanisters stripped)
+        // The Serialize prefix: strip, and return the records for the sidecar write of this same save (the
+        // MoonDepotSave.Write prefix inside this Serialize, on this thread). Throws if the strip fails; the caller then
+        // passes null to that write, which keeps every loaded canister record verbatim.
+        internal static List<CanisterRecord> StripCanistersForSave(MoonLooseDustSnapshot state, StrippedCanisters stripped)
         {
             var stats = new CanisterStats { Before = state?.canisters?.Count ?? 0 };
-            var records = StripCanisters(state, stripped);
+            List<int> pendingIds;
+            lock (gate) pendingIds = cargoPending.Select(p => p.id).ToList();
+            if (pendingIds.Count > 0)
+                CoreLog.Error($"Save: {pendingIds.Count} canister(s) restored from the sidecar still wait for their modded cargo ({string.Join(", ", pendingIds)}); they are kept out of this save");
+            var records = StripCanisters(state, stripped, pendingIds);
             stats.Stripped = stripped.Canisters.Count;
             stats.CargoStripped = stripped.Cargo.Count;
             stats.Recorded = records.Count;
             LastCanisterStrip = stats;
-            lock (gate) liveCanisters = records;
             if (stats.Stripped > 0 || stats.CargoStripped > 0)
                 CoreLog.Info($"Save: moved {stats.Stripped} modded-cargo canisters ({stats.CargoStripped} cargo entries, {stats.Recorded} recorded) out of the vanilla save; {stats.Before - stats.Stripped} canisters stay");
+            return records;
         }
 
         internal static void PutBackCanistersAfterSave(MoonLooseDustSnapshot state, StrippedCanisters stripped)
@@ -518,13 +560,13 @@ namespace StructureLib
                     taken.Add(id);
                     plan.Add((r, ToCanisterSnapshot(r, id), d.Value));
                 }
-                // Pass 2: add them. A record counts as in the world once it is in the snapshot; its cargo is set after the load.
+                // Pass 2: add them. A record is not claimed yet (it stays "not in the world" and would be written back
+                // verbatim) until ApplyCanisterCargo has given its canister the modded cargo.
                 snapshot.nextCanisterId = next;
                 cargoPending.Clear();
                 foreach (var (r, s, value) in plan)
                 {
                     list.Add(s);
-                    canistersInWorld[r] = s.id;
                     cargoPending.Add((r, s.id, value));
                     CoreLog.Info($"Sidecar: restoring a '{r.CargoId}' canister as canister {s.id} ({r.Kilograms}/{r.Capacity} kg) owner {CoreLog.Redact(r.Owner)}");
                 }
@@ -532,40 +574,52 @@ namespace StructureLib
             }
         }
 
-        // Injected canisters whose modded cargo is still to be set (by ApplyCanisterCargo).
+        // Injected canisters whose modded cargo is not set yet (by ApplyCanisterCargo). Every save keeps these out of the
+        // vanilla save (they are dust until then); their records stay unclaimed, so the sidecar keeps them verbatim.
         static readonly List<(CanisterRecord r, int id, byte value)> cargoPending = new();
 
         // RestoreProduction postfix, the last step of a load (RestoreCanisters -> RestoreDepots -> RestoreProduction): the
         // injected canisters are in world.canisters as dust; give each its modded cargo. world.canisters holds value types,
         // and a Dictionary set_Item from managed code does not stick (checked in game), so the record is rewritten through
-        // the game's own MoveCanisterRecord, which stores the canister it is given (same pose). A canister that cannot be set
-        // is removed from the world again, so it never reaches the vanilla save as dust; its record stays in the sidecar.
+        // the game's own MoveCanisterRecord, which stores the canister it is given (same pose). Only a canister that holds
+        // its cargo afterwards claims its record. One that cannot be set is removed from the world again, so it never
+        // reaches the vanilla save as dust; if even that fails it stays pending (kept out of every save).
+        // The game calls run outside `gate`; the lock only guards the lists.
         internal static void ApplyCanisterCargo(MoonWorld world)
         {
+            List<(CanisterRecord r, int id, byte value)> pending;
             lock (gate)
             {
                 if (cargoPending.Count == 0) return;
-                var pending = cargoPending.ToList();
-                cargoPending.Clear();
-                var canisters = world?.canisters;
-                int ok = 0;
-                foreach (var (r, id, value) in pending)
+                pending = cargoPending.ToList();
+            }
+            var canisters = world?.canisters;
+            int ok = 0;
+            foreach (var (r, id, value) in pending)
+            {
+                string why;
+                try { why = SetCargo(world, id, value); }
+                catch (Exception e) { why = "threw " + e.GetType().Name + ": " + e.Message; }
+                bool resolved = why == null;
+                if (resolved) ok++;
+                else
                 {
-                    string why;
-                    try { why = SetCargo(world, id, value); }
-                    catch (Exception e) { why = "threw " + e.GetType().Name + ": " + e.Message; }
-                    if (why == null) { ok++; continue; }
-                    canistersInWorld.Remove(r);
-                    bool removed = false;
                     try
                     {
-                        if (canisters != null && canisters.ContainsKey(id)) { world.RemoveCanister(id); removed = !canisters.ContainsKey(id); }
+                        if (canisters == null || !canisters.ContainsKey(id)) resolved = true;
+                        else { world.RemoveCanister(id); resolved = !canisters.ContainsKey(id); }
                     }
                     catch (Exception e) { CoreLog.Error($"Sidecar: removing canister {id} after a failed cargo set threw: {e.Message}"); }
-                    CoreLog.Error($"Sidecar: canister {id} ('{r.CargoId}') could not be given its cargo ({why}); {(removed ? "removed from the world, " : "")}kept in the sidecar untouched");
+                    CoreLog.Error($"Sidecar: canister {id} ('{r.CargoId}') could not be given its cargo ({why}); " +
+                                  (resolved ? "not in the world now, " : "still in the world as dust and kept out of every save, ") + "its sidecar record is kept as it was");
                 }
-                CoreLog.Info($"Sidecar: {ok} of {pending.Count} restored canisters hold their modded cargo; world has {canisters?.Count ?? 0} canisters");
+                lock (gate)
+                {
+                    if (why == null) canistersInWorld[r] = id;
+                    if (resolved) cargoPending.RemoveAll(p => ReferenceEquals(p.r, r));
+                }
             }
+            CoreLog.Info($"Sidecar: {ok} of {pending.Count} restored canisters hold their modded cargo; world has {canisters?.Count ?? 0} canisters");
         }
 
         // Null on success, else why not.
@@ -605,8 +659,10 @@ namespace StructureLib
             return s;
         }
 
-        // The file is committed only when the vanilla Write went through; otherwise the .tmp is dropped and the previous
-        // sidecar stays, matching the vanilla save the game keeps.
+        // Called once the whole vanilla write is through (see SavePatches): the file is committed only when nothing in it
+        // threw; otherwise the .tmp is dropped and the previous sidecar stays, matching the vanilla save the game keeps.
+        // Commits never go backwards: a write prepared from an older save snapshot than the last one committed to the same
+        // file (overlapping saves) is dropped.
         internal static void CommitWrite(PendingWrite p, Exception vanillaFailed)
         {
             if (p == null) return;
@@ -616,22 +672,33 @@ namespace StructureLib
                 {
                     if (vanillaFailed != null)
                     {
-                        CoreLog.Error($"Save: MoonDepotSave.Write threw ({vanillaFailed.GetType().Name}: {vanillaFailed.Message}); the sidecar is NOT updated this time");
+                        CoreLog.Error($"Save: the vanilla write threw ({vanillaFailed.GetType().Name}: {vanillaFailed.Message}); the sidecar is NOT updated this time");
+                        try { File.Delete(p.Tmp); } catch (Exception) { }
+                        return;
+                    }
+                    long last = lastCommitted.TryGetValue(p.Path, out long l) ? l : -1;
+                    if (!CommitOrder.ShouldCommit(p.Order, last))
+                    {
+                        CoreLog.Warn($"Save: a sidecar write from save snapshot #{p.Order} finished after one from #{last}; dropped (the newer one stays)");
                         try { File.Delete(p.Tmp); } catch (Exception) { }
                         return;
                     }
                     if (File.Exists(p.Path)) File.Copy(p.Path, p.Path + ".bak", true);
                     File.Move(p.Tmp, p.Path, true);
-                    CoreLog.Info($"Sidecar written: {p.Structures} structures ({p.Kept} kept untouched), {p.Canisters} canisters ({p.KeptCanisters} kept untouched) -> {CoreLog.Redact(p.Path)}");
+                    lastCommitted[p.Path] = p.Order;
+                    CoreLog.Info($"Sidecar written: {p.Structures} structures ({p.Kept} kept untouched), {p.Canisters} canisters ({p.KeptCanisters} kept untouched), save snapshot #{p.Order} -> {CoreLog.Redact(p.Path)}");
                 }
                 catch (Exception e)
                 {
                     CoreLog.Error($"Save: committing sidecar {CoreLog.Redact(p.Path)} failed; the vanilla save went ahead WITHOUT the modded structures: {e}");
+                    try { File.Delete(p.Tmp); } catch (Exception) { }
                 }
             }
         }
 
-        static PendingWrite WriteTmp()
+        // Builds the file for one save into its own .tmp. `structures` and `canisters` are what this save stripped (the
+        // world now); `canisters` null keeps every loaded canister record verbatim.
+        static PendingWrite WriteTmp(List<StructureRecord> structures, List<CanisterRecord> canisters, long order)
         {
             string root = CoreState.SaveRoot;
             if (root == null) { CoreState.CaptureRoot(CoreState.World); root = CoreState.SaveRoot; }
@@ -642,7 +709,7 @@ namespace StructureLib
                 string path = PathFor(root);
                 if (path == null)
                 {
-                    CoreLog.Error($"Save: save root unknown; the vanilla save goes ahead WITHOUT the {live.Count} modded structure(s)");
+                    CoreLog.Error($"Save: save root unknown; the vanilla save goes ahead WITHOUT the {structures.Count} modded structure(s) and {canisters?.Count ?? 0} modded-cargo canister(s)");
                     return null;
                 }
                 if (loadedRoot != root)
@@ -650,26 +717,27 @@ namespace StructureLib
                     // A save root this session never loaded (a changed root): read its file first so its records are kept,
                     // not overwritten. Nothing of it is in the world, so all of it is written back.
                     CoreLog.Warn($"Save: writing the sidecar to {CoreLog.Redact(root)} but loaded from {CoreLog.Redact(loadedRoot) ?? "nothing"}; reading it first");
-                    var keepLive = live;
-                    var keepLiveCanisters = liveCanisters;
                     LoadFor(root, IntPtr.Zero);
-                    live = keepLive;
-                    liveCanisters = keepLiveCanisters;
                 }
-                var current = new SidecarFile { Written = DateTime.Now.ToString("s"), Structures = live.ToList(), Canisters = liveCanisters.ToList() };
-                // Loaded records the world holds are replaced by the live list; every other one is kept as it was.
+                var liveCanisters = canisters ?? new List<CanisterRecord>();
+                var current = new SidecarFile { Written = DateTime.Now.ToString("s"), Structures = structures.ToList(), Canisters = liveCanisters.ToList() };
+                // Loaded records the world holds are replaced by the live lists; every other one is kept as it was.
                 var notInWorld = new SidecarFile
                 {
                     Structures = loaded.Structures.Where(r => !inWorld.ContainsKey(r)).ToList(),
                     Production = loaded.Production,
-                    Canisters = loaded.Canisters.Where(r => !canistersInWorld.ContainsKey(r)).ToList(),
+                    Canisters = canisters == null ? loaded.Canisters.ToList() : loaded.Canisters.Where(r => !canistersInWorld.ContainsKey(r)).ToList(),
                 };
                 var data = SidecarCodec.Merge(current, notInWorld, _ => false);
-                int kept = data.Structures.Count - live.Count;
                 if (data.Structures.Count == 0 && data.Production.Count == 0 && data.Canisters.Count == 0 && !File.Exists(path)) return null;
-                string tmp = path + ".tmp";
+                string tmp = CommitOrder.TmpPath(path, Interlocked.Increment(ref tmpSeq));
                 File.WriteAllText(tmp, SidecarCodec.Serialize(data));
-                return new PendingWrite { Tmp = tmp, Path = path, Structures = data.Structures.Count, Kept = kept, Canisters = data.Canisters.Count, KeptCanisters = data.Canisters.Count - liveCanisters.Count };
+                return new PendingWrite
+                {
+                    Tmp = tmp, Path = path, Order = order,
+                    Structures = data.Structures.Count, Kept = data.Structures.Count - structures.Count,
+                    Canisters = data.Canisters.Count, KeptCanisters = data.Canisters.Count - liveCanisters.Count,
+                };
             }
         }
     }
