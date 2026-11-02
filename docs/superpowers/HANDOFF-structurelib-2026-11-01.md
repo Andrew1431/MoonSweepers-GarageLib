@@ -1,9 +1,11 @@
 # StructureLib handoff — all 13 tasks complete, final review clean (2026-11-02)
 
-Written for Ryan and Andrew. Everything below is on branch `structurelib` in Ryan's clone
-(`C:\Users\ryguy\projects\moonsweep\MoonSweepers-GarageLib`), 34 commits ahead of the branch point `e700a21`,
-**nothing pushed, nothing merged**. The dev-tooling plan (`new-package.ps1`, `dev.ps1`) landed separately on branch
-`worktree-dev-tooling` (worktree `.claude/worktrees/dev-tooling`, 4 commits off `origin/main`), also unpushed.
+Written for Ryan and Andrew. Since 2026-11-02 the work is **two stacked pull requests**: the library on branch
+`structurelib-lib`, PR #2 against `main` (https://github.com/Andrew1431/MoonSweepers-GarageLib/pull/2), and
+SandPower on branch `structurelib`, PR #1 against `structurelib-lib`
+(https://github.com/Andrew1431/MoonSweepers-GarageLib/pull/1), whose diff is the mod alone. `origin/main` and the
+dev-tooling branch are already merged into the library branch. SandPower was built on the library branch and
+removed in its last commit, so the mod's development history is in PR #2 and its files are in PR #1.
 
 - Spec: `docs/superpowers/specs/2026-11-01-structurelib-design.md` (binding authority)
 - Plan: `docs/superpowers/plans/2026-11-01-structurelib.md`; tooling plan `docs/superpowers/plans/2026-11-01-dev-tooling.md`
@@ -76,22 +78,19 @@ Deferred minor findings of this plan: the `Minor deferred:` lines in the ledger
 
 ## Before merging (Ryan or Andrew)
 
-1. **Merge `origin/main` into `structurelib` by hand** (a dry run showed conflicts in `GarageLib.slnx`, `README.md`,
-   `modpack.json`; `Directory.Build.targets` and `CONTRIBUTING.md` auto-merge):
-   - `modpack.json`: main is `0.2.0` with `["GarageLib","SharedUpgrades","LateGameVehicles"]` (Ms Choppa was pulled
-     out and `modpack-v0.2.0` is already released). Resolve to version `0.3.0`, packages
-     `GarageLib, SharedUpgrades, LateGameVehicles, StructureLib, SandPower`, description merged. Do **not** keep this
-     branch's `0.1.0`/`MsChoppa` side: `package.ps1 -Release` would skip the modpack as "already released".
-   - `GarageLib.slnx`: both sides add a `/mods/` folder; keep both `SharedUpgrades` and `SandPower` plus this branch's
-     `/tests/` folder and the StructureLib/ExampleStructure entries.
-   - `README.md`: keep main's rewritten install section; add this branch's StructureLib and SandPower rows.
-2. **Fix `package.ps1`'s release note** (both sides append `' and GarageLib'` for every non-GarageLib package): SandPower
+1. **Merge PR #2 (the library) first, with a merge commit or a rebase, not a squash.** A squash would make PR #1's
+   diff against `main` show the whole library again. Then retarget PR #1 to `main`; its diff stays mod-only.
+2. **Fix `package.ps1`'s release note** (it appends `' and GarageLib'` for every non-GarageLib package): SandPower
    needs StructureLib, StructureLib needs nothing. Derive the dependency from the csproj `ProjectReference` or a small
-   name→dependency map. Do it in the merge commit or right after, before any `-Release`.
-3. Then merge `worktree-dev-tooling` (independent; touches `new-package.ps1`, `new-vehicle.ps1`, `dev.ps1`,
-   `templates/**`, `tests/scripts/**`, one section each in `README.md`/`CONTRIBUTING.md`).
-4. The work-order board was unreachable in every session; hot-path edits on this branch: `Directory.Build.targets`,
-   `GarageLib.slnx`, `modpack.json`, `README.md`, `CONTRIBUTING.md` (`package.ps1` untouched but needs item 2).
+   name→dependency map. Do it before any `-Release`.
+3. **While the PRs are stacked:** anything a mod needs from the library (a fix, a feature) goes on `structurelib-lib`,
+   never on a mod branch; the mod branch then rebases onto it. The next structure mod is a branch off
+   `structurelib-lib` with a PR against it, touching only `mods/<Name>/**` plus its registration lines
+   (`modpack.json`, `GarageLib.slnx`, root `README.md` row, `docs/cargo-registry.md` row). Two open mod PRs
+   conflict on those registration lines by one line each; resolve by keeping both.
+4. The work-order board was unreachable in every session; hot-path edits on these branches: `Directory.Build.targets`,
+   `GarageLib.slnx`, `modpack.json`, `README.md`, `CONTRIBUTING.md`, `package.ps1`, `src/GarageLib/GarageLib.csproj`,
+   `shared/**`.
 
 ## Needs a human (by hand, in this order)
 
