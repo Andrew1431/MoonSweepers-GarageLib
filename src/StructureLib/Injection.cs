@@ -104,6 +104,7 @@ namespace StructureLib
             // Nothing in the scene references the clone until something is built from it; keep asset GC off it.
             clone.hideFlags |= HideFlags.DontUnloadUnusedAsset;
             if (d.BuildModel != null) ApplyBuildModel(d, clone, donor);
+            ApplyPorts(d, clone);
             clones[d.Id] = clone;
             CoreLog.Info($"Definition for '{d.Id}' (kind {d.Kind}) cloned from kind {d.BaseStructure} ('{donor.displayName}'): '{clone.displayName}', ${clone.priceDollars}");
             return clone;
@@ -140,6 +141,35 @@ namespace StructureLib
                 CoreLog.Info($"'{d.Id}': BuildModel gave '{model.name}'; it replaces the prefab of base kind {d.BaseStructure}" + (skins != null && skins.Length > 0 ? $" and its {skins.Length} skin(s)" : ""));
             }
             catch (Exception e) { CoreLog.Error($"'{d.Id}': BuildModel threw; using the model of base kind {d.BaseStructure}: {e}"); }
+        }
+
+        // The clone's conveyorPorts become the resolved ports (MoonStructures.PortsOf), each named "sl:<cargo byte>:<Name>"
+        // so the PortCargo prefix can answer its cargo from the name alone. The game's belt snapping, joining and labels
+        // read this array. A throw keeps the donor's ports.
+        static void ApplyPorts(StructureDefinition d, MoonDepotBuildDefinition clone)
+        {
+            var ports = d.ResolvedPorts;
+            if (ports == null) return;
+            try
+            {
+                var arr = new Il2CppReferenceArray<MoonDepotBuildDefinition.ConveyorPort>(ports.Count);
+                for (int i = 0; i < ports.Count; i++)
+                {
+                    var p = ports[i];
+                    var cp = new MoonDepotBuildDefinition.ConveyorPort();
+                    cp.name = PortRules.EncodeName(p.Cargo.Value, p.Name);
+                    cp.position = p.Position;
+                    cp.direction = p.Direction;
+                    cp.output = p.Output;
+                    arr[i] = cp;
+                }
+                clone.conveyorPorts = arr;
+                var back = clone.conveyorPorts;
+                var names = new List<string>();
+                for (int i = 0; i < (back?.Length ?? 0); i++) names.Add(back[i] == null ? "null" : $"'{back[i].name}' {(back[i].output ? "out" : "in")} ({back[i].position.x:F2},{back[i].position.y:F2},{back[i].position.z:F2})");
+                CoreLog.Info($"'{d.Id}': ports from {d.PortRule}: {PortResolver.Describe(ports)}; clone conveyorPorts now {back?.Length ?? -1} [{string.Join(", ", names)}]");
+            }
+            catch (Exception e) { CoreLog.Error($"'{d.Id}': writing the clone's conveyorPorts threw; it keeps the ports of base kind {d.BaseStructure}: {e}"); }
         }
 
         // Clones belong to one world; drop (and destroy) them, and any BuildModel templates, when a different world asks.

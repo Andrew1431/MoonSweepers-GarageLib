@@ -30,9 +30,21 @@ namespace StructureLib.Patches
             try
             {
                 CoreLog.Info($"World loading ({hook}): freezing the structure registry");
-                MoonStructures.Freeze(kind => Donor(world, kind));
+                MoonStructures.Freeze(kind => Donor(world, kind), kind => Shape(world, kind));
             }
             catch (Exception e) { CoreLog.Error("Freezing the structure registry failed: " + e); }
+        }
+
+        // The donor's ports and footprint (port resolution and the footprint warning). A read that throws gives no shape:
+        // the structure then inherits no donor ports.
+        internal static DonorShape Shape(MoonWorld world, int kind)
+        {
+            try { return PortResolver.ReadDonor(world.BuildDefinition(kind)); }
+            catch (Exception e)
+            {
+                CoreLog.Error($"Reading the ports of donor kind {kind} threw: {e.Message}");
+                return null;
+            }
         }
 
         // The traits Rules.CheckDonor needs, read from the vanilla build definition of a donor kind. A read that throws

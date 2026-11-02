@@ -41,12 +41,23 @@ namespace StructureLib
         /// <summary>Makes the structure a power source. Null if it supplies none.</summary>
         public PowerDefinition Power;
 
+        /// <summary>
+        /// Belt ports. Null inherits the base structure's ports, each given a cargo by name (IN_SAND sand, any other dust)
+        /// matched against the processor's slots. An empty list removes them. Each port's cargo must be an Input slot's
+        /// (input) or the Output slot's (output), checked when the registry freezes; a structure that breaks that is dropped.
+        /// </summary>
+        public List<PortDefinition> Ports;
+
         /// <summary>Kind number assigned at freeze. -1 until then.</summary>
         public int Kind { get; internal set; } = -1;
         /// <summary>Plugin GUID that registered the structure.</summary>
         public string Owner { get; internal set; }
         /// <summary>That plugin's version, read from its BepInEx metadata at registration ("unknown" if not found).</summary>
         public string OwnerVersion { get; internal set; }
+
+        // The ports the clone carries and the rule that chose them, set when the registry freezes (MoonStructures.PortsOf).
+        internal List<PortDefinition> ResolvedPorts;
+        internal string PortRule;
 
         public override string ToString() => $"{Id} (kind {Kind})";
     }

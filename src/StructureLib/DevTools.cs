@@ -46,7 +46,7 @@ namespace StructureLib
             BindBelts(cfg);
             SelfTest.Subscribe();
             ScreenshotMenu = cfg.Bind("Dev", "ScreenshotMenu", false, "Dev build: 5 s after the self-test, open the build menu on the example lamp and save a screenshot to BepInEx/cache/structurelib/menu.png.");
-            CoreLog.Info($"[dev] AutoLoadSlot={AutoLoadSlot.Value} AllowSlot1={AllowSlot1.Value} SelfTest={RunSelfTest.Value} ScreenshotMenu={ScreenshotMenu.Value} AutoRemove={AutoRemove.Value} AutoSave={AutoSave.Value} ForcePower={ForcePower.Value} AutoBuildViaPlan={AutoBuildViaPlan.Value} AutoBuild='{AutoBuild.Value}' AutoFeed='{AutoFeed.Value}' AutoBelt='{AutoBelt.Value}' DumpCards={DumpCards.Value}");
+            CoreLog.Info($"[dev] AutoLoadSlot={AutoLoadSlot.Value} AllowSlot1={AllowSlot1.Value} SelfTest={RunSelfTest.Value} ScreenshotMenu={ScreenshotMenu.Value} AutoRemove={AutoRemove.Value} AutoSave={AutoSave.Value} ForcePower={ForcePower.Value} AutoBuildViaPlan={AutoBuildViaPlan.Value} AutoBuild='{AutoBuild.Value}' AutoFeed='{AutoFeed.Value}' AutoBelt='{AutoBelt.Value}' DumpCards={DumpCards.Value} RegisterBadPorts={RegisterBadPorts.Value}");
             // MoonStructures.Register reads this static at plugin Load time; prove the interop read works that early.
             try { CoreLog.Info($"[dev] MoonProductionSave.MaxSlots at Load = {MoonProductionSave.MaxSlots}"); }
             catch (Exception e) { CoreLog.Error("[dev] reading MoonProductionSave.MaxSlots at Load threw: " + e); }
@@ -417,7 +417,7 @@ namespace StructureLib
     }
 
     // In-game assertions. Line formats are fixed; tooling greps them.
-    internal static class SelfTest
+    internal static partial class SelfTest
     {
         static int passed, failed;
         static string logPath;
@@ -443,6 +443,7 @@ namespace StructureLib
             ProcessorChecks(lamp);
             PowerChecks();
             SandPowerChecks();
+            PortChecks();
             int expected = KindAllocator.KindOf("ryanhartwig.example-lamp");
             Assert("example-kind-hashed", lamp != null && lamp.Kind == expected,
                 lamp == null ? "'ryanhartwig.example-lamp' is not registered (is ExampleStructure installed?)" : $"kind {lamp.Kind}, expected {expected}");

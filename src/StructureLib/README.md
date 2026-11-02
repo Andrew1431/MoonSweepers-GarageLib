@@ -48,13 +48,24 @@ MoonStructures.Register(new StructureDefinition
   `Slot.Input`, at least one `Slot.Batch`, and one `Slot.Output` unless `ProducesPower`. Capacities are kilograms. A
   cycle starts when every Batch slot can be filled to capacity from an Input slot of the same cargo and the Output
   slot has room; it moves the batch into the Output slot at the same mass (4 kg in, 4 kg out).
+- **Ports** (`StructureDefinition.Ports`, a `List<PortDefinition>`): belt ports, each `Name` (unique), `Position`
+  (structure-local, Unity axes, metres; vanilla ports sit at deck height 0.85), `Direction` (the belt's flow direction at
+  the port, for inputs and outputs alike: every vanilla donor's ports point local +X), `Output`, `Cargo`.
+  `PortDefinition.In(...)` / `.Out(...)` build one. Null inherits the donor's ports, each given a cargo by name
+  (`IN_SAND` sand, any other dust, kept when an Input slot holds it, else the first Input slot's; an output carries
+  the Output slot's cargo); an empty list removes them. When the registry freezes, an input port whose cargo no Input
+  slot holds, an output port whose cargo is not the Output slot's, a duplicate name or a second output port drops the
+  structure (logged); a port outside the donor footprint plus 1.2 m is only a warning. The cloned definition's
+  `conveyorPorts` are rebuilt from them, named `sl:<cargo byte>:<Name>` so `MoonWorld.PortCargo` (prefixed) answers the
+  port's cargo; the game shows "input" / "output" and "<structure name> input", never that name.
+  `MoonStructures.PortsOf(def)` returns the resolved list.
 - **Power** (`StructureDefinition.Power`, with a `ProducesPower` processor): `PeakKw`, `BatteryKwh`, `Range`,
   `SupplyMode.Fuel`. Each burned batch adds half the battery. See [Power](#power) for the rules and limits.
 - **Events** (main thread): `MoonStructures.Built` (`StructureBuilt`: definition, depot id, depot record, the decorated
   view) when a modded structure is built and again for each one restored at load; `Removed` (depot id) after one is
   removed; `CycleFinished` (`CycleFinished`: definition, depot id, live production state) when a modded machine
   finishes a cycle. A handler that throws is logged and does not stop the game.
-- **Lookups:** `Definition(kind)`, `Definition(id)`, `IsModded(kind)`, `IsModded(MoonCargo)`, `CargoDefinition(...)`,
+- **Lookups:** `Definition(kind)`, `Definition(id)`, `PortsOf(def)`, `IsModded(kind)`, `IsModded(MoonCargo)`, `CargoDefinition(...)`,
   `All`, `AllCargo`, `Frozen`, `Disabled`.
 
 ## How it works
@@ -98,6 +109,7 @@ The recon behind all this, with the evidence, is in
 | Save | Sidecar for depots (pose included), production states and modded-cargo canisters; orphans kept; reload restores (see [Save audit](#save-audit)) | A modded robot dock's robots-off setting (resets on load); a modded garage holding vehicles | |
 | Cargo | Names, unit mass, price, canister round trip (see [Cargo audit](#cargo-audit)) | Depositing modded cargo at the collector; co-op cargo events; `CanisterTint` (not applied) | Whether `EmitCargo` keeps the modded value on a belt |
 | Processors | Cycle, batch moved at the same mass, `CycleFinished`, loading through `CrewProcessorLoad` | Walker loading (`LoadProcessor` refuses: "Not a production machine"); belt input (`FeedProcessor`, `EnterMachine`, `PortCargo`) and canister input into a machine: unsupported and untested, the vanilla port path refuses modded machines | Belt output (an outfeed belt, `EmitCargo`) |
+| Ports | Declared ports (and a port on a port-less donor) written into the cloned definition as `sl:<cargo>:<Name>`; `PortCargo` answers the declared cargo; the game shows "input"/"output" and "<name> input/output"; refusal at freeze for a port cargo no slot holds | | Belts placed by hand onto modded ports; ports inherited from a donor (no example uses them) |
 | Power | Machines on a vanilla grid's surplus and batteries; fuel generators charge, supply modded machines and keep their charge across saves; a modded-only group gets a negative grid id | Fuel generators feeding vanilla machines; power links drawn to modded structures; `SupplyMode.Solar`; `Power` without a `Processor`; a generator's `RunningKw` (ignored) | |
 | Co-op | Manifest built and compared with itself | Graceful degradation for a client missing a mod | Both two-player cases (identical mods; client missing a mod) |
 

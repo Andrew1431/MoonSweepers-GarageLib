@@ -133,10 +133,27 @@ namespace StructureLib
         /// <summary>A registered cargo by id (null if unknown, or dropped when the registry froze).</summary>
         public static CargoDefinition CargoDefinition(string id) => id != null && cargoById.TryGetValue(id, out var d) ? d : null;
 
+        /// <summary>
+        /// The ports a structure's cloned definition carries, resolved when the registry froze (model Port_* nodes, else
+        /// <see cref="StructureDefinition.Ports"/>, else the base structure's ports). Null before the freeze or for a
+        /// dropped structure.
+        /// </summary>
+        public static IReadOnlyList<PortDefinition> PortsOf(StructureDefinition def) => def?.ResolvedPorts;
+
+        // Ports from the structure's model file (Port_* nodes). Null until the model loader sets it; a null or empty answer
+        // falls through to the declared ports.
+        internal static Func<StructureDefinition, List<PortDefinition>> ModelPortsProvider = null;
+
+        // The belt-side allowance for a port outside the footprint (MoonWorld.PortReach, 1.20 m in this build).
+        static float PortReach
+        {
+            get { try { return MoonWorld.PortReach; } catch (Exception) { return 1.2f; } }
+        }
+
         // Assigns kinds and validates everything. donorLookup reads the vanilla build definition for a base kind.
         // Validation works on copies; the live tables change only once everything is decided, and Frozen is set last.
         // If anything throws, the library disables itself for the session (Frozen stays false) instead of half-working.
-        internal static void Freeze(Func<int, DonorTraits> donorLookup)
+        internal static void Freeze(Func<int, DonorTraits> donorLookup, Func<int, DonorShape> shapeLookup = null)
         {
             if (Frozen || Disabled) return;
             try
@@ -199,6 +216,34 @@ namespace StructureLib
                     dropped++;
                 }
 
+                // Ports: resolve (model, declared, donor), then each port's cargo must be a slot's; outside the footprint
+                // plus the belt reach is only a warning.
+                var resolved = new Dictionary<string, (List<PortDefinition> Ports, string Rule)>(StringComparer.Ordinal);
+                foreach (var def in structures.Values.OrderBy(d => d.Id, StringComparer.Ordinal).ToList())
+                {
+                    var shape = shapeLookup?.Invoke(def.BaseStructure);
+                    var r = PortResolver.Resolve(def, shape, ModelPortsProvider);
+                    var slots = (def.Processor?.Slots ?? new List<Slot>()).Select(s => (s.Role, s.Cargo.Id)).ToList();
+                    var portErrors = def.Processor == null && def.Ports == null && r.Rule.StartsWith("donor", StringComparison.Ordinal)
+                        ? new List<string>() // a plain structure keeps its donor's ports and vanilla cargo
+                        : PortRules.CheckPorts(def.Id, r.Ports.Select(p => (p.Name, p.Output, p.Cargo.Id)).ToList(), slots);
+                    if (portErrors.Count > 0)
+                    {
+                        foreach (var e in portErrors) CoreLog.Error(e);
+                        CoreLog.Error($"Structure '{def.Id}' dropped.");
+                        structures.Remove(def.Id);
+                        dropped++;
+                        continue;
+                    }
+                    if (shape != null)
+                        foreach (var p in r.Ports)
+                        {
+                            string warn = PortRules.WarnOutsideFootprint(def.Id, p.Name, (p.Position.x, p.Position.y, p.Position.z), (shape.HalfFootprint.x, shape.HalfFootprint.y), PortReach);
+                            if (warn != null) CoreLog.Warn(warn);
+                        }
+                    resolved[def.Id] = r;
+                }
+
                 // Commit.
                 byId.Clear();
                 foreach (var kv in structures) byId[kv.Key] = kv.Value;
@@ -209,6 +254,7 @@ namespace StructureLib
                 {
                     def.Kind = kinds[def.Id];
                     byIndex[def.Kind] = def;
+                    if (resolved.TryGetValue(def.Id, out var r)) { def.ResolvedPorts = r.Ports; def.PortRule = r.Rule; }
                 }
 
                 CoreLog.Info($"Registry frozen: structures={byIndex.Count}" + (dropped > 0 ? $" ({dropped} dropped)" : "") +

@@ -15,13 +15,14 @@ namespace StructureLib
     internal static partial class DevTools
     {
         internal static ConfigEntry<string> AutoBelt;
-        internal static ConfigEntry<bool> DumpCards;
+        internal static ConfigEntry<bool> DumpCards, RegisterBadPorts;
         static bool cardsDumped;
 
         static void BindBelts(ConfigFile cfg)
         {
             AutoBelt = cfg.Bind("Dev", "AutoBelt", "", "Dev build: ';'-separated '<from>:<port>-><to>:<port>' belts to build 3 s after the AutoBuild step (before AutoFeed). <from>/<to> is a structure id or vanilla kind number, resolved to the depot AutoBuild built for that entry; <port> is the definition's port name (IN_SAND), a PortName or PortLabel when only one port has it, or a 0-based index into the definition's conveyorPorts (the '[dev] ports of' lines print all three); the runtime port is the one at that definition port's position. Each belt goes through the game's TryBuildConveyor.");
             DumpCards = cfg.Bind("Dev", "DumpCards", false, "Dev build: once in game (30 s after load, so modded pictures are rendered), write every build-menu card picture (vanilla and modded) to BepInEx/cache/structurelib/cards/<kind>-<name>.png.");
+            RegisterBadPorts = cfg.Bind("Dev", "RegisterBadPorts", false, "Dev build: the example plugin also registers ryanhartwig.example-bad-ports, whose input port takes a cargo no slot holds; the registry must drop it at freeze (self-test ports-rules-logged).");
         }
 
         static void TickBelts(float gameT)
@@ -323,6 +324,119 @@ namespace StructureLib
                 if (outTex != null) UnityEngine.Object.Destroy(outTex);
             }
             return $"{w}x{h} from a {tex.width}x{tex.height} texture";
+        }
+    }
+
+    // Port self-tests: the clones carry the declared ports under "sl:" names, the burner gained the port its donor lacks,
+    // PortCargo answers a modded port's cargo, and a structure whose port cargo matches no slot was dropped at freeze.
+    internal static partial class SelfTest
+    {
+        const string BadPortsId = "ryanhartwig.example-bad-ports";
+
+        static void PortChecks()
+        {
+            var world = CoreState.World ?? CoreState.FindWorld();
+            var grinder = MoonStructures.Definition(GrinderId);
+            var burner = MoonStructures.Definition(BurnerId);
+            string noWorld = world == null ? "no MoonWorld found" : null;
+            string noGrinder = noWorld ?? (grinder == null ? $"'{GrinderId}' is not registered (is ExampleStructure installed?)" : null);
+
+            Check("ports-on-clone", noGrinder, () =>
+            {
+                var ports = world.BuildDefinition(grinder.Kind)?.conveyorPorts;
+                var names = Names(ports);
+                CoreLog.Info($"[selftest] grinder clone conveyorPorts: {Describe(ports)}");
+                bool ok = names.Count == 2 && names[0] == "sl:0:Dust in" && names[1] == "sl:250:Grit out" && !ports[0].output && ports[1].output &&
+                          Vector3.Distance(ports[0].position, new Vector3(-2.95f, 0.85f, 0f)) < 0.01f && Vector3.Distance(ports[1].position, new Vector3(2.95f, 0.85f, 0f)) < 0.01f;
+                return (ok, $"expected 'sl:0:Dust in' in at (-2.95,0.85,0) and 'sl:250:Grit out' out at (2.95,0.85,0); got {Describe(ports)}");
+            });
+
+            Check("ports-burner-added", noWorld ?? (burner == null ? $"'{BurnerId}' is not registered" : null), () =>
+            {
+                var donor = world.BuildDefinition(MoonWorld.SolarPostKind)?.conveyorPorts;
+                var mine = world.BuildDefinition(burner.Kind)?.conveyorPorts;
+                CoreLog.Info($"[selftest] solar post ports: {Describe(donor)}; burner clone ports: {Describe(mine)}");
+                var names = Names(mine);
+                return ((donor?.Length ?? 0) == 0 && names.Count == 1 && names[0] == "sl:250:Grit in" && !mine[0].output,
+                    $"solar post has {donor?.Length ?? -1} port(s), burner clone {Describe(mine)}; expected 0 and one input 'sl:250:Grit in'");
+            });
+
+            int depot = grinder != null && world != null ? DepotOfKind(world, grinder.Kind) : -1;
+            Check("ports-cargo-answer", noGrinder ?? (depot < 0 ? "no example grinder depot (AutoBuild it)" : null), () => CargoAnswer(world, depot));
+
+            if (!DevTools.RegisterBadPorts.Value)
+                CoreLog.Info("[selftest] [Dev] RegisterBadPorts is false: ports-rules-logged not applicable");
+            else Check("ports-rules-logged", null, () =>
+            {
+                const string expected = "port 'Sand in' takes sand but no input slot does";
+                string text = ReadWholeLog();
+                bool logged = text != null && text.Contains($"'{BadPortsId}': {expected}") && text.Contains($"Structure '{BadPortsId}' dropped.");
+                bool gone = MoonStructures.Definition(BadPortsId) == null;
+                return (logged && gone, $"Definition('{BadPortsId}') {(gone ? "is null" : "still exists")}; the log {(text == null ? "could not be read" : logged ? "has" : "lacks")} \"'{BadPortsId}': {expected}\" and the drop line");
+            });
+        }
+
+        // The grinder's runtime ports (ConveyorPorts near the depot, its own) matched to the clone's definition ports by
+        // position under the depot's view pose; PortCargo is asked for each definition port (it takes the definition's
+        // struct, not the runtime one). PortName and PortLabel are logged to show what the game displays.
+        static (bool, string) CargoAnswer(MoonWorld world, int depot)
+        {
+            var rec = world.depots.get_Item(depot);
+            var def = world.BuildDefinition(rec.kind);
+            var runtime = AutoBelter.RuntimePorts(world, rec);
+            var view = UnityEngine.Object.FindFirstObjectByType<MoonDepotConstruction>()?.ViewOf(rec.id);
+            if (view == null) return (false, $"depot {depot} has no view");
+            var ports = def.conveyorPorts;
+            var problems = new List<string>();
+            var answers = new Dictionary<string, MoonCargo>();
+            for (int i = 0; i < (ports?.Length ?? 0); i++)
+            {
+                var p = ports[i];
+                var at = view.transform.position + view.transform.rotation * p.position;
+                var match = runtime.Where(r => r.output == p.output).OrderBy(r => Vector3.Distance(r.position, at)).FirstOrDefault();
+                float dist = match == null ? -1f : Vector3.Distance(match.position, at);
+                var cargo = MoonWorld.PortCargo(p);
+                answers[p.name] = cargo;
+                CoreLog.Info($"[selftest] grinder depot {depot} port '{p.name}': PortName '{MoonWorld.PortName(def, p)}' PortLabel '{MoonWorld.PortLabel(def, p)}' PortCargo {(int)cargo}; runtime {(match == null ? "none" : $"'{match.label}' at {AutoBelter.V(match.position)} ({dist:F3} m)")}");
+                if (match == null || dist > MoonWorld.PortTolerance) problems.Add($"no runtime port at '{p.name}' ({runtime.Count} runtime)");
+            }
+            if (!answers.TryGetValue("sl:0:Dust in", out var dust) || dust != MoonCargo.Dust) problems.Add($"'Dust in' -> {(answers.ContainsKey("sl:0:Dust in") ? ((int)dust).ToString() : "missing")}, expected Dust (0)");
+            if (!answers.TryGetValue("sl:250:Grit out", out var grit) || grit != (MoonCargo)250) problems.Add($"'Grit out' -> {(answers.ContainsKey("sl:250:Grit out") ? ((int)grit).ToString() : "missing")}, expected 250");
+            return (problems.Count == 0, problems.Count == 0 ? "" : string.Join("; ", problems));
+        }
+
+        static List<string> Names(Il2CppInterop.Runtime.InteropTypes.Arrays.Il2CppReferenceArray<MoonDepotBuildDefinition.ConveyorPort> ports)
+        {
+            var names = new List<string>();
+            for (int i = 0; i < (ports?.Length ?? 0); i++) names.Add(ports[i]?.name);
+            return names;
+        }
+
+        static string Describe(Il2CppInterop.Runtime.InteropTypes.Arrays.Il2CppReferenceArray<MoonDepotBuildDefinition.ConveyorPort> ports)
+        {
+            if (ports == null) return "null";
+            var parts = new List<string>();
+            for (int i = 0; i < ports.Length; i++)
+            {
+                var p = ports[i];
+                parts.Add(p == null ? "null" : $"'{p.name}' {(p.output ? "out" : "in")} {AutoBelter.V(p.position)} dir {AutoBelter.V(p.direction)}");
+            }
+            return $"{ports.Length} [{string.Join(", ", parts)}]";
+        }
+
+        // The whole BepInEx log so far (freeze errors come before the self-test's watch starts).
+        static string ReadWholeLog()
+        {
+            foreach (var l in BepInEx.Logging.Logger.Listeners.OfType<BepInEx.Logging.DiskLogListener>())
+                try { l.LogWriter?.Flush(); } catch (Exception) { }
+            string path = Path.Combine(BepInEx.Paths.BepInExRootPath, "LogOutput.log");
+            try
+            {
+                using var fs = new FileStream(path, FileMode.Open, FileAccess.Read, FileShare.ReadWrite | FileShare.Delete);
+                using var reader = new StreamReader(fs, Encoding.UTF8);
+                return reader.ReadToEnd();
+            }
+            catch (Exception) { return null; }
         }
     }
 }

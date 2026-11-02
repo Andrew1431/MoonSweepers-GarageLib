@@ -69,6 +69,12 @@ namespace ExampleStructure
                         Slot.Output("Grit", grit, 10),
                     },
                 },
+                // Belt ports at the pressure chamber's own IN and OUT (deck height 0.85; belts flow along local +X).
+                Ports = new()
+                {
+                    PortDefinition.In("Dust in", Cargo.Dust, new Vector3(-2.95f, 0.85f, 0f), Vector3.right),
+                    PortDefinition.Out("Grit out", grit, new Vector3(2.95f, 0.85f, 0f), Vector3.right),
+                },
             }, Guid);
 
             // A fuel generator on the solar post's model (the battery bank prefab has no MoonProductionView; see the recon
@@ -94,7 +100,44 @@ namespace ExampleStructure
                         Slot.Batch("Burning", grit, 1),
                     },
                 },
+                // The solar post has no ports; this adds one at its -X footprint edge, flowing +X like every donor's.
+                Ports = new() { PortDefinition.In("Grit in", grit, new Vector3(-0.90f, 0.85f, 0f), Vector3.right) },
             }, Guid);
+
+            // Dev builds of StructureLib only ([Dev] RegisterBadPorts): a structure whose input port takes sand while no
+            // slot does. The library must drop it when the registry freezes; the self-test checks that it did.
+            if (StructureLibDevFlag("RegisterBadPorts"))
+                MoonStructures.Register(new StructureDefinition
+                {
+                    Id = BadPortsId,
+                    Name = "Example bad ports",
+                    Category = "Production",
+                    Price = 100m,
+                    BaseStructure = MoonWorld.PressureChamberKind,
+                    Processor = new ProcessorDefinition
+                    {
+                        RunningKw = 1,
+                        CycleSeconds = 4,
+                        Slots = { Slot.Input("Dust", Cargo.Dust, 10), Slot.Batch("Grinding", Cargo.Dust, 2), Slot.Output("Grit", grit, 10) },
+                    },
+                    Ports = new() { PortDefinition.In("Sand in", Cargo.Sand, new Vector3(-2.95f, 0.85f, 0f), Vector3.right) },
+                }, Guid);
+        }
+
+        public const string BadPortsId = "ryanhartwig.example-bad-ports";
+
+        // A [Dev] bool from StructureLib's own config (it loads first, as our dependency). False when absent (release builds).
+        static bool StructureLibDevFlag(string key)
+        {
+            try
+            {
+                if (BepInEx.Unity.IL2CPP.IL2CPPChainloader.Instance.Plugins.TryGetValue(StructureLib.Plugin.Guid, out var info) &&
+                    info.Instance is BasePlugin lib &&
+                    lib.Config.TryGetEntry<bool>(new BepInEx.Configuration.ConfigDefinition("Dev", key), out var entry))
+                    return entry.Value;
+            }
+            catch (System.Exception e) { L.LogWarning($"Reading StructureLib's [Dev] {key} failed: {e.Message}"); }
+            return false;
         }
     }
 }
