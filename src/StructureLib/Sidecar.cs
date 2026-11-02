@@ -37,9 +37,6 @@ namespace StructureLib
         /// <summary>Structure ids in the file loaded for this session (orphans included).</summary>
         internal static List<string> LoadedIds() { lock (gate) return loaded.Structures.Select(s => s.Id).ToList(); }
 
-        /// <summary>True when the sidecar file existed when this session's save was loaded.</summary>
-        internal static bool LoadedFileExisted { get; private set; }
-
         /// <summary>Structure ids kept as orphans at the last inject.</summary>
         internal static readonly List<string> Orphans = new();
 
@@ -91,7 +88,6 @@ namespace StructureLib
                 CoreLog.Info("Sidecar: in game without a save load (new game?); starting with an empty sidecar state");
                 loadedRoot = null;
                 loaded = new SidecarFile();
-                LoadedFileExisted = false;
                 inWorld.Clear();
                 Orphans.Clear();
                 live = new();
@@ -107,14 +103,12 @@ namespace StructureLib
                 loadedRoot = root;
                 loadedSnapshot = snapshot;
                 loaded = new SidecarFile();
-                LoadedFileExisted = false;
                 inWorld.Clear();
                 Orphans.Clear();
                 live = new();
                 string path = PathFor(root);
                 if (path == null) { CoreLog.Warn("Sidecar load: save root unknown, starting empty"); return; }
                 if (!File.Exists(path)) { CoreLog.Info($"Sidecar: none at {CoreLog.Redact(path)} (no modded structures saved yet)"); return; }
-                LoadedFileExisted = true;
                 try
                 {
                     loaded = SidecarCodec.Deserialize(File.ReadAllText(path));
@@ -259,10 +253,7 @@ namespace StructureLib
                 for (int i = 0; i < c.Count; i++)
                 {
                     var w = c.get_Item(i);
-                    if (w == null) continue;
-                    var share = ShareOf(w);
-                    CoreLog.Debug($"Save: depot {s.id} contribution {i}: {CoreLog.Redact(w.player)} dollars '{w.dollars.ToString()}' -> {share.Amount}");
-                    r.Contributions.Add(share);
+                    if (w != null) r.Contributions.Add(ShareOf(w));
                 }
             return r;
         }
@@ -322,7 +313,8 @@ namespace StructureLib
             }
         }
 
-        // Called by the finalizer, after the stripped records are back. Puts them back in their original order.
+        // Called by the finalizer. Pass 2 removed from the highest index down, so walking `removed` backwards appends the
+        // records in their original relative order.
         internal static void PutBackDepots(MoonLooseDustSnapshot state, List<MoonDepotSnapshot> removed)
         {
             if (removed == null) return;
@@ -330,7 +322,7 @@ namespace StructureLib
             if (removed.Count > 0)
             {
                 if (state?.depots == null) { CoreLog.Error($"Save: cannot put {removed.Count} modded structures back: the snapshot has no depot list"); return; }
-                for (int i = 0; i < removed.Count; i++) { state.depots.Add(removed[i]); n++; }
+                for (int i = removed.Count - 1; i >= 0; i--) { state.depots.Add(removed[i]); n++; }
             }
             var stats = LastWrite;
             if (stats != null) stats.PutBack = n;

@@ -679,12 +679,13 @@ namespace StructureLib
         // its view was spawned (Built with a view).
         static void ReloadChecks(StructureDefinition lamp)
         {
-            // Not applicable when this run builds the lamp itself, or when the save has no sidecar file at all.
-            if (lamp == null || DevTools.AutoBuildNames(LampId) || !Sidecar.LoadedFileExisted) return;
+            // Not applicable when this run builds the lamp itself, or when the loaded sidecar holds no lamp record (no file,
+            // or a file written after the lamp was removed: the normal state). It fails only when a saved lamp did not
+            // come back into the world.
+            if (lamp == null || DevTools.AutoBuildNames(LampId) || !Sidecar.LoadedIds().Contains(LampId)) return;
             var world = CoreState.World ?? CoreState.FindWorld();
             Check("reload-restores", world == null ? "no MoonWorld found" : null, () =>
             {
-                if (!Sidecar.LoadedIds().Contains(LampId)) return (false, $"the save's {Sidecar.FileName} existed at load but held no '{LampId}' record");
                 int depot = DepotOfKind(world, lamp.Kind);
                 if (depot < 0) return (false, $"the sidecar held '{LampId}' but world.depots ({world.depots?.Count}) has no record of kind {lamp.Kind}");
                 if (!builtViews.Contains(depot)) return (false, $"MoonStructures.Built was not raised with a view for restored depot {depot}");
