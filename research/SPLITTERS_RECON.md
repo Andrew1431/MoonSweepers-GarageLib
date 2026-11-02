@@ -406,3 +406,25 @@ port flows +Z.
   (`valid=True routable=True length=2.53`).
 - So the belt tool needs room for a 180° turn. In the self-test, place a side output's target off the line (or add
   spacing), or rotate the target so the belt runs straight.
+
+## Self-test facts (Task 6)
+
+From the BeltBoxes self-test runs (`.superpowers/sdd/2026-11-02-belt-boxes/task-6-logs/`, `src/StructureLib/DevBoxes.cs`):
+- Side belts: with 5 m between the two boxes' footprints (`[Dev] AutoBuildGap = 1.3,1.3,5,1.3`), both side-to-side
+  U-belts (splitter Left to merger Left, Right to Right) built on the first route, 9.81 m each; the straight Forward to
+  Back belt was 5.00 m. A single 5 m gap for every neighbour would put the line's ends past the build reach.
+- `TryRemoveConveyor(walker, id, out reason)` removes a belt ("Belt removed."). Its riders become loose canisters lying
+  in its path, and a new belt along that path is refused ("Blocked by an object.") until they are gone. Removing them
+  (`RemoveCanister`) lets the rebuild through.
+- `RemoveStructureNow` on a router keeps every belt joined to it. The canister waiting at the end of a belt into the
+  removed router stays there (rider, not moving). The game wrote a save within 3 s of the removal without being asked.
+  The belts then save and reload ending (or starting) at nothing, with their canisters.
+- After that reload, a test of `MachineWithPort(end, false) >= 0` took every open end for joined (the first reload
+  attempt released nothing); checked against `world.depots` instead, all three were open (the raw answer was not
+  logged). Taking the canister off the end of each open belt out of the splitter let the queue move up and the
+  splitter hop within 0.2 s.
+- A 3 kg grit canister hopped whole: `CargoRouted` 3 kg, and the new canister held 3 kg at capacity 3 (the rewrite
+  after `EmitCargo` worked).
+- A sand canister at the end of the merger's output belt holds the merger (the burner refuses sand). Every input belt
+  then fills, and once the sand is removed the next six hops came Right, Back, Left, Right, Back, Left (turn order
+  from wherever the turn stood).

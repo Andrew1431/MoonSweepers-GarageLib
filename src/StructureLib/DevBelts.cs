@@ -14,7 +14,7 @@ namespace StructureLib
     // writes every build-menu card picture to a PNG.
     internal static partial class DevTools
     {
-        internal static ConfigEntry<string> AutoBelt, AutoBuildLayout;
+        internal static ConfigEntry<string> AutoBelt, AutoBuildLayout, AutoBuildGap;
         internal static ConfigEntry<bool> DumpCards, RegisterBadPorts, SunOverhead, RegisterBoxProbe;
         static bool cardsDumped, sunSet;
 
@@ -24,8 +24,9 @@ namespace StructureLib
             DumpCards = cfg.Bind("Dev", "DumpCards", false, "Dev build: once in game (30 s after load, so modded pictures are rendered), write every build-menu card picture (vanilla and modded) to BepInEx/cache/structurelib/cards/<kind>-<name>.png.");
             RegisterBadPorts = cfg.Bind("Dev", "RegisterBadPorts", false, "Dev build: the example plugin also registers ryanhartwig.example-bad-ports, whose input port takes a cargo no slot holds; the registry must drop it at freeze (self-test ports-rules-logged).");
             SunOverhead = cfg.Bind("Dev", "SunOverhead", false, "Dev build: 5 s after a world loads, set the lunar clock (MoonSolarSystem.SetLunarTime) so the sun stands overhead at the walker, so vanilla solar panels supply power (the belt checks need the pressure chamber to make sand). The clock runs in real time, so a cloned save is often at night.");
-            AutoBuildLayout = cfg.Bind("Dev", "AutoBuildLayout", "ring", "Dev build: where AutoBuild puts its entries. 'ring': 10 m from the walker at 0, 90, 180, 270, 45, ... deg from its facing (a refused site tries the next free heading). 'line': in entry order along the structures' +X (their belt flow axis at yaw 0), 1.3 m between neighbouring footprints, centred 6 m to the walker's side, so each entry's output faces the next entry's input (a chain of three or more machines).");
-            CoreLog.Info($"[dev] AutoBuildLayout={AutoBuildLayout.Value}");
+            AutoBuildLayout = cfg.Bind("Dev", "AutoBuildLayout", "ring", "Dev build: where AutoBuild puts its entries. 'ring': 10 m from the walker at 0, 90, 180, 270, 45, ... deg from its facing (a refused site tries the next free heading). 'line': in entry order along the structures' +X (their belt flow axis at yaw 0), AutoBuildGap metres between neighbouring footprints, centred 6 m to the walker's side, so each entry's output faces the next entry's input (a chain of three or more machines).");
+            AutoBuildGap = cfg.Bind("Dev", "AutoBuildGap", "1.3", "Dev build: with AutoBuildLayout = line, the metres between neighbouring footprints. One number is every gap; a comma-separated list gives the gaps in entry order (the first is between entries 1 and 2) and its last number repeats for any later gap. A belt box's side belts need room to swing round (at 1.3 m a side-port U-turn is refused: 'Turn too tight'), and the end entries must stay within the build reach (18 m from the walker is refused), so widen only the gaps that need it.");
+            CoreLog.Info($"[dev] AutoBuildLayout={AutoBuildLayout.Value} AutoBuildGap={AutoBuildGap.Value}");
         }
 
         static void TickBelts(float gameT)
@@ -113,6 +114,24 @@ namespace StructureLib
                 string from = sides[0].Trim(), to = sides.Length > 1 ? sides[1].Trim() : "?";
                 CoreLog.Info($"[dev] belt {from} -> {to} id={r.Belt} ok={r.Ok} reason='{r.Reason}'");
             }
+        }
+
+        /// <summary>
+        /// Builds one more '&lt;from&gt;:&lt;port&gt;-&gt;&lt;to&gt;:&lt;port&gt;' belt now and appends its result to Results (the belt-boxes
+        /// self-test rebuilds the belt it removed). Null when there is no world or walker.
+        /// </summary>
+        internal static Result BuildOne(string entry)
+        {
+            var world = CoreState.World ?? CoreState.FindWorld();
+            var walkers = UnityEngine.Object.FindObjectsByType<MoonWalker>(FindObjectsSortMode.None);
+            var walker = walkers != null && walkers.Length > 0 ? walkers[0] : null;
+            if (world == null || walker == null) return null;
+            var r = new Result { Entry = entry };
+            Results.Add(r);
+            try { Build(world, walker, r, new HashSet<int>()); }
+            catch (Exception e) { r.Reason = "threw " + e.GetType().Name + ": " + e.Message; }
+            CoreLog.Info($"[dev] belt (rebuilt) {entry} id={r.Belt} ok={r.Ok} reason='{r.Reason}'");
+            return r;
         }
 
         static void Build(MoonWorld world, MoonWalker walker, Result r, HashSet<int> logged)
@@ -611,6 +630,12 @@ namespace StructureLib
             waitSince = -1f;
             enteredMark = entered.Count;
             phaseUntil = Time.unscaledTime + 90f;
+            // The chamber makes sand only on solar power: without the solar tracker (94) no sand canister ever rides this belt.
+            if (!DevTools.AutoBuildNames("94"))
+            {
+                CoreLog.Info("[selftest] AutoBuild names no solar tracker (94), so the chamber makes no sand: belt-in-refuses-cargo not applicable");
+                StartGrit(world);
+            }
         }
 
         static void TickRefuse(MoonWorld world, float now)
@@ -675,20 +700,24 @@ namespace StructureLib
         // (recon fact (c)); the game boards it.
         static int Spawn(MoonWorld world, float d, MoonCargo cargo, out string why) => Spawn(world, inPath, d, cargo, out why);
 
-        internal static int Spawn(MoonWorld world, MoonConveyorPath path, float d, MoonCargo cargo, out string why)
+        internal static int Spawn(MoonWorld world, MoonConveyorPath path, float d, MoonCargo cargo, out string why) => Spawn(world, path, d, cargo, 1.0, out why);
+
+        // The same with kg in the canister (its capacity at least kg): the belt-boxes heavy-canister check puts 3 kg.
+        internal static int Spawn(MoonWorld world, MoonConveyorPath path, float d, MoonCargo cargo, double kg, out string why)
         {
             why = null;
             var p = path.Point(d);
             var up = path.Up(p);
             if (up.sqrMagnitude < 0.5f) up = p.normalized;
             string player = MoonWorld.LocalPlayer;
-            world.DevSetCarriedDust(player, 1.0);
+            world.DevSetCarriedDust(player, kg);
             if (!world.PackDustCanister(player, p + up * 0.5f, up, out int id)) { why = "PackDustCanister refused"; return -1; }
             if (!world.canisters.ContainsKey(id)) { why = $"canister {id} is not in world.canisters"; return -1; }
             var c = world.canisters.get_Item(id);
             var at = p + up * MoonWorld.BeltRideHeight;
             var rotation = new Il2CppSystem.Nullable<Quaternion>(c.rotation);
-            var moved = new MoonDroppedCanister(c.id, c.owner, c.kilograms, c.capacity, at, up, c.createdAt, rotation, cargo);
+            double kilograms = kg == 1.0 ? c.kilograms : kg;
+            var moved = new MoonDroppedCanister(c.id, c.owner, kilograms, Math.Max(c.capacity, kilograms), at, up, c.createdAt, rotation, cargo);
             moved.physicalPose = c.physicalPose;
             world.MoveCanisterRecord(moved, at, up, rotation);
             return id;
@@ -789,7 +818,8 @@ namespace StructureLib
             outTo = r.To;
             outPath = world.BeltPath(outBelt);
             if (outPath == null) { foreach (var n in OutNames) Assert(n, false, $"BeltPath({outBelt}) is null"); return; }
-            CoreLog.Info($"[selftest] belt output checks on belt {outBelt} (length {outPath.Length:F2} m) from grinder depot {outFrom} to depot {outTo}; grinder {StateText(world.ProductionOf(outFrom))}");
+            outRouter = RouterAt(world, outTo);
+            CoreLog.Info($"[selftest] belt output checks on belt {outBelt} (length {outPath.Length:F2} m) from grinder depot {outFrom} to depot {outTo}{(outRouter != null ? $" (router '{outRouter.Id}')" : "")}; grinder {StateText(world.ProductionOf(outFrom))}");
             outPhase = 1;
             outPhaseFrom = Time.unscaledTime;
             outUntil = outPhaseFrom + 40f;
@@ -839,6 +869,14 @@ namespace StructureLib
             var gaps = mine.Zip(mine.Skip(1), (a, b) => b.t - a.t).ToList();
             CoreLog.Info($"[selftest] belt-out-emits: CargoEmitted {mine.Count}x from depot {outFrom} on belt {outBelt} [{string.Join(", ", mine.Take(8).Select(x => $"{x.e.Cargo} {x.e.Kilograms} kg"))}]; gaps between emits [{string.Join(" ", gaps.Take(8).Select(g => g.ToString("F2")))}] s; first grit rider: {firstRider ?? "none"}; riders on belt {outBelt}: {RidersText(world, outBelt)}");
             Assert("belt-out-emits", ok, $"CargoEmitted of grit from depot {outFrom} on belt {outBelt}: {mine.Count} (all events {emitted.Count}); grit rider on the belt: {firstRider ?? "none"}; grinder {StateText(world.ProductionOf(outFrom))}");
+            // Both later checks take the belt's end to be a machine: a router takes no cargo in (it raises CargoRouted, not
+            // CargoEntered) and passes any cargo on, so a canister it refuses never waits there.
+            if (outRouter != null)
+            {
+                CoreLog.Info($"[selftest] the grinder's belt {outBelt} ends at router '{outRouter.Id}' depot {outTo}, not a machine: belt-chain-feeds and belt-save-clean not applicable (the beltboxes-* checks cover that chain)");
+                outPhase = 0;
+                return;
+            }
             outPhase = 2;
             outUntil = outPhaseFrom + 60f;
         }
@@ -918,6 +956,15 @@ namespace StructureLib
             loadedGrit = Sidecar.LoadedCanisters().Where(c => c.CargoId == GritId).Select(c => c.Id).ToList();
             outFrom = DepotOfKind(world, grinder.Kind);
             outTo = DepotOfKind(world, burner.Kind);
+            if (outFrom >= 0)
+                foreach (var kv in world.conveyors)
+                {
+                    if (kv.Value == null || world.MachineWithPort(kv.Value.start, true) != outFrom) continue;
+                    var router = RouterAt(world, world.MachineWithPort(kv.Value.end, false));
+                    if (router == null) continue;
+                    CoreLog.Info($"[selftest] the restored grinder's belt {kv.Key} ends at router '{router.Id}', not the burner: belt-save-clean (reload) not applicable (beltboxes-reload covers that chain)");
+                    return;
+                }
             if (outFrom < 0 || outTo < 0 || loadedGrit.Count == 0)
             {
                 CoreLog.Info($"[selftest] no restored grinder ({outFrom}), burner ({outTo}) or sidecar grit canister ({loadedGrit.Count}): belt output checks not applicable");
@@ -956,6 +1003,16 @@ namespace StructureLib
             Assert("belt-save-clean", ok, $"belt from grinder {outFrom} to burner {outTo}: {(outBelt >= 0 ? outBelt.ToString() : "none")}; sidecar grit canister riding it: {(found >= 0 ? $"{found} d {d:F2}" : "none")}; {burnerText}");
         }
 
+        static StructureDefinition outRouter;
+
+        /// <summary>The router definition of a depot (a belt box), or null for a machine, a vanilla kind or no depot.</summary>
+        internal static StructureDefinition RouterAt(MoonWorld world, int depot)
+        {
+            if (depot < 0 || world?.depots == null || !world.depots.ContainsKey(depot)) return null;
+            var d = MoonStructures.Definition(world.depots.get_Item(depot)?.kind ?? -1);
+            return d?.Router != null ? d : null;
+        }
+
         static void FailOut(int phase, string why)
         {
             int from = phase >= 3 ? 2 : Math.Max(1, phase) - 1;
@@ -967,14 +1024,23 @@ namespace StructureLib
     // [Dev] AutoBuildLayout = line: AutoBuild puts its entries on one line along the structures' local +X at yaw 0 (every
     // donor's flow axis; the tangent-plane projection of world +X, which the recon found to be the structures' +X near
     // slot-2's walker), in entry order, so each entry's +X output faces the next entry's input. Neighbours stand
-    // GapMetres apart between their footprints (half footprints along X from their build definitions; the chamber to the
+    // GapMetres ([Dev] AutoBuildGap, 1.3 m by default) apart between their footprints (half footprints along X from their build definitions; the chamber to the
     // press is then 10 m centre to centre, a 2.95 m belt). The line is centred on the walker along +X and SideMetres to
     // its side nearest 270 deg from its facing (slot-2 has vanilla structures ahead of the spawn point and at 90 deg),
     // which keeps every site within the build reach (the game refuses 18 m: "Move closer to the build site."). One site
     // per entry: a refused site is reported, not moved.
     internal static class AutoLine
     {
-        internal const float GapMetres = 1.3f, SideMetres = 6f, SideHeading = 270f;
+        internal const float SideMetres = 6f, SideHeading = 270f;
+
+        /// <summary>[Dev] AutoBuildGap: the gap after entry i (0-based) in metres; 1.3 when unset or unreadable.</summary>
+        internal static float GapMetres(int i)
+        {
+            var gaps = new List<float>();
+            foreach (var x in (DevTools.AutoBuildGap?.Value ?? "").Split(','))
+                if (float.TryParse(x.Trim(), System.Globalization.NumberStyles.Float, System.Globalization.CultureInfo.InvariantCulture, out float g) && g >= 0f) gaps.Add(g);
+            return gaps.Count == 0 ? 1.3f : gaps[Math.Min(i, gaps.Count - 1)];
+        }
         static readonly List<float> along = new();
 
         internal static bool On => string.Equals(DevTools.AutoBuildLayout?.Value?.Trim(), "line", StringComparison.OrdinalIgnoreCase);
@@ -996,13 +1062,13 @@ namespace StructureLib
             float x = 0f;
             for (int i = 0; i < half.Count; i++)
             {
-                if (i > 0) x += half[i - 1] + GapMetres + half[i];
+                if (i > 0) x += half[i - 1] + GapMetres(i - 1) + half[i];
                 along.Add(x);
             }
             if (half.Count == 0) return;
             float mid = ((along[0] - half[0]) + (along[half.Count - 1] + half[half.Count - 1])) / 2f;
             for (int i = 0; i < along.Count; i++) along[i] -= mid;
-            CoreLog.Info($"[dev] AutoBuild line: half footprints [{string.Join(", ", half.Select(h => h.ToString("F2")))}], centres along +X [{string.Join(", ", along.Select(a => a.ToString("F2")))}] m, {SideMetres:F0} m to the side");
+            CoreLog.Info($"[dev] AutoBuild line: half footprints [{string.Join(", ", half.Select(h => h.ToString("F2")))}], gaps [{string.Join(", ", Enumerable.Range(0, Math.Max(0, half.Count - 1)).Select(i => GapMetres(i).ToString("F2")))}] m, centres along +X [{string.Join(", ", along.Select(a => a.ToString("F2")))}] m, {SideMetres:F0} m to the side");
         }
 
         internal static (float h, Vector3 at, string where) Site(Transform walker, int index)

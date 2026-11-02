@@ -488,6 +488,7 @@ namespace StructureLib
             PortChecks();
             BeltChecks();
             OutChecks();
+            BoxChecks();
             ModelChecks();
             int expected = KindAllocator.KindOf("ryanhartwig.example-lamp");
             Assert("example-kind-hashed", lamp != null && lamp.Kind == expected,
@@ -545,9 +546,10 @@ namespace StructureLib
             if (OutPending) TickOutChecks();
             if (ModelPending) TickModels();
             if (SandChainPending) TickSandChain();
+            if (BoxPending) TickBoxes();
             if (artUntil >= 0f) { TickCardArt(); return; }
             if (renderUntil >= 0f) { TickRendered(); return; }
-            if (saveUntil >= 0f && cycleUntil < 0f && !PowerPending && sandOpen.Count == 0 && !BeltPending && !OutPending && !ModelPending && !SandChainPending) TickSaveWait();
+            if (saveUntil >= 0f && cycleUntil < 0f && !PowerPending && sandOpen.Count == 0 && !BeltPending && !OutPending && !ModelPending && !SandChainPending && !BoxPending) TickSaveWait();
         }
 
         // cardart-modded: CardArt answers something once nothing is pending, or after 5 s.
@@ -1133,6 +1135,15 @@ namespace StructureLib
             string[] names = { "power-node-registered", "power-grid-joined", "power-burner-supplies", "power-grinder-runs-on-burner", "power-no-burn-when-full" };
             string skip = burner == null ? $"'{BurnerId}' is not registered" : burnerDepot < 0 ? "no example burner depot in world.depots" : null;
             var feed = AutoFeeder.For(BurnerId);
+            // The checks time themselves from the burner's AutoFeed. A burner with no AutoFeed entry that AutoBelt feeds
+            // (straight from the grinder, or through belt boxes) runs on whatever the belt brings: nothing here applies.
+            if (skip == null && feed == null && BeltedInto(burnerDepot))
+            {
+                var into = AutoBelter.Results.First(r => r.Ok && r.To == burnerDepot);
+                var router = RouterAt(world, into.From);
+                CoreLog.Info($"[selftest] '{BurnerId}' has no AutoFeed entry and is belt-fed (belt {into.Belt} from depot {into.From}{(router != null ? $", router '{router.Id}'" : "")}): power checks not applicable; {PowerText(world.ProductionOf(burnerDepot))}");
+                return;
+            }
             skip ??= feed == null ? "no AutoFeed entry for the burner" : feed.Error;
             if (skip != null) { foreach (var n in names) Assert(n, false, skip); return; }
             float now = Time.unscaledTime;
