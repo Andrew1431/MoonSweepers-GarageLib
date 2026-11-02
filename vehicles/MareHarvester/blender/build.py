@@ -1,6 +1,6 @@
 # Mare harvester concept: Wide line tier 4. A combine harvester for the Moon: a 16.36 m header of orange rollers and
 # disc brushes hung from trussed booms and suspension stays, four crawler tracks, a cab perched on a pedestal, a
-# towering silo hopper and a swung-out unloading auger. Run from the repo root:
+# towering silo hopper. Run from the repo root:
 #   "C:\Program Files\Blender Foundation\Blender 4.5\blender.exe" -b --factory-startup --python vehicles/MareHarvester/blender/build.py
 import os, sys
 import bmesh
@@ -165,21 +165,6 @@ for k, (px, py) in enumerate(ring):
     qx, qy = ring[(k + 1) % 14]
     kit.rod(f"CatwalkPost{k}", (px, py, 10.95), (px, py, 11.75), 0.025, STEEL, r, 6)
     kit.rod(f"CatwalkRail{k}", (px, py, 11.75), (qx, qy, 11.75), 0.03, ORANGE, r, 6)
-
-# ---------------------------------------------------------------- unloading auger, swung out to the left
-AX, AY = 1.75, SY + 1.75
-kit.cyl("AugerRiser", 0.32, 6.4, (AX, AY, 7.0), WHITE, r, "Z", 14, 0)
-for z in (5.0, 7.5, 9.5):
-    kit.rod(f"AugerBracket{z}", (AX, AY, z), (1.2, SY + 1.3, z), 0.08, BLACK, r, 6)
-kit.cyl("AugerElbow", 0.42, 0.9, (AX, AY, 10.3), BLACK, r, "Z", 14, 0.02)
-tip = (11.2, AY - 0.3, 9.6)
-kit.rod("AugerTube", (AX, AY, 10.3), tip, 0.32, WHITE, r, 14)
-for t in (0.3, 0.55, 0.8):
-    p = [AX + (tip[0] - AX) * t, AY + (tip[1] - AY) * t, 10.3 + (tip[2] - 10.3) * t]
-    kit.rod(f"AugerBand{t}", (p[0] - 0.15, p[1], p[2] + 0.011), (p[0] + 0.15, p[1], p[2] - 0.011), 0.34, ORANGE, r, 14)
-kit.rod("AugerStay", (0, SY, 12.0), (7.0, AY - 0.15, 9.9), 0.04, STEEL, r, 6)
-kit.rod("AugerSpout", tip, (tip[0] + 0.2, tip[1], tip[2] - 1.1), 0.36, BLACK, r, 12)
-kit.cyl("AugerTipLamp", 0.1, 0.16, (tip[0], tip[1], tip[2] + 0.38), LAMP, r, "Z", 10, 0)
 
 # ---------------------------------------------------------------- engine pod at the rear
 kit.box("EnginePod", (3.6, 1.6, 1.8), (0, 4.9, 3.6), WHITE, r, 0.08)
