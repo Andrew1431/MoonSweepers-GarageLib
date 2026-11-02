@@ -29,7 +29,8 @@ namespace StructureLib
 
         /// <summary>
         /// Optional full model builder. Return the structure's root GameObject parented under <c>ctx.Parent</c>.
-        /// Null builds the base structure's model and then calls <see cref="DecorateModel"/>.
+        /// Called once per world; the result is the template the game copies for every one built (it replaces the base
+        /// structure's prefab). Null builds the base structure's model. <see cref="DecorateModel"/> runs on each copy either way.
         /// </summary>
         public Func<ModelContext, GameObject> BuildModel;
         /// <summary>Optional tweak applied after the model is built (tint, extra parts).</summary>
@@ -142,8 +143,12 @@ namespace StructureLib
     public sealed class StructureBuilt
     {
         public StructureDefinition Definition;
-        public int Kind;
-        public Vector3 Position;
+        /// <summary>The game's depot id (key of <c>MoonWorld.depots</c>).</summary>
+        public int DepotId;
+        /// <summary>The depot record: kind, owner, position, yaw.</summary>
+        public MoonDepotSnapshot Record;
+        /// <summary>The live view root, already decorated and named <c>"ModStructure_" + Definition.Id</c>.</summary>
+        public GameObject View;
     }
 
     /// <summary>Payload of <see cref="MoonStructures.CycleFinished"/>.</summary>

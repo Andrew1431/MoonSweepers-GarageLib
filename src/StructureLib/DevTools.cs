@@ -19,15 +19,19 @@ namespace StructureLib
         internal static ConfigEntry<bool> AllowSlot1, RunSelfTest, ScreenshotMenu;
         internal static ConfigEntry<string> AutoBuild, AutoFeed;
         static float menuT, gameT;
-        static bool loadRequested, selfTestRan, menuShot;
+        static bool loadRequested, selfTestRan, menuShot, autoBuilt;
+
+        /// <summary>What AutoBuild did per entry (id or kind number as written in the config): ok, depot id, reason.</summary>
+        internal static readonly Dictionary<string, (bool ok, int depot, string reason)> BuildResults = new(StringComparer.Ordinal);
 
         internal static void Bind(ConfigFile cfg)
         {
             AutoLoadSlot = cfg.Bind("Dev", "AutoLoadSlot", -1, "Dev build: load the existing save in folder slot-<n> from the main menu. -1 = off. Slot 1 is the real save and is refused unless AllowSlot1 is true.");
             AllowSlot1 = cfg.Bind("Dev", "AllowSlot1", false, "Dev build: let AutoLoadSlot and SelfTest touch slot-1 (the real save). Leave false.");
             RunSelfTest = cfg.Bind("Dev", "SelfTest", false, "Dev build: run the in-game self-test 20 s after a world loads and log [selftest] lines.");
-            AutoBuild = cfg.Bind("Dev", "AutoBuild", "", "Dev build: comma-separated structure ids or vanilla kind numbers to build once in game. (Not used yet.)");
+            AutoBuild = cfg.Bind("Dev", "AutoBuild", "", "Dev build: comma-separated structure ids or vanilla kind numbers to build once, 10 s after a world loads, 8 m apart behind (or beside) the walker. An entry whose kind already has a depot reuses it.");
             AutoFeed = cfg.Bind("Dev", "AutoFeed", "", "Dev build: '<structureId>:<cargoId|Dust|Sand|Stone>:<kg>' to load into a built structure. (Not used yet.)");
+            SelfTest.Subscribe();
             ScreenshotMenu = cfg.Bind("Dev", "ScreenshotMenu", false, "Dev build: 5 s after the self-test, open the build menu on the example lamp and save a screenshot to BepInEx/cache/structurelib/menu.png.");
             CoreLog.Info($"[dev] AutoLoadSlot={AutoLoadSlot.Value} AllowSlot1={AllowSlot1.Value} SelfTest={RunSelfTest.Value} ScreenshotMenu={ScreenshotMenu.Value} AutoBuild='{AutoBuild.Value}' AutoFeed='{AutoFeed.Value}'");
             // MoonStructures.Register reads this static at plugin Load time; prove the interop read works that early.
@@ -45,6 +49,16 @@ namespace StructureLib
             }
             if (!MoonSession.InGame) { gameT = 0; return; }
             gameT += dt;
+            if (!autoBuilt && gameT > 10f)
+            {
+                autoBuilt = true;
+                if (!string.IsNullOrWhiteSpace(AutoBuild.Value))
+                {
+                    string refusal = SlotRefusal();
+                    if (refusal != null) CoreLog.Warn("[dev] AutoBuild skipped: " + refusal);
+                    else AutoBuilder.Run(AutoBuild.Value);
+                }
+            }
             if (RunSelfTest.Value && !selfTestRan && gameT > 20f)
             {
                 selfTestRan = true;
@@ -84,6 +98,100 @@ namespace StructureLib
             if (!chosen.EndsWith(suffix)) { CoreLog.Warn($"[dev] AutoLoadSlot: active slot resolved to '{chosen.Substring(chosen.LastIndexOf('/') + 1)}', refusing"); return; }
             CoreLog.Info($"[dev] AutoLoadSlot: loading slot index {target} (folder slot-{slot})");
             MoonSession.StartShift();
+        }
+    }
+
+    // [Dev] AutoBuild: builds each entry through the game's own TryBuildDepot with a null placement check (fact (e)),
+    // entry i at 8 * (i + 1) m from the local walker. Behind first: slot-2 has vanilla structures 12 m and 22 m ahead of
+    // the spawn point. A refused site is retried to the sides, then ahead. Tops the team wallet up when it is short.
+    internal static class AutoBuilder
+    {
+        static readonly float[] Headings = { 180f, 90f, 270f, 0f };
+
+        internal static void Run(string spec)
+        {
+            var entries = spec.Split(',').Select(s => s.Trim()).Where(s => s.Length > 0).ToList();
+            var world = CoreState.World ?? CoreState.FindWorld();
+            var walkers = UnityEngine.Object.FindObjectsByType<MoonWalker>(FindObjectsSortMode.None);
+            var walker = walkers != null && walkers.Length > 0 ? walkers[0] : null;
+            if (world == null || walker == null)
+            {
+                foreach (var e in entries) Report(e, false, -1, world == null ? "no MoonWorld" : "no MoonWalker");
+                return;
+            }
+            for (int i = 0; i < entries.Count; i++)
+            {
+                try { Build(world, walker, entries[i], i); }
+                catch (Exception e) { Report(entries[i], false, -1, "threw " + e.GetType().Name + ": " + e.Message); }
+            }
+        }
+
+        static void Build(MoonWorld world, MoonWalker walker, string entry, int index)
+        {
+            int kind;
+            if (!int.TryParse(entry, out kind))
+            {
+                var d = MoonStructures.Definition(entry);
+                if (d == null || !MoonStructures.IsModded(d.Kind)) { Report(entry, false, -1, "no registered structure with this id"); return; }
+                kind = d.Kind;
+            }
+            int existing = SelfTest.DepotOfKind(world, kind);
+            if (existing >= 0)
+            {
+                CoreLog.Info($"[dev] AutoBuild: '{entry}' (kind {kind}) already has depot {existing} in this world; reusing it");
+                Report(entry, true, existing, "reused existing depot");
+                return;
+            }
+            var def = world.BuildDefinition(kind);
+            if (def == null) { Report(entry, false, -1, $"no build definition for kind {kind}"); return; }
+            EnsureMoney(world, def.priceDollars);
+
+            var wt = walker.transform;
+            var up = wt.position.normalized;
+            float dist = 8f * (index + 1);
+            bool ok = false;
+            string reason = "";
+            int id = -1;
+            foreach (float h in Headings)
+            {
+                var at = wt.position + Quaternion.AngleAxis(h, up) * wt.forward * dist;
+                var before = DepotIds(world);
+                ok = world.TryBuildDepot(walker, at.normalized, 0f, out reason, null, kind);
+                if (ok) foreach (var kv in world.depots) if (!before.Contains(kv.Key)) { id = kv.Key; break; }
+                CoreLog.Info($"[dev] AutoBuild: '{entry}' (kind {kind}) at {dist:F0} m, heading {h:F0} deg from facing: ok={ok} reason='{reason}'");
+                if (ok) break;
+            }
+            Report(entry, ok, id, reason);
+        }
+
+        // DevAddMoney is a no-op in this build; the wallet is team-wide, so SetTeamDollars is the fallback.
+        static void EnsureMoney(MoonWorld world, int price)
+        {
+            string player = MoonWorld.LocalPlayer;
+            decimal have = SelfTest.DecimalOf(world.WalletDollars(player));
+            if (have >= price) return;
+            decimal target = price + 100;
+            world.DevAddMoney(player, new Il2CppSystem.Decimal((double)(target - have)));
+            decimal now = SelfTest.DecimalOf(world.WalletDollars(player));
+            if (now < price)
+            {
+                world.SetTeamDollars(new Il2CppSystem.Decimal((double)target));
+                now = SelfTest.DecimalOf(world.WalletDollars(player));
+            }
+            CoreLog.Info($"[dev] AutoBuild: wallet ${have} was short of ${price}; now ${now}");
+        }
+
+        static HashSet<int> DepotIds(MoonWorld world)
+        {
+            var s = new HashSet<int>();
+            if (world.depots != null) foreach (var kv in world.depots) s.Add(kv.Key);
+            return s;
+        }
+
+        static void Report(string entry, bool ok, int depot, string reason)
+        {
+            DevTools.BuildResults[entry] = (ok, depot, reason);
+            CoreLog.Info($"[dev] built {entry} depot={depot} ok={ok} reason='{reason}'");
         }
     }
 
@@ -256,11 +364,79 @@ namespace StructureLib
             Finish();
         }
 
+        // AutoBuild placed the example lamp: the [dev] built line said ok, the world holds a depot of its kind, its view
+        // was decorated and renamed (and Built was raised), and removing it refunds part or all of its price, drops the
+        // record and raises Removed.
+        const string LampId = "ryanhartwig.example-lamp";
+
+        static void BuildChecks(StructureDefinition lamp)
+        {
+            var world = CoreState.World ?? CoreState.FindWorld();
+            string noLamp = lamp == null ? "example lamp not registered" : null;
+            string noWorld = world == null ? "no MoonWorld found" : noLamp;
+            Check("build-modded-ok", noLamp, () =>
+            {
+                if (!DevTools.BuildResults.TryGetValue(LampId, out var r))
+                    return (false, $"no [dev] built line for '{LampId}' (AutoBuild='{DevTools.AutoBuild.Value}')");
+                return (r.ok, $"[dev] built {LampId} depot={r.depot} ok={r.ok} reason='{r.reason}'");
+            });
+            int depot = -1;
+            Check("build-modded-depot-kind", noWorld, () =>
+            {
+                depot = DepotOfKind(world, lamp.Kind);
+                return (depot >= 0, $"world.depots ({world.depots?.Count}) has no record of kind {lamp.Kind}");
+            });
+            Check("build-modded-view-decorated", noLamp, () =>
+            {
+                string name = "ModStructure_" + lamp.Id;
+                var view = GameObject.Find(name);
+                if (view == null) return (false, $"no GameObject named '{name}'");
+                if (view.transform.Find("ExampleLampTag") == null) return (false, $"'{name}' has no child 'ExampleLampTag'");
+                if (depot >= 0 && !builtEvents.Contains(depot)) return (false, $"MoonStructures.Built was not raised for depot {depot}");
+                return (true, null);
+            });
+            Check("remove-modded-refund", noWorld ?? (depot < 0 ? "no example lamp depot to remove" : null), () =>
+            {
+                decimal refund = DecimalOf(world.StructureRefund(depot));
+                decimal price = lamp.Price;
+                CoreLog.Info($"[selftest] refund for depot {depot} ('{lamp.Id}', price ${price}): ${refund} = {(price != 0 ? refund / price : 0):0.###} of the price");
+                if (!(refund > 0 && refund <= price)) return (false, $"StructureRefund({depot}) = {refund}, expected > 0 and <= {price}");
+                world.RemoveStructureNow(depot);
+                if (world.depots.ContainsKey(depot)) return (false, $"depot {depot} is still in world.depots after RemoveStructureNow");
+                if (!removedEvents.Contains(depot)) return (false, $"MoonStructures.Removed was not raised for depot {depot}");
+                return (true, null);
+            });
+        }
+
+        static readonly HashSet<int> builtEvents = new(), removedEvents = new();
+
+        // Records the library's events so the checks can see they fired. Called once from DevTools.Bind.
+        internal static void Subscribe()
+        {
+            MoonStructures.Built += b => { if (b != null) builtEvents.Add(b.DepotId); };
+            MoonStructures.Removed += id => removedEvents.Add(id);
+        }
+
+        internal static int DepotOfKind(MoonWorld world, int kind)
+        {
+            if (world?.depots == null) return -1;
+            foreach (var kv in world.depots)
+                if (kv.Value != null && kv.Value.kind == kind) return kv.Key;
+            return -1;
+        }
+
+        internal static decimal DecimalOf(Il2CppSystem.Decimal d)
+        {
+            try { return decimal.Parse(d.ToString(), System.Globalization.NumberStyles.Any, System.Globalization.CultureInfo.InvariantCulture); }
+            catch (Exception) { return (decimal)(double)d; }
+        }
+
         // True once nothing more is coming for this structure's card art (no render pending).
         static bool ArtSettled(StructureDefinition d) => !IconRenderer.Pending(d);
 
         static void Finish()
         {
+            BuildChecks(MoonStructures.Definition(LampId));
             Done();
             FinishedAt = Time.unscaledTime;
         }

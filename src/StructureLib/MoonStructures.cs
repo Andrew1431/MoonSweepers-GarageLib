@@ -23,9 +23,12 @@ namespace StructureLib
         public static IReadOnlyCollection<StructureDefinition> All => byId.Values;
         public static IReadOnlyCollection<CargoDefinition> AllCargo => cargoById.Values;
 
-        /// <summary>Fired on the main thread after a modded structure is built.</summary>
+        /// <summary>
+        /// Fired on the main thread when a modded structure's view is spawned: right after it is built, and again for each
+        /// saved one restored when a world loads. The view is already decorated.
+        /// </summary>
         public static event Action<StructureBuilt> Built;
-        /// <summary>Fired when a modded structure is removed (its kind).</summary>
+        /// <summary>Fired on the main thread after a modded structure is removed (its depot id).</summary>
         public static event Action<int> Removed;
         /// <summary>Fired when a modded processor finishes a cycle.</summary>
         public static event Action<CycleFinished> CycleFinished;
@@ -207,12 +210,12 @@ namespace StructureLib
 
         internal static void RaiseBuilt(StructureBuilt b)
         {
-            try { Built?.Invoke(b); } catch (Exception e) { CoreLog.Error($"Built handler threw for {b.Definition}: {e}"); }
+            try { Built?.Invoke(b); } catch (Exception e) { CoreLog.Error($"Built handler threw for {b.Definition} depot {b.DepotId}: {e}"); }
         }
 
-        internal static void RaiseRemoved(int kind)
+        internal static void RaiseRemoved(int depotId)
         {
-            try { Removed?.Invoke(kind); } catch (Exception e) { CoreLog.Error($"Removed handler threw for kind {kind}: {e}"); }
+            try { Removed?.Invoke(depotId); } catch (Exception e) { CoreLog.Error($"Removed handler threw for depot {depotId}: {e}"); }
         }
 
         internal static void RaiseCycleFinished(CycleFinished c)

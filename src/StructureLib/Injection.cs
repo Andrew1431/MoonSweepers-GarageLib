@@ -103,12 +103,46 @@ namespace StructureLib
             clone.name = "StructureLib_" + d.Id;
             // Nothing in the scene references the clone until something is built from it; keep asset GC off it.
             clone.hideFlags |= HideFlags.DontUnloadUnusedAsset;
+            if (d.BuildModel != null) ApplyBuildModel(d, clone, donor);
             clones[d.Id] = clone;
             CoreLog.Info($"Definition for '{d.Id}' (kind {d.Kind}) cloned from kind {d.BaseStructure} ('{donor.displayName}'): '{clone.displayName}', ${clone.priceDollars}");
             return clone;
         }
 
-        // Clones belong to one world; drop (and destroy) them when a different world asks.
+        // BuildModel runs once per world; its result becomes the clone's prefab (and every skin), so the game instantiates
+        // the mod's model wherever it would have instantiated the donor's. The template lives under an inactive holder,
+        // so its scripts never wake; the copies the game makes from it are active. A null result or a throw keeps the
+        // donor's model.
+        static GameObject modelHolder;
+
+        static void ApplyBuildModel(StructureDefinition d, MoonDepotBuildDefinition clone, MoonDepotBuildDefinition donor)
+        {
+            try
+            {
+                if (!Alive(modelHolder))
+                {
+                    modelHolder = new GameObject("StructureLib_Models");
+                    modelHolder.SetActive(false);
+                    modelHolder.hideFlags |= HideFlags.HideInHierarchy;
+                }
+                var model = d.BuildModel(new ModelContext { Definition = d, Parent = modelHolder.transform, Donor = donor });
+                if (model == null) { CoreLog.Warn($"'{d.Id}': BuildModel returned null; using the model of base kind {d.BaseStructure}"); return; }
+                if (model.transform.parent == null || model.transform.parent.Pointer != modelHolder.transform.Pointer)
+                    model.transform.SetParent(modelHolder.transform, false);
+                clone.prefab = model;
+                var skins = clone.skinPrefabs;
+                if (skins != null && skins.Length > 0)
+                {
+                    var own = new Il2CppReferenceArray<GameObject>(skins.Length);
+                    for (int i = 0; i < skins.Length; i++) own[i] = model;
+                    clone.skinPrefabs = own;
+                }
+                CoreLog.Info($"'{d.Id}': BuildModel gave '{model.name}'; it replaces the prefab of base kind {d.BaseStructure}" + (skins != null && skins.Length > 0 ? $" and its {skins.Length} skin(s)" : ""));
+            }
+            catch (Exception e) { CoreLog.Error($"'{d.Id}': BuildModel threw; using the model of base kind {d.BaseStructure}: {e}"); }
+        }
+
+        // Clones belong to one world; drop (and destroy) them, and any BuildModel templates, when a different world asks.
         static void SwitchWorld(MoonWorld world)
         {
             if (world.Pointer == cacheWorld) return;
@@ -119,6 +153,8 @@ namespace StructureLib
                 CoreLog.Info($"World changed: dropped {clones.Count} cloned definition(s)");
                 clones.Clear();
             }
+            if (Alive(modelHolder)) UnityEngine.Object.Destroy(modelHolder);
+            modelHolder = null;
             cacheWorld = world.Pointer;
         }
 
