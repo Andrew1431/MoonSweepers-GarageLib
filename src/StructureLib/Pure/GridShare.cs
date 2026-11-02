@@ -20,5 +20,16 @@ namespace StructureLib
             float fromBattery = charged ? demandKw - fromSun : 0f;
             return ((fromSun + fromBattery) / demandKw, fromSun, fromBattery);
         }
+
+        /// <summary>Share of a sun surplus that vanilla stores while charging (S0: 5.52 - 5.00 kW surplus charged 0.48 kW).</summary>
+        public const float ChargeEfficiency = 0.92f;
+
+        /// <summary>
+        /// While the grid's batteries charge, vanilla has already stored the sun surplus (× <see cref="ChargeEfficiency"/>)
+        /// that a modded machine then used. The kW to take back out of the batteries so the same energy is not counted
+        /// twice: the stored share of what the machine took from the sun, at most what was charging.
+        /// </summary>
+        public static float ChargeTakenKw(float fromSunKw, float chargingKw) =>
+            Math.Min(Math.Max(0f, fromSunKw) * ChargeEfficiency, Math.Max(0f, chargingKw));
     }
 }

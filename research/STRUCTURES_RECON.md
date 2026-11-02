@@ -197,6 +197,11 @@ chamber (96): Input dust 10 kg, Batch dust 2 kg, Output grit 10 kg, 1 kW, 4 s cy
 - **`RestoreProduction`** calls `NewProduction(id, depots[id].kind)` for every `snapshot.production` entry, then fills
   the stores from the snapshot. So a snapshot injected in a `RestoreProduction` prefix restores a modded machine like a
   vanilla one: saved `[0 0 6]` kg came back `[0 0 6]`.
+  - It creates states only for snapshot entries. So when a saved record no longer fits the definition's slots, the
+    library injects an *empty* snapshot for that machine; `NewProduction` then sizes it from the current definition.
+    The old record is kept verbatim but marked `Superseded`, so it is never offered again, and it is dropped once its
+    machine is no longer saved (`Pure/ProductionPlan`, fix round 1). This path is argued from the trace above and
+    unit-tested; it has not been run in game.
 - **The production save shape.** `MoonProductionSnapshot` holds `id, progress, running, charge` and `stores`, with no
   kind and no cargo. `stores` is a per-slot list of `MoonWalletSnapshot` owner shares. **The kilograms are in
   `pendingKilograms`; `dollars` is 0.** `MoonProductionSave.Write` runs inside the same `Serialize` as
@@ -206,6 +211,17 @@ chamber (96): Input dust 10 kg, Batch dust 2 kg, Output grit 10 kg, 1 kW, 4 s cy
   - `CrewProcessorLoad`: vanilla loads nothing into a modded machine, and no `InputSlot` call was seen.
     **Prefix:** for a modded machine, load the first Input slot that takes the cargo, up to its capacity, under the
     player's share through `MoonWorld.Put(store, player, kg)`.
+    - Who deducts the walker's cargo (fix round 1, checked on the vanilla chamber with
+      `DevSetCarriedDust(player, 30)`):
+      - The walker path is `LoadProcessor(player, machine, out reason)`. It loaded the chamber's 10 kg of free room,
+        took those 10 kg out of the walker's inventory itself (`InventoryKilograms` 54.54 → 44.54), and did **not**
+        call `CrewProcessorLoad`.
+      - Vanilla `CrewProcessorLoad(player, 2, Dust, 15)` on the then full chamber left the inventory untouched and the
+        slot at its 20 kg capacity, dropping the excess.
+      - So `CrewProcessorLoad` is an apply step whose caller has already deducted. The prefix matches vanilla: it caps
+        at capacity and never touches the walker's cargo.
+    - `LoadProcessor` on the grinder refuses with `'Not a production machine'` (another inlined kind check). Walker
+      loading into modded machines is not supported yet.
   - `CanStartCycle`: answers false with batch 0 for a modded kind, even with 6 kg of dust in slot 0 and `Power` 1. The
     recipe is hard-coded per vanilla kind.
     **Prefixes** on `CanStartCycle` / `TryStartCycle` / `FinishCycle` run a generic cycle (`Pure/ProcessorCycle`):
@@ -222,8 +238,8 @@ chamber (96): Input dust 10 kg, Batch dust 2 kg, Output grit 10 kg, 1 kW, 4 s cy
   - **`SolvePower`'s node list**: it is rebuilt from scratch on every call, from an inlined kind check (the patched
     `IsPowerNode` is not asked). A `PowerNode` added to `powerNodes` in a `SolvePower` prefix was gone after the call.
     So a modded processor is never a node, and stays at `Grid 0` / `Power 0`.
-  - Not checked: `LoadProcessor` (walker canister), `FeedProcessor` / `EnterMachine` (belts), `PortCargo`. They very
-    likely refuse modded machines the same way; belt and canister input is outside Task 10.
+  - `LoadProcessor` (walker) refuses a modded machine (above). Not checked: `FeedProcessor` / `EnterMachine` (belts)
+    and `PortCargo`, which very likely refuse it the same way. Belt and walker input is outside Task 10.
 - **Grid membership rule (a `SolvePower` postfix).** After the vanilla solve, each modded processor that is not a node
   attaches to the grid of the nearest vanilla node, provided the node's own `PowerRange(node.record.kind)` reaches the
   machine:
@@ -231,7 +247,16 @@ chamber (96): Input dust 10 kg, Batch dust 2 kg, Output grit 10 kg, 1 kW, 4 s cy
   - Demand is `RunningKw` while `Running`, else 0.
   - The machine is supplied (`Pure/GridShare`) first from the grid's sun surplus, `supplyKw - usedKw` (shared between
     modded machines in the same solve), then from its batteries when `storedKwh > 0` (S0 saw batteries discharge at any
-    rate). The battery share × dt / 3600 kWh is taken out of the `ChargeKwh` of the grid's panel states.
+    rate).
+  - Energy accounting (corrected in fix round 1):
+    - While charging, vanilla has already stored the sun surplus in the batteries (fact (b): `BatteryKw` = surplus ×
+      ~0.92).
+    - So the part of the modded machine's sun share that was being stored is taken back: `takenBack =
+      min(fromSun × 0.92, charging)`. `charging` is the sum of the grid's panels' positive `BatteryKw`, shared between
+      modded machines in the same solve (`GridShare.ChargeTakenKw`).
+    - `(fromBattery + takenBack) × dt / 3600` kWh then comes out of the `ChargeKwh` of the grid's panel states, in node
+      order.
+    - When the batteries are full or discharging, nothing was stored, so nothing is taken back from the sun share.
   - Satisfaction is the share of demand covered. An idle machine reads 1 when the grid has any surplus or charge, else
     0.
   - The state then gets `Grid` = that grid, `Power` = satisfaction, `DemandKw`, `UsedKw = DemandKw × satisfaction`, and
@@ -240,6 +265,11 @@ chamber (96): Input dust 10 kg, Batch dust 2 kg, Output grit 10 kg, 1 kW, 4 s cy
   - **Limits.** `powerGrids` holds `MoonPowerGrid` *structs*, which managed code cannot write back (the same hazard as
     `world.canisters`). So the grid's reported `demandKw` / `usedKw` / `satisfaction` leave out the modded demand, and
     the vanilla machines on that grid do not see it.
+    - The energy itself is conserved through the panels' `ChargeKwh`: the battery share, plus the sun share that was
+      being stored.
+    - Two things are not mirrored. A sun share used while the batteries are full was surplus vanilla wasted, so no
+      energy is created there. A vanilla machine's own satisfaction is not reduced when a modded machine takes the same
+      surplus first in the next solve.
   - No power link is drawn to the modded machine.
   - In game, the grinder attached to the new solar twin's grid 26 (5.8 m from the twin's footprint, range 24 m; supply
     3.38 kW) and ran its cycles.

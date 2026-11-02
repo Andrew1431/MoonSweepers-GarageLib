@@ -696,6 +696,9 @@ namespace StructureLib
         static readonly Dictionary<ProductionRecord, int> productionInWorld = new(ReferenceEqualityComparer.Instance);
         // Injected into the load snapshot, not yet seen in the world (ClaimProduction decides).
         static readonly List<(ProductionRecord r, int id)> productionPending = new();
+        // Loaded records superseded at this load (slots changed; the machine started empty), with the machine's depot id.
+        // Kept verbatim only while that machine is still saved, so removing it lets its old record go too.
+        static readonly Dictionary<ProductionRecord, int> productionSuperseded = new(ReferenceEqualityComparer.Instance);
         static IntPtr productionInjectedFor;
 
         // Under gate: a new load or session forgets the previous one's production bookkeeping.
@@ -703,6 +706,7 @@ namespace StructureLib
         {
             productionInWorld.Clear();
             productionPending.Clear();
+            productionSuperseded.Clear();
             RestoredProduction.Clear();
         }
 
@@ -815,15 +819,17 @@ namespace StructureLib
             return s;
         }
 
-        // RestoreProduction prefix (after RestoreDepots, so the injected structures are in world.depots): a loaded record
-        // goes into the load snapshot when its structure was injected and restored (inWorld, matched by structure id and
-        // saved depot id, so a depot restored under a new id takes its record along) and it still fits the definition's
-        // slots. Anything else stays in the file untouched. Same two passes as InjectDepots; the game list is filled
-        // outside `gate`.
+        // RestoreProduction prefix (after RestoreDepots, so the injected structures are in world.depots). Per record
+        // (ProductionPlan.Decide): it goes into the load snapshot when its structure was injected and restored (inWorld,
+        // matched by structure id and saved depot id, so a depot restored under a new id takes its record along) and it
+        // still fits the definition's slots. When the slots changed, the machine gets an empty snapshot instead
+        // (RestoreProduction only creates states for snapshot entries, and NewProduction sizes it from the current
+        // definition), and the old record is kept for its data, marked Superseded so it is never offered again. Anything
+        // else stays in the file untouched. Same two passes as InjectDepots; the game list is filled outside `gate`.
         internal static void InjectProduction(MoonLooseDustSnapshot snapshot)
         {
             if (snapshot == null) return;
-            var plan = new List<(ProductionRecord r, MoonProductionSnapshot s, int id)>();
+            var plan = new List<(ProductionRecord r, MoonProductionSnapshot s, int id, bool fresh)>();
             lock (gate)
             {
                 if (snapshot.Pointer == productionInjectedFor) return;
@@ -842,30 +848,39 @@ namespace StructureLib
                 foreach (var p in loaded.Production)
                 {
                     var d = MoonStructures.Definition(p.Id);
-                    string why;
-                    int id = -1;
-                    if (d?.Processor == null || !MoonStructures.IsModded(d.Kind)) why = "no installed mod registers it as a processor";
-                    else if (!depotOf.TryGetValue((p.Id, p.DepotId), out id)) why = $"its structure (depot {p.DepotId}) is not in the world";
-                    else if (taken.Contains(id)) why = $"depot {id} already has a production state in the save";
-                    else why = ProcessorLayout.RecordMismatch(p.SlotCargoIds, p.Stores.Count, SpecBuilder.SlotCargoIds(d));
-                    if (why != null)
+                    bool registered = d?.Processor != null && MoonStructures.IsModded(d.Kind);
+                    bool there = depotOf.TryGetValue((p.Id, p.DepotId), out int id);
+                    string mismatch = registered ? ProcessorLayout.RecordMismatch(p.SlotCargoIds, p.Stores.Count, SpecBuilder.SlotCargoIds(d)) : null;
+                    var action = ProductionPlan.Decide(registered, there, there && taken.Contains(id), p.Superseded, mismatch);
+                    if (action == ProductionRestoreAction.Keep)
                     {
+                        string why = !registered ? "no installed mod registers it as a processor"
+                            : !there ? $"its structure (depot {p.DepotId}) is not in the world"
+                            : p.Superseded ? "it was superseded by a fresh state after a slot change"
+                            : $"depot {id} already has a production state";
                         CoreLog.Warn($"Sidecar: production record of '{p.Id}' (depot {p.DepotId}) kept in the sidecar untouched: {why}");
                         continue;
                     }
                     taken.Add(id);
-                    plan.Add((p, ToProductionSnapshot(p, id), id));
+                    if (action == ProductionRestoreAction.Restore) { plan.Add((p, ToProductionSnapshot(p, id), id, false)); continue; }
+                    var empty = new MoonProductionSnapshot();
+                    empty.id = id;
+                    empty.stores = new Il2CppSystem.Collections.Generic.List<Il2CppSystem.Collections.Generic.List<MoonWalletSnapshot>>();
+                    p.Superseded = true;
+                    productionSuperseded[p] = id;
+                    plan.Add((p, empty, id, true));
+                    CoreLog.Warn($"Sidecar: production record of '{p.Id}' (depot {p.DepotId}) no longer fits its definition ({mismatch}); depot {id} starts empty and the old record is kept in the sidecar, marked superseded");
                 }
                 productionPending.Clear();
-                foreach (var (p, _, id) in plan) productionPending.Add((p, id));
+                foreach (var (p, _, id, fresh) in plan) if (!fresh) productionPending.Add((p, id));
             }
             snapshot.production ??= new Il2CppSystem.Collections.Generic.List<MoonProductionSnapshot>();
-            foreach (var (p, s, id) in plan)
+            foreach (var (p, s, id, fresh) in plan)
             {
                 snapshot.production.Add(s);
-                CoreLog.Info($"Sidecar: restoring production of '{p.Id}' as depot {id}: stores [{string.Join(" ", p.Stores.Select((x, i) => $"{i}:{x.Sum(y => y.Pending)}"))} kg], progress {p.Progress:F3}, running {p.Running}");
+                if (!fresh) CoreLog.Info($"Sidecar: restoring production of '{p.Id}' as depot {id}: stores [{string.Join(" ", p.Stores.Select((x, i) => $"{i}:{x.Sum(y => y.Pending)}"))} kg], progress {p.Progress:F3}, running {p.Running}");
             }
-            CoreLog.Info($"Sidecar: injected {plan.Count} modded production states into the load snapshot");
+            CoreLog.Info($"Sidecar: injected {plan.Count} modded production states into the load snapshot ({plan.Count(x => x.fresh)} empty after a slot change)");
         }
 
         // RestoreProduction postfix: an injected record counts as in the world only once the machine's state is there with
@@ -967,7 +982,9 @@ namespace StructureLib
                 var notInWorld = new SidecarFile
                 {
                     Structures = loaded.Structures.Where(r => !inWorld.ContainsKey(r)).ToList(),
-                    Production = production == null ? loaded.Production.ToList() : loaded.Production.Where(r => !productionInWorld.ContainsKey(r)).ToList(),
+                    // A superseded record stays only while its machine is still saved (its live record is in this write).
+                    Production = production == null ? loaded.Production.ToList() : loaded.Production.Where(r => !productionInWorld.ContainsKey(r) &&
+                        (!productionSuperseded.TryGetValue(r, out int machine) || liveProduction.Any(p => p.DepotId == machine))).ToList(),
                     Canisters = canisters == null ? loaded.Canisters.ToList() : loaded.Canisters.Where(r => !canistersInWorld.ContainsKey(r)).ToList(),
                 };
                 var data = SidecarCodec.Merge(current, notInWorld, _ => false);

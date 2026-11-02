@@ -37,11 +37,13 @@ namespace StructureLib.Patches
         // processor is never a node (a node added before the solve is dropped; IsPowerNode is not asked). After the
         // vanilla solve, each modded processor that is not a node attaches to the grid of the nearest vanilla node whose
         // own PowerRange reaches the machine's position (FootprintDistance to the node's footprint), and draws its demand
-        // (RunningKw while Running) through GridShare: first from that grid's sun surplus (supplyKw - usedKw, shared
-        // between modded machines in the same solve), then from its batteries, whose share is taken out of the grid's
-        // panels' ChargeKwh. Grid, Power, DemandKw, UsedKw and SuppliedKw (0: a machine supplies nothing) are set as
-        // vanilla sets them on a machine node. The grid's own totals are a struct in a dictionary and cannot be written
-        // back from managed code, so they do not include the modded demand. With no node in range: grid 0, power 0.
+        // (RunningKw while Running) through GridShare: first from that grid's sun surplus (supplyKw - usedKw), then from
+        // its batteries. Both come out of the grid's panels' ChargeKwh: the battery share in full, and of the sun share
+        // what vanilla already stored while charging (GridShare.ChargeTakenKw against the panels' positive BatteryKw),
+        // so no energy is counted twice. Surplus and charging are shared between modded machines in the same solve.
+        // Grid, Power, DemandKw, UsedKw and SuppliedKw (0: a machine supplies nothing) are set as vanilla sets them on a
+        // machine node. The grid's own totals are a struct in a dictionary and cannot be written back from managed code,
+        // so they do not include the modded demand. With no node in range: grid 0, power 0.
         [HarmonyPatch(typeof(MoonWorld), nameof(MoonWorld.SolvePower)), HarmonyPostfix]
         static void SolvePower(MoonWorld __instance, float dt)
         {
@@ -66,6 +68,7 @@ namespace StructureLib.Patches
             }
             var grids = world.powerGrids;
             var surplus = new Dictionary<int, float>();
+            var charging = new Dictionary<int, float>();
             foreach (var kv in production)
             {
                 var s = kv.Value;
@@ -91,11 +94,17 @@ namespace StructureLib.Patches
                 int g = best.state.Grid;
                 var grid = grids != null && grids.ContainsKey(g) ? grids.get_Item(g) : default;
                 if (!surplus.TryGetValue(g, out float left)) left = grid.supplyKw - grid.usedKw;
+                if (!charging.TryGetValue(g, out float charge)) charge = ChargingKw(vanilla, g);
                 var (satisfaction, fromSun, fromBattery) = GridShare.Draw(demand, left, grid.storedKwh);
+                float takenBack = GridShare.ChargeTakenKw(fromSun, charge);
                 surplus[g] = left - fromSun;
-                if (fromBattery > 0f) DrainBatteries(vanilla, g, fromBattery * (double)dt / 3600.0);
+                charging[g] = charge - takenBack;
+                double kwh = (fromBattery + takenBack) * (double)dt / 3600.0;
+                double drained = kwh > 0 ? DrainBatteries(vanilla, g, kwh) : 0;
                 SetPower(s, g, demand, satisfaction);
                 CoreLog.Once("grid:" + kv.Key + ":" + g, $"Power: '{d.Id}' depot {kv.Key} attached to grid {g} through depot {best.record.id} ({bestDistance:F1} m, range {bestRange} m); grid supply {grid.supplyKw:F2} kW, used {grid.usedKw:F2} kW, stored {grid.storedKwh:F3} kWh", 1);
+                if (demand > 0f)
+                    CoreLog.Once("draw:" + kv.Key, $"Power: '{d.Id}' depot {kv.Key} draws {demand} kW on grid {g}: {fromSun:F3} kW from the sun surplus ({left:F2} kW left; {takenBack:F3} kW of it taken back from {charge:F2} kW charging), {fromBattery:F3} kW from batteries; {drained:F7} kWh ({(dt > 0f ? drained * 3600.0 / dt : 0):F3} kW) out of the panels' charge over {dt:F3} s", 3);
             }
         }
 
@@ -111,17 +120,28 @@ namespace StructureLib.Patches
             s._SuppliedKw_k__BackingField = 0f;
         }
 
-        // The battery share of a modded machine's draw comes out of the charge of the grid's panels, in node order.
-        static void DrainBatteries(List<MoonWorld.PowerNode> nodes, int grid, double kwh)
+        // kW the grid's panels are putting into their batteries this solve (their positive BatteryKw).
+        static float ChargingKw(List<MoonWorld.PowerNode> nodes, int grid)
         {
+            float kw = 0f;
+            foreach (var n in nodes)
+                if (n.panel && n.state.Grid == grid && n.state.BatteryKw > 0f) kw += n.state.BatteryKw;
+            return kw;
+        }
+
+        // Takes kWh out of the charge of the grid's panels, in node order; returns how much it took.
+        static double DrainBatteries(List<MoonWorld.PowerNode> nodes, int grid, double kwh)
+        {
+            double taken = 0;
             foreach (var n in nodes)
             {
-                if (kwh <= 0) return;
+                if (kwh - taken <= 0) break;
                 if (!n.panel || n.state.Grid != grid || n.state.ChargeKwh <= 0) continue;
-                double take = Math.Min(kwh, n.state.ChargeKwh);
+                double take = Math.Min(kwh - taken, n.state.ChargeKwh);
                 n.state._ChargeKwh_k__BackingField = n.state.ChargeKwh - take;
-                kwh -= take;
+                taken += take;
             }
+            return taken;
         }
 
         [HarmonyPatch(typeof(MoonWorld), nameof(MoonWorld.Processor)), HarmonyPrefix]
@@ -147,10 +167,11 @@ namespace StructureLib.Patches
             return false;
         }
 
-        // A walker (or AutoFeed) loading cargo straight into a machine. Vanilla refuses a modded machine without asking
-        // InputSlot (checked in game: the kilograms never arrived and no InputSlot call was seen), so for a modded machine
-        // the prefix does the load: the first Input slot that takes the cargo gets as much as fits, under the player's
-        // share. A cargo no Input slot takes is refused, as vanilla refuses it.
+        // Applying a load into a machine (the crew / AutoFeed path). It never touches the walker's cargo: the walker path,
+        // LoadProcessor, deducts the carried dust itself and does not call it, and vanilla CrewProcessorLoad caps the load at
+        // the slot's capacity and drops the excess (both checked in game on the chamber). Vanilla loads nothing into a
+        // modded machine (no InputSlot call was seen), so for one the prefix does the same: the first Input slot that takes
+        // the cargo gets as much as fits, under the player's share; a cargo no Input slot takes is refused.
         [HarmonyPatch(typeof(MoonWorld), nameof(MoonWorld.CrewProcessorLoad)), HarmonyPrefix]
         static bool CrewProcessorLoad(MoonWorld __instance, string player, int machine, MoonCargo cargo, double kilograms)
         {

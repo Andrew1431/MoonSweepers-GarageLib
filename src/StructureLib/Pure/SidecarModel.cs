@@ -69,6 +69,11 @@ namespace StructureLib
         public List<List<ShareRecord>> Stores { get; set; } = new();
         /// <summary>Per slot, its cargo id when saved: a registered cargo id, or "dust", "sand", "stone".</summary>
         public List<string> SlotCargoIds { get; set; } = new();
+        /// <summary>
+        /// True once a load found the definition's slots changed and gave the machine a fresh state instead: the record is
+        /// kept only for its data and never restored again.
+        /// </summary>
+        public bool Superseded { get; set; }
     }
 
     /// <summary>
