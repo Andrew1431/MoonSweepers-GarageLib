@@ -32,6 +32,7 @@ namespace StructureLib
         static Job job;
         static bool queued, gaveUp;
         static float waited;
+        static float modelWait;
 
         sealed class Job
         {
@@ -72,6 +73,7 @@ namespace StructureLib
         {
             try
             {
+                StructureMaterials.Upgrade();
                 if (job == null)
                 {
                     if (queue.Count == 0) return;
@@ -81,6 +83,19 @@ namespace StructureLib
                         waited += Time.unscaledDeltaTime;
                         if (waited > 60f && !gaveUp) { gaveUp = true; CoreLog.Warn("Card art: no world after 60 s, still waiting"); }
                         return;
+                    }
+                    // A Model's materials may still be tinted stand-ins (no player equipment yet): photograph it once they
+                    // are the game's own, or after 60 s anyway.
+                    var next = queue.Peek();
+                    if (next.ModelPath != null && modelWait < 60f)
+                    {
+                        Injection.DefinitionFor(next, world);
+                        if (StructureMaterials.Waiting)
+                        {
+                            modelWait += Time.unscaledDeltaTime;
+                            if (modelWait >= 60f) CoreLog.Warn($"Card art for '{next.Id}': model materials still waiting for the player's equipment after 60 s; rendering anyway");
+                            return;
+                        }
                     }
                     Start(queue.Dequeue(), world);
                     return;

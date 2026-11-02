@@ -8,5 +8,7 @@
   <ItemGroup>
     <!-- The type of BepInPlugin.Version: the registry records each owning plugin's version for the co-op handshake. -->
     <Reference Include="$(BepInExCoreDir)\SemanticVersioning.dll" Private="false" />
+    <!-- The .bin model reader (namespace GarageLib), shared with GarageLib; StructureLib does not reference GarageLib. -->
+    <Compile Include="$(RepoRoot)shared\MeshModel\MeshModel.cs" Link="Shared\MeshModel.cs" />
   </ItemGroup>
 </Project>

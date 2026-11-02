@@ -44,6 +44,7 @@ namespace StructureLib
             ForcePower = cfg.Bind("Dev", "ForcePower", false, "Dev build: run every modded processor at full power (Power = 1) whatever its grid supplies. For isolating power problems; no self-test relies on it.");
             AutoBuildViaPlan = cfg.Bind("Dev", "AutoBuildViaPlan", false, "Dev build: AutoBuild places modded structures through the build menu's own path (PlanStructure, BeginStructureCheck, TryBuildStructure), which records a free pose (placedPose), instead of TryBuildDepot. Vanilla kinds still use TryBuildDepot.");
             BindBelts(cfg);
+            BindModels(cfg);
             SelfTest.Subscribe();
             ScreenshotMenu = cfg.Bind("Dev", "ScreenshotMenu", false, "Dev build: 5 s after the self-test, open the build menu on the example lamp and save a screenshot to BepInEx/cache/structurelib/menu.png.");
             CoreLog.Info($"[dev] AutoLoadSlot={AutoLoadSlot.Value} AllowSlot1={AllowSlot1.Value} SelfTest={RunSelfTest.Value} ScreenshotMenu={ScreenshotMenu.Value} AutoRemove={AutoRemove.Value} AutoSave={AutoSave.Value} ForcePower={ForcePower.Value} AutoBuildViaPlan={AutoBuildViaPlan.Value} AutoBuild='{AutoBuild.Value}' AutoFeed='{AutoFeed.Value}' AutoBelt='{AutoBelt.Value}' DumpCards={DumpCards.Value} RegisterBadPorts={RegisterBadPorts.Value} SunOverhead={SunOverhead.Value}");
@@ -446,6 +447,7 @@ namespace StructureLib
             PortChecks();
             BeltChecks();
             OutChecks();
+            ModelChecks();
             int expected = KindAllocator.KindOf("ryanhartwig.example-lamp");
             Assert("example-kind-hashed", lamp != null && lamp.Kind == expected,
                 lamp == null ? "'ryanhartwig.example-lamp' is not registered (is ExampleStructure installed?)" : $"kind {lamp.Kind}, expected {expected}");
@@ -500,9 +502,10 @@ namespace StructureLib
             if (sandOpen.Count > 0) TickSandPower();
             if (BeltPending) TickBeltChecks();
             if (OutPending) TickOutChecks();
+            if (ModelPending) TickModels();
             if (artUntil >= 0f) { TickCardArt(); return; }
             if (renderUntil >= 0f) { TickRendered(); return; }
-            if (saveUntil >= 0f && cycleUntil < 0f && !PowerPending && sandOpen.Count == 0 && !BeltPending && !OutPending) TickSaveWait();
+            if (saveUntil >= 0f && cycleUntil < 0f && !PowerPending && sandOpen.Count == 0 && !BeltPending && !OutPending && !ModelPending) TickSaveWait();
         }
 
         // cardart-modded: CardArt answers something once nothing is pending, or after 5 s.

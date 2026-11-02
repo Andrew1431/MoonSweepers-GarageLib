@@ -103,7 +103,9 @@ namespace StructureLib
             clone.name = "StructureLib_" + d.Id;
             // Nothing in the scene references the clone until something is built from it; keep asset GC off it.
             clone.hideFlags |= HideFlags.DontUnloadUnusedAsset;
-            if (d.BuildModel != null) ApplyBuildModel(d, clone, donor);
+            // A Model file with no BuildModel of the mod's own: the library's swap onto the donor template.
+            var build = d.BuildModel ?? (d.ModelPath != null ? (ModelContext ctx) => ModelSwap.Build(d, ctx) : null);
+            if (build != null) ApplyBuildModel(d, build, clone, donor);
             ApplyPorts(d, clone);
             clones[d.Id] = clone;
             CoreLog.Info($"Definition for '{d.Id}' (kind {d.Kind}) cloned from kind {d.BaseStructure} ('{donor.displayName}'): '{clone.displayName}', ${clone.priceDollars}");
@@ -116,7 +118,7 @@ namespace StructureLib
         // donor's model.
         static GameObject modelHolder;
 
-        static void ApplyBuildModel(StructureDefinition d, MoonDepotBuildDefinition clone, MoonDepotBuildDefinition donor)
+        static void ApplyBuildModel(StructureDefinition d, Func<ModelContext, GameObject> build, MoonDepotBuildDefinition clone, MoonDepotBuildDefinition donor)
         {
             try
             {
@@ -126,7 +128,7 @@ namespace StructureLib
                     modelHolder.SetActive(false);
                     modelHolder.hideFlags |= HideFlags.HideInHierarchy;
                 }
-                var model = d.BuildModel(new ModelContext { Definition = d, Parent = modelHolder.transform, Donor = donor });
+                var model = build(new ModelContext { Definition = d, Parent = modelHolder.transform, Donor = donor });
                 if (model == null) { CoreLog.Warn($"'{d.Id}': BuildModel returned null; using the model of base kind {d.BaseStructure}"); return; }
                 if (model.transform.parent == null || model.transform.parent.Pointer != modelHolder.transform.Pointer)
                     model.transform.SetParent(modelHolder.transform, false);

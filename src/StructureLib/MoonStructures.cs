@@ -1,6 +1,8 @@
 using System;
 using System.Collections.Generic;
+using System.IO;
 using System.Linq;
+using System.Runtime.CompilerServices;
 using MoonCleaners;
 
 namespace StructureLib
@@ -45,6 +47,7 @@ namespace StructureLib
         public static event Action<CargoEmitted> CargoEmitted;
 
         /// <summary>Register a structure. Call from your plugin's Load().</summary>
+        [MethodImpl(MethodImplOptions.NoInlining)] // GetCallingAssembly must see the mod, not an inlined caller
         public static StructureDefinition Register(StructureDefinition def, string ownerGuid = null)
         {
             if (def == null) throw new ArgumentNullException(nameof(def));
@@ -76,6 +79,7 @@ namespace StructureLib
                 CoreLog.Error($"Register('{def.Id}'): CardImageKey '{def.CardImageKey}' uses the reserved 'structurelib:' prefix; ignored.");
                 def.CardImageKey = null;
             }
+            if (!string.IsNullOrWhiteSpace(def.Model)) def.ModelPath = ResolveModel(def, System.Reflection.Assembly.GetCallingAssembly());
             def.Owner = ownerGuid ?? "unknown";
             def.OwnerVersion = PluginVersion(ownerGuid);
             def.Name ??= def.Id;
@@ -84,8 +88,27 @@ namespace StructureLib
             byId[def.Id] = def;
             CoreLog.Info($"Registered structure '{def.Id}' ('{def.Name}', base {def.BaseStructure}, ${def.Price}) from {def.Owner} {def.OwnerVersion}" +
                          (def.Processor != null ? $", processor with {def.Processor.Slots.Count} slots" : "") +
-                         (def.Power != null ? ", power source" : ""));
+                         (def.Power != null ? ", power source" : "") +
+                         (def.ModelPath != null ? $", model {def.ModelPath}" : ""));
             return def;
+        }
+
+        // Model is a file name next to the registering mod's DLL. The file is read (and a missing one reported) when the
+        // registry freezes and when the model is built.
+        static string ResolveModel(StructureDefinition def, System.Reflection.Assembly owner)
+        {
+            string dir = null;
+            try { dir = Path.GetDirectoryName(owner?.Location); } catch (Exception e) { CoreLog.Warn($"Register('{def.Id}'): the registering assembly has no location ({e.Message})"); }
+            if (string.IsNullOrEmpty(dir)) dir = BepInEx.Paths.PluginPath;
+            string path = Path.Combine(dir, def.Model);
+#if DEVBUILD
+            if (DevTools.BreakModelPath != null && DevTools.BreakModelPath.Value)
+            {
+                path = Path.Combine(dir, "missing-" + Path.GetFileName(def.Model));
+                CoreLog.Info($"[dev] BreakModelPath: '{def.Id}' model points at {path}");
+            }
+#endif
+            return path;
         }
 
         /// <summary>
@@ -151,9 +174,9 @@ namespace StructureLib
         /// </summary>
         public static IReadOnlyList<PortDefinition> PortsOf(StructureDefinition def) => def?.ResolvedPorts;
 
-        // Ports from the structure's model file (Port_* nodes). Null until the model loader sets it; a null or empty answer
-        // falls through to the declared ports.
-        internal static Func<StructureDefinition, List<PortDefinition>> ModelPortsProvider = null;
+        // Ports from the structure's model file (Port_* nodes); a null or empty answer (no Model, no readable file, no
+        // Port_* node) falls through to the declared ports.
+        internal static Func<StructureDefinition, List<PortDefinition>> ModelPortsProvider = ModelSwap.Ports;
 
         // The belt-side allowance for a port outside the footprint (MoonWorld.PortReach, 1.20 m in this build).
         static float PortReach

@@ -88,6 +88,9 @@ namespace ExampleStructure
                 Note = "StructureLib example: burns example grit for power.",
                 Price = 100m,
                 BaseStructure = MoonWorld.SolarPostKind,
+                // Shown instead of the solar post (blender/example_burner.py); its Port_Grit in node sits exactly on the declared
+                // port below, and model ports win.
+                Model = "example_burner.bin",
                 Power = new PowerDefinition { PeakKw = 5, BatteryKwh = 2, Range = 20, SupplyMode = SupplyMode.Fuel },
                 Processor = new ProcessorDefinition
                 {

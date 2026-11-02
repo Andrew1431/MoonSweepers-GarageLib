@@ -33,6 +33,14 @@ namespace StructureLib
         /// structure's prefab). Null builds the base structure's model. <see cref="DecorateModel"/> runs on each copy either way.
         /// </summary>
         public Func<ModelContext, GameObject> BuildModel;
+        /// <summary>
+        /// Optional model file (e.g. <c>"sand_compactor.bin"</c>, exported by shared/blender/export_mesh_model.py) next to the
+        /// registering mod's DLL. When set and <see cref="BuildModel"/> is null, the library shows it on the base structure:
+        /// every base mesh is hidden (colliders and scripts stay) and the model stands under a child named
+        /// <c>"StructureLibModel"</c>, its lowest vertex on the base's lowest mesh point. Its <c>Port_&lt;name&gt;</c> nodes become
+        /// the ports (they win over <see cref="Ports"/>). A missing or unreadable file logs one error and keeps the base model.
+        /// </summary>
+        public string Model;
         /// <summary>Optional tweak applied after the model is built (tint, extra parts).</summary>
         public Action<GameObject, ModelContext> DecorateModel;
 
@@ -54,6 +62,9 @@ namespace StructureLib
         public string Owner { get; internal set; }
         /// <summary>That plugin's version, read from its BepInEx metadata at registration ("unknown" if not found).</summary>
         public string OwnerVersion { get; internal set; }
+
+        // Model resolved next to the registering assembly at Register; null without a Model.
+        internal string ModelPath;
 
         // The ports the clone carries and the rule that chose them, set when the registry freezes (MoonStructures.PortsOf).
         internal List<PortDefinition> ResolvedPorts;

@@ -774,6 +774,15 @@ Belt output and save with belts (Task 4, 2026-11-02; logs `task-4-logs/`, run1 =
   14.42, 13.67, 12.92 m, all `moving False`, cargo 250. The vanilla sand canister came back on the belt the same way.
   `MoonConveyorSave` restored belt 1 between the restored grinder (26) and burner (27); the burner's production state
   came back as saved (`stores [0:1 1:0]`).
+- **Models (Task 5, slot-2, 2026-11-02).** The burner with `Model = "example_burner.bin"` on the solar post: the swap
+  hid the post's 10 renderers (mesh bounds in template space: donor bottom 0.000), model bottom 0.000, holder y 0.000,
+  scale 1.00; the built view keeps the prefab's 3 colliders, all 10 donor renderers stay disabled, the 3 model
+  renderers are enabled, and `StructureLibModel` is a direct child of the view root. **No player equipment exists when a
+  world's clones are built** (`MoonPrototypeModels` not found at world load), so the model's materials start as tinted
+  stand-ins copied from the donor's first material; the first run used them for the card (all cyan). They are now
+  turned into the game's prototype materials in place once the equipment exists (`StructureMaterials.Upgrade`, within
+  seconds of load), and the card waits for that. A missing file logs one error and keeps the post's model and the
+  declared port.
 
 ## Still open
 

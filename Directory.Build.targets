@@ -8,9 +8,14 @@
     <Copy SourceFiles="@(VehicleStatsFile)" DestinationFolder="$(OutDir)" SkipUnchangedFiles="true" />
   </Target>
 
-  <!-- Each plugin goes to BepInEx/plugins/<AssemblyName>/. -->
+  <!-- Each plugin goes to BepInEx/plugins/<AssemblyName>/, with any model .bin files beside its project (StructureLib
+       reads a structure's Model next to the DLL). -->
   <Target Name="CopyPluginToGame" AfterTargets="Build" Condition="'$(InstallToGame)' == 'true'">
+    <ItemGroup>
+      <ModelBinFile Include="$(MSBuildProjectDirectory)\*.bin" />
+    </ItemGroup>
     <MakeDir Directories="$(GameDir)\BepInEx\plugins\$(AssemblyName)" />
     <Copy SourceFiles="$(TargetPath);@(VehicleStatsFile)" DestinationFolder="$(GameDir)\BepInEx\plugins\$(AssemblyName)" />
+    <Copy SourceFiles="@(ModelBinFile)" DestinationFolder="$(GameDir)\BepInEx\plugins\$(AssemblyName)" SkipUnchangedFiles="true" />
   </Target>
 </Project>
