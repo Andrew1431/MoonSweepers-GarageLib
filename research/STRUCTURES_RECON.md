@@ -19,8 +19,8 @@ Everywhere (catalog, placement, built records, production, power, save), a struc
 | 85, 86, 113 | wall corner / three-way / four-way | Structures | |
 | 91, 92 | Robot vacuum Mk I / Mk II | Services | `RobotDockKind`, `RobotDockMk2Kind` |
 | 93, 94, 95 | Solar post (S) / twin (M) / tracker (L) | Power | `IsSolarPanel`, `IsPowerNode`, `PowerRange` 16 / 24 / 34 |
-| 96 | Pressure chamber | Production | `IsProcessor`, `IsPowerNode`, `Processor(k)` = `ChamberSpec` |
-| 97 | Stone press | Production | `IsProcessor`, `IsPowerNode`, `Processor(k)` = `PressSpec` |
+| 96 | Pressure chamber | Production | `IsProcessor` (cannot be prefixed, see Interop hazards), `IsPowerNode`, `Processor(k)` = `ChamberSpec` |
+| 97 | Stone press | Production | `IsProcessor` (cannot be prefixed, see Interop hazards), `IsPowerNode`, `Processor(k)` = `PressSpec` |
 | 98 | Garage | Services | `GarageKind` (the vehicle garage GarageLib hooks) |
 | 99 | J.O.O.N.A.S. | Services | `JoonasKind` |
 | 100 | Capsule catcher | Services | `CapsuleCatcherKind` |
@@ -32,7 +32,9 @@ Everywhere (catalog, placement, built records, production, power, save), a struc
   per-kind query at menu time. Whether the save reader rejects a kind above 192 is a world-time question (see below).
 - Per-kind answers are **static switches** on `MoonWorld`: `IsSolarPanel`, `IsProcessor`, `IsPowerNode`,
   `HexPieceKind`, `PowerRange`, `Processor`, `TryPanel`, `InputSlot`, `IsRobotDock`, `IsEdgeRail`, `IsWorldHex`,
-  `IsWorldSquare`, `IsWorldGrid`. All are Harmony-prefixable; none reads a table a mod could grow.
+  `IsWorldSquare`, `IsWorldGrid` (the dump shows `IsEdgeRail`, `IsWorldHex`, `IsWorldSquare`, `IsWorldGrid` as
+  instance methods). None reads a table a mod could grow. All are Harmony-prefixable **except `IsProcessor`**: a prefix
+  on it crashes the game natively at world load (Task 5; see Interop hazards).
 - `MoonWorld.BuildDefinition(int kind)` (instance) returns the `MoonDepotBuildDefinition` for a kind. No
   `MoonDepotBuildDefinition` or `MoonConveyorKit` asset is loaded at menu time (`Resources.FindObjectsOfTypeAll`
   finds 0), so the definition table arrives with the world. `MoonWorld.depotDefinition` is the root asset and it has an
@@ -132,6 +134,25 @@ Everywhere (catalog, placement, built records, production, power, save), a struc
   `MoonWorld.LocalPlayer` (a `local…` id in single player). `MoonWorld.solarSystem` was null in one session 20 s after
   load; `FindFirstObjectByType<MoonSolarSystem>()` finds it.
 - `PowerNode.spec` (a non-blittable `PanelSpec`) reads fine through the property; only `TryPanel`'s `out` crashes.
+- **A Harmony prefix on `MoonWorld.IsProcessor(int kind)` crashes the game natively at world load** (Task 5, 5 of 5
+  runs with it enabled; 5 of 5 without it clean). Harmony reports the patch as applied without error; the process then
+  vanishes during world load, before `RestoreDepots`, with no managed exception, and the game's crash report says it
+  "stopped without its crash handler". A log line as the first statement of the prefix never appeared, so the crash is
+  in the detour or trampoline, before managed code runs. Its native body is a 15-byte leaf
+  (`83 F9 60 75 03 B0 01 C3 83 F9 61 0F 94 C0 C3 CC`); no other Assembly-CSharp method shares its native address (all
+  8592 `NativeMethodInfoPtr_*` scanned), so it is not identical-code folding. Cause unconfirmed (a caller on a
+  non-main thread is one guess). StructureLib deliberately leaves it unpatched (comment in `KindRules`,
+  `Patches/ProductionPatches.cs`); a modded kind gets vanilla's answer for kinds above 192, false.
+  - The crash is specific to `IsProcessor`. In the same build, prefixes on the static switches `IsSolarPanel`,
+    `IsPowerNode`, `PowerRange`, `HexPieceKind`, `IsRobotDock` and `MapKindOf` (and on the instance methods
+    `IsEdgeRail`, `IsWorldHex`, `IsWorldSquare`, `IsWorldGrid`, `FarSpec`, `BuildDefinition`, `AcceptsText`,
+    `MoonDepotBuilder.CanBuild`, `MoonDepotBuilder.ProductionNote`) patched and the world loaded cleanly with the
+    self-test 9/9. `IsSolarPanel` has the same 15-byte native shape (`83 F9 5D 7D 03 32 C0 C3 83 F9 5F 0F 9E C0 C3
+    CC`) and is fine. Only patching and load were proven: no modded kind reached those remaps in game, since nothing
+    was built.
+  - Candidate alternative for Task 10 (**untested**): prefix the instance method `MoonWorld.IsProcessorId(int id)`
+    (normal prologue, not a tiny leaf), plus a `MoonWorld.Processor(int kind)` prefix that answers the modded
+    processor spec, and patch the specific `IsProcessor(kind)` callers only if a path still needs it.
 
 ## World-time findings (new game in slot-1, 2026-11-01)
 
