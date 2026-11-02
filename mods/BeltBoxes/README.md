@@ -109,7 +109,8 @@ through both boxes into its example burner: grinder → splitter `In`; splitter 
 - **Cut-in offers.** The game decides whether a structure is a router (`MoonWorld.Routes`) from its definition's ports,
   so it treats any clone with three or four ports, these boxes included, as a router. The belt tool may offer cut-in
   on a placed box, and the other `Routes`-gated paths in the game are untested. StructureLib's own hop answers first
-  for a box's input belts, which is what the self-test exercised.
+  for a box's input belts and never hands one to vanilla (while a box's port is unresolved during a load, the canister
+  waits), which is what the self-test exercised.
 - **The models in real lighting**, at player scale.
 - **Removing a box or a belt by hand mid-traffic** with the remove tool. The self-test removed them through the game's
   own calls. A removed belt drops its canisters on the ground in its path, and a new belt there is refused ("Blocked by

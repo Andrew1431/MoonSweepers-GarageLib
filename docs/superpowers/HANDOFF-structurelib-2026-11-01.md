@@ -134,7 +134,8 @@ run. The report and logs are in `.superpowers/sdd/2026-11-02-belt-boxes/task-6-r
 - The belt tool onto every port at the 0.7 m port spacing, the side ports included. The self-test builds belts through
   `TryBuildConveyor`, never the tool.
 - Cut-in offers. The game's `Routes` is true for any 3–4-port clone, so the belt tool may offer to cut a placed box
-  into a belt. Check that and the other `Routes`-gated paths.
+  into a belt. Check that and the other `Routes`-gated paths: they stay untested (the `HandOff` prefix keeps a box's
+  input belts from vanilla routing, nothing else).
 - Both models at player scale and in real lighting.
 - Removing a box or a belt mid-traffic with the remove tool. A removed belt drops its canisters in its path, and they
   block a new belt there until they are picked up.

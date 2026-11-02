@@ -3,7 +3,7 @@
 # belt height running into a black belt mouth (orange lip on an input, steel lip on an output), and the black lid
 # carries one orange arrow per port showing the flow: into the box for an input, away from it for an output.
 # Axes: Blender (x, y, z) is Unity (-x, z, -y). A port is given by its face's outward normal in Blender XY.
-import os, sys, math
+import os, sys
 HERE = os.path.dirname(os.path.abspath(__file__))
 sys.path.insert(0, os.path.join(HERE, "..", "..", "..", "shared", "blender"))
 import kit, bpy, bmesh
@@ -110,7 +110,7 @@ def build(root_name, ports, out_name, preview_name):
         _face_box(f"Bracket{tag}", n, uc - 0.02, 0, DECK - TREAD - 0.04, ul - 0.06, BELT_W - 0.16, 0.08, BLACK, r)
         _arrow(f"Arrow{tag}", n, d, r, LID - 0.004, LID + 0.008)
         p = kit.port(name, (n[0] * HALF, n[1] * HALF, DECK), (d[0], d[1], 0), output, None, r)
-        del p["cargo"]     # routers are cargo-agnostic: no cargo prop, so the loader reads null
+        del p["cargo"]     # cosmetic: ModelSwap.CargoOf short-circuits for routers, so a cargo prop would be ignored
 
     lo, hi = kit.bounds(r)
     print(f"MODEL bounds lo=({lo.x:.3f},{lo.y:.3f},{lo.z:.3f}) hi=({hi.x:.3f},{hi.y:.3f},{hi.z:.3f})")
