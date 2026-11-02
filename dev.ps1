@@ -58,7 +58,7 @@ function Select-Projects($all) {
 }
 
 function Invoke-Build($project) {
-    $buildArgs = @('build', $project.Path, '-c', 'Release')
+    $buildArgs = @('build', $project.Path, '-c', 'Release', "-p:GameDir=$gameDir")
     if ($Release) { $buildArgs += '-p:DevBuild=false' }
     & dotnet @buildArgs
     if ($LASTEXITCODE -ne 0) { throw "Build failed for $($project.Name) (dotnet exit code $LASTEXITCODE)." }
@@ -78,7 +78,8 @@ function Follow-Log($gameDir, $names) {
     Get-Content -LiteralPath $log -Wait -Tail 0 | Where-Object { $_ -match $mine -or $_ -notmatch '^\[' }
 }
 
-$gameDir = Resolve-GameDir
+# No trailing backslash: it would escape the closing quote of -p:GameDir="..." in native argument parsing.
+$gameDir = (Resolve-GameDir).TrimEnd('\')
 $projects = Select-Projects @(Get-Projects)
 $running = [bool](Get-Process -Name MoonSweepers -ErrorAction SilentlyContinue)
 
@@ -87,7 +88,7 @@ if ($WhatIf) {
     if ($running) { 'Would close MoonSweepers.exe (taskkill /IM MoonSweepers.exe /F)' } else { 'MoonSweepers.exe is not running; nothing to close' }
     if ($NoBuild) { 'Would skip the build (-NoBuild)' }
     else {
-        foreach ($p in $projects) { "Would run: dotnet build $($p.Path) -c Release$(if ($Release) { ' -p:DevBuild=false' })" }
+        foreach ($p in $projects) { "Would run: dotnet build $($p.Path) -c Release -p:GameDir=$gameDir$(if ($Release) { ' -p:DevBuild=false' })" }
     }
     if ($NoLaunch) { 'Would not launch the game (-NoLaunch)' } else { "Would launch $(Join-Path $gameDir 'MoonSweepers.exe')" }
     if ($Tail) { "Would tail $(Join-Path $gameDir 'BepInEx\LogOutput.log') for: $((@($projects.Name) + 'BepInEx') -join ', ')" } else { 'Would not tail the log' }
@@ -101,7 +102,7 @@ if ($running) {
 }
 
 if (-not $NoBuild) {
-    # The game folder reaches MSBuild through MOONSWEEPERS_DIR / Directory.Build.local.props, same as plain dotnet build.
+    # GameDir is passed explicitly so MSBuild installs into the same folder this script closes, launches and tails.
     foreach ($p in $projects) { "Building $($p.Name)"; Invoke-Build $p }
 }
 
