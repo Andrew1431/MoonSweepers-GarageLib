@@ -134,12 +134,13 @@ existing belt hooks.
 - **Box splitter** `ryanhartwig.box-splitter`, Category `Logistics`, price $25 (vanilla's is $5; ours is a
   convenience, priced above it but trivially). `BaseStructure` = the solar post (kind 93, as the generator uses: a
   small donor with no production view), `Footprint` 1.4 × 1.4, `Model = "box_splitter.bin"`, `Router = Splitter`,
-  `Ports` null (the model's `Port_*` nodes win): `Port_In` on the −Z face flowing +Z, `Port_Forward` on +Z flowing
-  +Z, `Port_Left` on −X flowing −X, `Port_Right` on +X flowing +X, all at y 0.85 and on the footprint edge
-  (±0.7). Note text: "Splits one belt into up to three, taking turns. Skips an output that is blocked or has no belt."
+  `Ports` null (the model's `Port_*` nodes win). Flow runs along structure +X like every vanilla production donor
+  (the dev line layout and AutoBelt assume it): `Port_In` on the −X face flowing +X, `Port_Forward` on +X flowing
+  +X, `Port_Left` on the +Z face flowing +Z, `Port_Right` on −Z flowing −Z (left and right as seen looking along
+  +X with Y up), all at y 0.85 and on the footprint edge (±0.7). Note text: "Splits one belt into up to three, taking turns. Skips an output that is blocked or has no belt."
 - **Box merger** `ryanhartwig.box-merger`, same category, price and donor, `Model = "box_merger.bin"`,
-  `Router = Merger`: `Port_Left` on −X flowing +X (into the box), `Port_Back` on −Z flowing +Z, `Port_Right` on +X
-  flowing −X, `Port_Out` on +Z flowing +Z. Note: "Merges up to three belts into one, taking turns."
+  `Router = Merger`: `Port_Left` on the +Z face flowing −Z (into the box), `Port_Back` on −X flowing +X,
+  `Port_Right` on −Z flowing +Z, `Port_Out` on +X flowing +X. Note: "Merges up to three belts into one, taking turns."
 - **README** in the SandPower README's shape: what each box does, the ports table with positions and directions, the
   two differences from vanilla (no cut-in, no visible crossing), how to lay one out (a belt may leave any face
   straight), preview images.
