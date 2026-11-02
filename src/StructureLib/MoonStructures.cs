@@ -56,6 +56,12 @@ namespace StructureLib
                     def.Processor = null;
                 }
             }
+            // A "structurelib:" key would send CardArt back into our own prefix (endless recursion); treat it as unset.
+            if (def.CardImageKey != null && def.CardImageKey.StartsWith("structurelib:", StringComparison.Ordinal))
+            {
+                CoreLog.Error($"Register('{def.Id}'): CardImageKey '{def.CardImageKey}' uses the reserved 'structurelib:' prefix; ignored.");
+                def.CardImageKey = null;
+            }
             def.Owner = ownerGuid ?? "unknown";
             def.Name ??= def.Id;
             def.Category ??= "";

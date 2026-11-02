@@ -22,9 +22,12 @@ namespace StructureLib.Patches
             if (d == null || !MoonStructures.IsModded(d.Kind)) return true;
             try
             {
-                // A mod-supplied key is vanilla art by another name: ask vanilla for it (the nested call is not ours).
-                if (!string.IsNullOrEmpty(d.CardImageKey)) __result = __instance.CardArt(d.CardImageKey);
-                else __result = IconRenderer.Get(d) ?? DonorArt(__instance, d);
+                // PNG (or rendered) picture first, then the mod's vanilla key, then the donor's art. UsableKey never
+                // carries our prefix, so the nested CardArt call goes straight to vanilla.
+                var art = IconRenderer.Get(d);
+                string key = UsableKey(d);
+                if (art == null && key != null) art = __instance.CardArt(key);
+                __result = art != null ? art : DonorArt(__instance, d);
             }
             catch (Exception e)
             {
@@ -34,6 +37,10 @@ namespace StructureLib.Patches
             if (__result == null) CoreLog.Once("cardart-null:" + d.Id, $"CardArt for '{d.Id}': no picture (not rendered yet, and no donor art)", 1);
             return false;
         }
+
+        // The definition's CardImageKey, or null when unset or (defensively; Register clears these) one of ours.
+        internal static string UsableKey(StructureDefinition d) =>
+            string.IsNullOrEmpty(d.CardImageKey) || d.CardImageKey.StartsWith(ImagePrefix, StringComparison.Ordinal) ? null : d.CardImageKey;
 
         // The donor's own card picture: the catalog entry of BaseStructure if it has one, else the floodlight's (kind 4,
         // the usual donor, has no entry), else null.

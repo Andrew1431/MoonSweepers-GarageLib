@@ -9,8 +9,8 @@ namespace StructureLib
 {
     // Build-menu card pictures for modded structures (adapted from GarageLib's IconRenderer). The model is the donor's
     // prefab (from the structure's cloned definition) with DecorateModel applied, on a stage at the moon's centre, shot
-    // orthographically from the front-left and above onto a transparent background. A PNG from the definition wins; a
-    // CardImageKey means vanilla art, so nothing is rendered. Under URP a manual Camera.Render may draw nothing, so the
+    // orthographically from the front-left and above onto a transparent background. A PNG from the definition wins;
+    // otherwise a CardImageKey means vanilla art, so nothing is rendered. Under URP a manual Camera.Render may draw nothing, so the
     // camera is enabled for one frame and read the next.
     //
     // The prefab is instantiated under an inactive parent so none of its game scripts wake up (Awake would run even on
@@ -51,16 +51,17 @@ namespace StructureLib
         /// <summary>True while a picture for the structure is queued or being rendered.</summary>
         internal static bool Pending(StructureDefinition d) => d != null && pending.Contains(d.Kind);
 
-        // Called when a session enters the game and after the first complete catalog. Queues every modded structure
-        // without a CardImageKey whose PNG (if any) did not load. Once per process: sprites outlive worlds.
+        // Called when a session enters the game and after the first complete catalog. Precedence: CardImagePng, then
+        // CardImageKey (vanilla art, no render), then a render. Once per process: sprites outlive worlds.
         internal static void QueueAll()
         {
             if (queued || !MoonStructures.Frozen || MoonStructures.Disabled) return;
             queued = true;
             foreach (var d in MoonStructures.All)
             {
-                if (d.Kind <= 0 || !MoonStructures.IsModded(d.Kind) || !string.IsNullOrEmpty(d.CardImageKey)) continue;
+                if (d.Kind <= 0 || !MoonStructures.IsModded(d.Kind)) continue;
                 if (d.CardImagePng != null && FromPng(d)) continue;
+                if (CatalogPatches.UsableKey(d) != null) continue;
                 queue.Enqueue(d);
                 pending.Add(d.Kind);
             }
@@ -274,7 +275,9 @@ namespace StructureLib
 #endif
             pending.Remove(d.Kind);
             Cleanup();
-            CatalogPatches.ShowArt(d, sprite);
+            // After Cleanup the job is gone; name the structure here if swapping the art into open cards fails.
+            try { CatalogPatches.ShowArt(d, sprite); }
+            catch (Exception e) { CoreLog.Error($"Card art for '{d.Id}': swapping it into existing cards failed: {e}"); }
         }
 
         static bool Reframe(Color32[] px)

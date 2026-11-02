@@ -166,11 +166,12 @@ namespace StructureLib
         }
 
         // The build menu lists the lamp under Services, in the static catalog and in the menu's own copy of it. Its card
-        // art is polled for up to 5 s (the renderer needs a few frames) before the run finishes.
+        // art is polled for up to 5 s (the renderer needs a few frames); then the rendered picture itself is awaited for
+        // up to 10 s and must be what CardArt answers (fallback art does not count). Then the run finishes.
         const string LampImage = "structurelib:ryanhartwig.example-lamp";
         static MoonDepotBuilder artBuilder;
         static StructureDefinition artLamp;
-        static float artUntil = -1f;
+        static float artUntil = -1f, renderUntil = -1f;
 
         /// <summary>Unscaled time at which the last run printed its done line; -1 until then.</summary>
         internal static float FinishedAt = -1f;
@@ -194,16 +195,23 @@ namespace StructureLib
                 if (entries == null) return (false, "structureEntries is null after RefreshCatalog");
                 return (entries.Any(e => e != null && e.kind == lamp.Kind), $"no entry for kind {lamp.Kind} among {entries.Length} structureEntries");
             });
-            if (noBuilder != null) { Assert("cardart-modded", false, noBuilder); Finish(); return; }
+            if (noBuilder != null) { Assert("cardart-modded", false, noBuilder); Assert("cardart-rendered", false, noBuilder); Finish(); return; }
             artBuilder = builder;
             artLamp = lamp;
             artUntil = Time.unscaledTime + 5f;
+            renderUntil = Time.unscaledTime + 10f;
         }
 
-        // Every frame in game: answers the pending card art check once the art is there or 5 s have passed.
+        // Every frame in game: answers the pending card art checks, then finishes the run.
         internal static void Tick()
         {
-            if (artUntil < 0f) return;
+            if (artUntil >= 0f) { TickCardArt(); return; }
+            if (renderUntil >= 0f) TickRendered();
+        }
+
+        // cardart-modded: CardArt answers something once nothing is pending, or after 5 s.
+        static void TickCardArt()
+        {
             Sprite art = null;
             string error = null;
             bool timedOut = Time.unscaledTime >= artUntil;
@@ -222,6 +230,27 @@ namespace StructureLib
                 string source = rendered != null && rendered.Pointer == art.Pointer ? "the rendered picture" : "fallback art";
                 CoreLog.Info($"[selftest] card art for '{artLamp.Id}': sprite '{art.name}' {art.rect.width}x{art.rect.height} ({source})");
             }
+        }
+
+        // cardart-rendered: once IconRenderer has a sprite (up to 10 s), CardArt must answer that very sprite.
+        static void TickRendered()
+        {
+            Sprite rendered = null;
+            string error = null;
+            bool timedOut = Time.unscaledTime >= renderUntil;
+            if (!(artBuilder != null && artBuilder.Pointer != IntPtr.Zero && artBuilder)) error = "the MoonDepotBuilder went away";
+            else rendered = IconRenderer.Get(artLamp);
+            if (rendered == null && error == null && !timedOut) return;
+            renderUntil = -1f;
+            if (error == null && rendered == null) error = "IconRenderer.Get returned null after 10 s (render failed or never queued)";
+            Sprite art = null;
+            if (error == null)
+            {
+                try { art = artBuilder.CardArt(LampImage); }
+                catch (Exception e) { error = "CardArt threw " + e.GetType().Name + ": " + e.Message; }
+            }
+            bool ok = error == null && art != null && art.Pointer == rendered.Pointer;
+            Assert("cardart-rendered", ok, error ?? $"CardArt(\"{LampImage}\") returned '{art?.name ?? "null"}', not the rendered sprite '{rendered.name}'");
             artBuilder = null;
             artLamp = null;
             Finish();
