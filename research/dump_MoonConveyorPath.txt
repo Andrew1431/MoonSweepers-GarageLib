@@ -1,0 +1,29 @@
+== MoonCleaners.MoonConveyorPath : Il2CppSystem.Object
+  P UnityEngine.Vector3 start
+  P UnityEngine.Vector3 startDirection
+  P UnityEngine.Vector3 end
+  P UnityEngine.Vector3 endDirection
+  P UnityEngine.Vector3 centre
+  P UnityEngine.Vector3 c1
+  P UnityEngine.Vector3 c2
+  P static System.Int32 Samples
+  P Il2CppInterop.Runtime.InteropTypes.Arrays.Il2CppStructArray`1<System.Single> lengths
+  P System.Single _StartRoll_k__BackingField
+  P System.Single _EndRoll_k__BackingField
+  P System.Single Length
+  P System.Single StartRoll
+  P System.Single EndRoll
+  M Single Roll(Single distance, Vector3 wanted)
+  M Vector3 Bezier(Single t)
+  M Vector3 Derivative(Single t)
+  M Vector3 SecondDerivative(Single t)
+  M Void QuickShape(Single& steepest, Single& tightest)
+  M Single ParameterAt(Single distance)
+  M Vector3 Point(Single distance)
+  M Vector3 Up(Vector3 point)
+  M Void Frame(Single distance, Vector3& position, Vector3& forward, Vector3& right, Vector3& up)
+  M Void LevelFrame(Single distance, Vector3& position, Vector3& forward, Vector3& right, Vector3& up)
+  M Void Shape(Single& steepest, Single& tightest)
+  M Void .ctor()
+  M Void .ctor(Vector3 start, Vector3 startDirection, Vector3 end, Vector3 endDirection, Vector3 centre, Vector3 startUp, Vector3 endUp)
+  M Void .ctor(IntPtr pointer)
