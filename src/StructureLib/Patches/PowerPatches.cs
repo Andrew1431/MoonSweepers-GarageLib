@@ -171,6 +171,9 @@ namespace StructureLib.Patches
             }
         }
 
+        // Machines a fuel generator fed in the last solve (the look-at panel's POWERING row). 0 until the solve records it.
+        internal static int FedCountOf(int depotId) => 0;
+
         static bool IsFuelSource(StructureDefinition d) => d.Power != null && d.Power.SupplyMode == SupplyMode.Fuel && d.Processor != null && d.Processor.ProducesPower;
 
         static void SetPower(MoonProductionState s, int grid, float demandKw, float satisfaction)

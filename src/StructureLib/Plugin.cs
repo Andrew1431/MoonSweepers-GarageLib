@@ -44,6 +44,9 @@ namespace StructureLib
             // The leaf tables (Patches/LeafTables.cs) and the game domain they are bounded to.
             "MoonCleaners.MoonWorld:HexPieceKind", "MoonCleaners.MoonWorld:IsRobotDock", "MoonCleaners.MoonWorld:MapKindOf",
             "MoonCleaners.MoonDepotSave:MaxStructureKind", "MoonCleaners.MoonDepotBuilder:ConveyorKind",
+            // The look-at panel (Patches/PanelPatches.cs).
+            "MoonCleaners.MoonProductionInteraction:ShowPanel", "MoonCleaners.MoonProductionInteraction:Aimed", "MoonCleaners.MoonProductionInteraction:look",
+            "MoonCleaners.MoonLookPanel:Show", "MoonCleaners.MoonLookPanel:SetRow", "MoonCleaners.MoonLookPanel:Rows",
         };
 
         public override void Load()
@@ -68,7 +71,7 @@ namespace StructureLib
             LeafTables.Snapshot();
             var h = new Harmony(Guid);
             int ok = 0, failed = 0;
-            foreach (var t in new[] { typeof(FreezePatches), typeof(DefinitionPatches), typeof(PowerPatches), typeof(CatalogPatches), typeof(ModelPatches), typeof(BuildPatches), typeof(SavePatches), typeof(CargoPatches), typeof(ProductionPatches), typeof(HandshakePatches), typeof(PortPatches), typeof(BeltPatches) })
+            foreach (var t in new[] { typeof(FreezePatches), typeof(DefinitionPatches), typeof(PowerPatches), typeof(CatalogPatches), typeof(ModelPatches), typeof(BuildPatches), typeof(SavePatches), typeof(CargoPatches), typeof(ProductionPatches), typeof(HandshakePatches), typeof(PortPatches), typeof(BeltPatches), typeof(PanelPatches) })
             {
                 try { h.CreateClassProcessor(t).Patch(); ok++; CoreLog.Debug($"Patched {t.Name}"); }
                 catch (Exception e) { failed++; CoreLog.Error($"Patching {t.Name} failed: {e}"); }

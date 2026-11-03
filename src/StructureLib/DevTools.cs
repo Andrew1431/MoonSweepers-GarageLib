@@ -486,6 +486,7 @@ namespace StructureLib
             CanisterRoundTrip();
             ProcessorChecks(lamp);
             PowerChecks();
+            PanelChecks();
             SandPowerChecks();
             PortChecks();
             BeltChecks();
