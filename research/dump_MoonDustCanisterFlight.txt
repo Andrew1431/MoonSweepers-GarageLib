@@ -1,0 +1,48 @@
+== MoonCleaners.MoonDustCanisterFlight : UnityEngine.MonoBehaviour
+  P static Il2CppSystem.Collections.Generic.List`1<MoonCleaners.MoonDustCanisterFlight> all
+  P MoonCleaners.MoonWorld world
+  P MoonCleaners.MoonDustCanisterView view
+  P System.String carrier
+  P System.Int32 id
+  P UnityEngine.Rigidbody body
+  P UnityEngine.PhysicsMaterial contactMaterial
+  P Il2CppSystem.Collections.Generic.HashSet`1<UnityEngine.Collider> contacts
+  P System.Single elapsed
+  P System.Single settledTime
+  P System.Boolean _IsFlying_k__BackingField
+  P System.Double wordAt
+  P UnityEngine.Vector3 wordVelocity
+  P System.Single hitAt
+  P static Il2CppSystem.Collections.Generic.IReadOnlyList`1<MoonCleaners.MoonDustCanisterFlight> All
+  P System.Boolean IsFlying
+  P System.Int32 Id
+  P UnityEngine.Vector3 Position
+  P MoonCleaners.MoonWorld World
+  P UnityEngine.Vector3 Velocity
+  P UnityEngine.Vector3 Spin
+  M static Void ResetAll()
+  M static MoonDustCanisterFlight Of(MoonDustCanisterView view)
+  M Boolean WordDue(Double now)
+  M Void WordSent(Double now)
+  M Boolean Launch(MoonWorld source, String player, Int32 canisterId, Vector3 velocity, Vector3 spin)
+  M Void FixedUpdate()
+  M Void Update()
+  M Void AdvanceFlight(Single delta)
+  M Void LateUpdate()
+  M Boolean Catch(String player, Vector3 localPlayerPoint)
+  M Void OnCollisionEnter(Collision collision)
+  M Void OnCollisionStay(Collision collision)
+  M Void OnCollisionExit(Collision collision)
+  M Void Finish(Boolean settled)
+  M Void OnDisable()
+  M Void OnDestroy()
+  M Void .ctor()
+  M Void .ctor()
+  M Void .ctor(IntPtr pointer)
+== MoonCleaners.MoonDustCanisterFlight/__c : Il2CppSystem.Object
+  P static MoonCleaners.MoonDustCanisterFlight/__c __9
+  P static Il2CppSystem.Predicate`1<UnityEngine.Collider> __9__33_0
+  M Boolean _FixedUpdate_b__33_0(Collider c)
+  M Void .ctor()
+  M Void .ctor()
+  M Void .ctor(IntPtr pointer)

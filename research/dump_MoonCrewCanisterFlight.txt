@@ -1,0 +1,35 @@
+== MoonCleaners.MoonCrewCanisterFlight : UnityEngine.MonoBehaviour
+  P static System.Single Lifetime
+  P static System.Single Behind
+  P static System.Single Silence
+  P static System.Single Extrapolate
+  P static System.Int32 MaxPoints
+  P static Il2CppSystem.Collections.Generic.Dictionary`2<System.Int32,MoonCleaners.MoonCrewCanisterFlight> flying
+  P MoonCleaners.MoonWorld world
+  P MoonCleaners.MoonDustCanisterView view
+  P System.Int32 id
+  P System.Single elapsed
+  P Il2CppSystem.Collections.Generic.List`1<MoonCleaners.MoonCrewCanisterFlight/Point> points
+  P System.Double offset
+  P System.Double lastHeard
+  P static System.Double Now
+  M static Void ResetFlying()
+  M static Void Launch(MoonWorld world, Int32 id, Vector3 position, Quaternion rotation, Vector3 velocity, Vector3 spin, Double sent)
+  M static Void Moved(MoonWorld world, Int32 id, Vector3 position, Quaternion rotation, Vector3 velocity, Vector3 spin, Double sent)
+  M static Void Ended(MoonWorld world, Int32 id)
+  M Void Begin(MoonWorld source, MoonDustCanisterView shown, Int32 canisterId)
+  M Void Add(Double sent, Vector3 position, Quaternion rotation, Vector3 velocity)
+  M Void Update()
+  M Void Place()
+  M static Vector3 Hermite(Vector3 p0, Vector3 m0, Vector3 p1, Vector3 m1, Single t)
+  M Void OnDestroy()
+  M Void .ctor()
+  M Void .ctor()
+  M Void .ctor(IntPtr pointer)
+== MoonCleaners.MoonCrewCanisterFlight/Point : System.ValueType
+  F System.Double at
+  F UnityEngine.Vector3 position
+  F UnityEngine.Vector3 velocity
+  F UnityEngine.Quaternion rotation
+  M Object BoxIl2CppObject()
+  M Void .ctor()

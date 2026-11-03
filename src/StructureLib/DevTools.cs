@@ -45,6 +45,7 @@ namespace StructureLib
             AutoBuildViaPlan = cfg.Bind("Dev", "AutoBuildViaPlan", false, "Dev build: AutoBuild places modded structures through the build menu's own path (PlanStructure, BeginStructureCheck, TryBuildStructure), which records a free pose (placedPose), instead of TryBuildDepot. Vanilla kinds still use TryBuildDepot.");
             BindBelts(cfg);
             BindModels(cfg);
+            BindPowerUx(cfg);
             // Box spike (belt-boxes plan, Task 1; DevBelts.cs BoxSpike).
             RegisterBoxProbe = cfg.Bind("Dev", "RegisterBoxProbe", false, "Dev build: the example plugin also registers ryanhartwig.example-box-probe, a router (splitter: In on -X; Forward, Left, Right outputs) cloned from the floodlight (kind 4) with a 1.4 x 1.4 m Footprint. 15 s after load the donor's and the probe's definitions, prefab components and colliders (and the probe view's) are logged, and three dust canisters are put on the AutoBelt belt into the probe and followed for 10 s (CargoRouted count, riders on the in and out belts).");
             SelfTest.Subscribe();
@@ -96,6 +97,7 @@ namespace StructureLib
             if (beltAt > 0f && gameT > beltAt) { beltAt = -1f; AutoBelter.Run(AutoBelt.Value); }
             if (feedAt > 0f && gameT > feedAt) { feedAt = -1f; AutoFeeder.Run(AutoFeed.Value); }
             TickBelts(gameT);
+            PowerUx.Tick(gameT);
             if (saveAt > 0f && gameT > saveAt) { saveAt = -1f; RequestSave(); }
             if (RunSelfTest.Value && !selfTestRan && gameT > 20f)
             {
