@@ -359,9 +359,10 @@ namespace StructureLib
             return string.Join("; ", Patches.PowerPatches.LastSolve.Fed.Select(kv => $"{kv.Key} (network {(Patches.PowerPatches.LastSolve.NetworkOf.TryGetValue(kv.Key, out int n) ? n : -1)}) -> [{string.Join(", ", kv.Value)}]"));
         }
 
-        // cargo-tint (Patches/CanisterPatches.cs). Views are pooled: a view that showed tinted grit and is reused for a dust
-        // (or other) canister must come back white. The check drives the walker, so it starts once every other pending check is done (and,
-        // with the probe on, once its tour is over), at most 240 s after it opened:
+        // cargo-tint (Patches/CanisterPatches.cs). Views are pooled: a view that showed tinted grit and is reused for a
+        // dust (or other) canister must come back white. The check drives the walker, so it starts once every other
+        // pending check is done (and, with the probe on, once its tour is over) and no save is in flight; after 240 s of
+        // waiting it is not applicable and changes nothing. Every exit puts the borrowed canister back to dust and the walker back where it started:
         //  1. The ground dust canister nearest the walker (within 40 m) that has a near view and another dust canister
         //     within 2 m is borrowed. The walker goes 250 m away (the spot's near views go back to the pool), the canister
         //     is made grit in place (MoveCanisterRecord; slot-2's PackDustCanister refuses new canisters, and a view
@@ -375,15 +376,19 @@ namespace StructureLib
         // cargo; a reading wrong for 1.5 s in a row is a failure.
         // Pass: the grit canister's view matched, dust views read white, a view that showed grit was later seen with the
         // right colour on another cargo (white, or that modded cargo's own tint),
-        // nothing read wrong. Not applicable when no dust canister could be borrowed. A failure, a throw or the end
-        // always makes the borrowed canister dust again.
+        // nothing read wrong. Not applicable when no dust canister could be borrowed, when making it grit fails, when the
+        // pool never reused a grit view, or when the world, streaming or walker goes away; the whole check stops at 300 s.
         static readonly int TintColor = Shader.PropertyToID("_BaseColor");
         static float ctOpened = -1f, ctUntil = -1f, ctNext, ctStageAt;
         static int ctStage, ctGrit = -1, ctSamples;
         static bool ctGritOk, ctDustOk, ctReused, ctPutBack;
         static byte ctGritValue;
         static Color ctTint;
-        static Vector3 ctSpot, ctStand, ctFar, ctLook;
+        static Vector3 ctSpot, ctStand, ctFar, ctLook, ctHome;
+        static bool ctHomeSet;
+        // The wait for the other checks, the probe tour and any save in flight; then about 17 s of stages. ctUntil (opened
+        // + WaitLimit + 60 s) is the hard stop for the whole check.
+        const float WaitLimit = 240f;
         static readonly List<string> ctBad = new();
         static readonly List<string> ctSeen = new();
         static readonly Dictionary<int, int> ctTinted = new();          // view instance id -> the grit canister it showed
@@ -402,7 +407,7 @@ namespace StructureLib
             ctTint = grit.CanisterTint.Value;
             ctGritValue = grit.Value;
             ctOpened = Time.unscaledTime;
-            ctUntil = ctOpened + 300f;
+            ctUntil = ctOpened + WaitLimit + 60f;
             ctStage = 0;
             CoreLog.Info($"[selftest] {name} opened: grit value {ctGritValue} tint {PowerUx.C(ctTint)}; ActiveViews {streaming.ActiveViews}; waits for the other checks{(DevTools.PowerUxProbe?.Value == true ? " and the probe's tour" : "")}");
         }
@@ -477,6 +482,14 @@ namespace StructureLib
             walker.Face(flat.normalized, sign * Mathf.Atan2(Vector3.Dot(to, up), flat.magnitude) * Mathf.Rad2Deg);
         }
 
+        // A save the world has in flight, or an AutoSave save requested and not yet written: the check changes a canister's
+        // cargo and moves the walker, neither of which may be saved.
+        static bool SaveInFlight(MoonWorld world)
+        {
+            try { var p = world?.PendingSave; if (p != null && !p.IsCompleted) return true; } catch (Exception) { }
+            return DevTools.AutoSave.Value && DevTools.SaveRequested && Sidecar.WriteSeq <= DevTools.SaveSeqAtRequest;
+        }
+
         static void TickCargoTint()
         {
             const string name = "cargo-tint";
@@ -484,29 +497,34 @@ namespace StructureLib
             var world = CoreState.World ?? CoreState.FindWorld();
             var streaming = UnityEngine.Object.FindFirstObjectByType<MoonCanisterStreaming>();
             var walker = UnityEngine.Object.FindFirstObjectByType<MoonWalker>();
-            if (world == null || streaming == null || walker == null) return;
+            if (world == null || streaming == null || walker == null) { TintFinish(name, world, walker, $"the {(world == null ? "MoonWorld" : streaming == null ? "MoonCanisterStreaming" : "MoonWalker")} went away (stage {ctStage})"); return; }
+            if (now > ctUntil) { TintFinish(name, world, walker, $"timed out at stage {ctStage} after {now - ctOpened:F0} s"); return; }
             try
             {
                 if (ctStage == 0)
                 {
-                    bool probe = DevTools.PowerUxProbe?.Value == true;
-                    if ((OthersPending || (probe && !PowerUx.Tour.Finished)) && now < ctOpened + 240f) return;
-                    ctGrit = BorrowableDust(world, streaming, walker.transform.position, 40f);
-                    if (ctGrit < 0)
+                    // Nothing in the world is changed until this wait is over; on timeout nothing is changed at all.
+                    bool tour = DevTools.PowerUxProbe?.Value == true && !PowerUx.Tour.Finished;
+                    bool others = OthersPending, saving = SaveInFlight(world);
+                    if (others || tour || saving)
                     {
-                        ctUntil = -1f;
-                        CoreLog.Info($"[selftest] {name} not applicable: no ground dust canister with a near view (and another beside it) within 40 m of the walker to borrow");
+                        if (now < ctOpened + WaitLimit) return;
+                        TintFinish(name, world, walker, $"still waiting after {WaitLimit:F0} s (other checks pending {others}, probe tour running {tour}, save in flight {saving})");
                         return;
                     }
+                    ctGrit = BorrowableDust(world, streaming, walker.transform.position, 40f);
+                    if (ctGrit < 0) { TintFinish(name, world, walker, "no ground dust canister with a near view (and another beside it) within 40 m of the walker to borrow"); return; }
+                    ctHome = walker.transform.position;
+                    ctHomeSet = true;
                     ctSpot = world.canisters.get_Item(ctGrit).position;
                     var up = ctSpot.normalized;
-                    var away = Vector3.ProjectOnPlane(walker.transform.position - ctSpot, up).normalized;
+                    var away = Vector3.ProjectOnPlane(ctHome - ctSpot, up).normalized;
                     if (away.sqrMagnitude < 0.5f) away = Vector3.ProjectOnPlane(Vector3.right, up).normalized;
                     ctStand = ctSpot + away * 2.8f;
                     ctFar = ctSpot + away * 250f;
                     ctLook = ctSpot + up * 0.15f;
                     Stand(walker, ctFar);
-                    CoreLog.Info($"[selftest] {name}: started after {now - ctOpened:F1} s; borrowing dust canister {ctGrit} at {PowerUx.V(ctSpot)} (view {streaming.views.get_Item(ctGrit).GetInstanceID()}); walker 250 m off");
+                    CoreLog.Info($"[selftest] {name}: started after {now - ctOpened:F1} s; walker home {PowerUx.V(ctHome)}; borrowing dust canister {ctGrit} at {PowerUx.V(ctSpot)} (view {streaming.views.get_Item(ctGrit).GetInstanceID()}); walker 250 m off");
                     ctStage = 1; ctStageAt = now + 3f;
                     return;
                 }
@@ -517,9 +535,9 @@ namespace StructureLib
                     case 1:
                     {
                         bool viewed = streaming.views.ContainsKey(ctGrit);
-                        bool made = Recargo(world, ctGrit, (MoonCargo)ctGritValue);
+                        if (!Recargo(world, ctGrit, (MoonCargo)ctGritValue)) { TintFinish(name, world, walker, $"could not make canister {ctGrit} grit (MoveCanisterRecord did not take; near view while away {viewed})"); return; }
                         Stand(walker, ctStand);
-                        CoreLog.Info($"[selftest] {name}: canister {ctGrit} near view while away {viewed}; made grit {made}; walker back to {PowerUx.V(ctStand)}");
+                        CoreLog.Info($"[selftest] {name}: canister {ctGrit} near view while away {viewed}; made grit; walker back to {PowerUx.V(ctStand)}");
                         ctStage = 2; ctStageAt = now + 3f; return;
                     }
                     case 2: LookAt(walker, ctLook, -1f); ctStage = 3; ctStageAt = now + 1.5f; return;
@@ -538,12 +556,12 @@ namespace StructureLib
                     }
                     case 6: LookAt(walker, ctLook, -1f); CoreLog.Info($"[selftest] {name}: back: {ViewsText(streaming)}"); ctStage = 7; ctStageAt = now + 1.5f; return;
                 }
-                TintFinish(name, world, now);
+                TintFinish(name, world, walker, null);
             }
             catch (Exception e)
             {
-                CoreLog.Warn($"[selftest] {name}: threw {e.GetType().Name}: {e.Message}");
-                TintFinish(name, world, now);
+                ctBad.Add($"the check threw {e.GetType().Name} at stage {ctStage}: {e.Message}");
+                TintFinish(name, world, walker, null);
             }
         }
 
@@ -608,13 +626,33 @@ namespace StructureLib
             return $"ActiveViews {s.ActiveViews}, pool {s.pool?.Count ?? -1}, views [{string.Join(" ", parts)}]";
         }
 
-        static void TintFinish(string name, MoonWorld world, float now)
+        // Every exit of the check comes here, once: the borrowed canister back to dust, the walker back where it stood when
+        // the check started, then the verdict. `skip` set: not applicable with that reason. A run whose grit and dust views
+        // read right but whose pool never reused a grit view for another canister is not applicable too (nothing wrong
+        // was seen, the reuse just did not happen).
+        static void TintFinish(string name, MoonWorld world, MoonWalker walker, string skip)
         {
             ctUntil = -1f;
-            if (!ctPutBack && ctGrit >= 0) ctPutBack = Recargo(world, ctGrit, MoonCargo.Dust);
-            bool ok = ctGritOk && ctDustOk && ctReused && ctBad.Count == 0;
-            string detail = $"grit canister {ctGrit} matched {ctGritOk}, dust white {ctDustOk}, a grit view reused for another cargo with its colour {ctReused} ({ctTinted.Count} view(s) showed grit), back to dust {ctPutBack}, {ctSamples} samples; wrong: [{string.Join("; ", ctBad)}]; seen: [{string.Join("; ", ctSeen)}]";
-            Assert(name, ok, detail);
+            try
+            {
+                if (ctGrit >= 0 && world != null && world.canisters.ContainsKey(ctGrit))
+                    ctPutBack = world.canisters.get_Item(ctGrit).cargo == MoonCargo.Dust || Recargo(world, ctGrit, MoonCargo.Dust);
+            }
+            catch (Exception e) { CoreLog.Warn($"[selftest] {name}: putting canister {ctGrit} back to dust threw {e.Message}"); }
+            if (ctHomeSet)
+            {
+                try
+                {
+                    if (walker != null) { walker.Teleport(ctHome, true); CoreLog.Info($"[selftest] {name}: walker back home {PowerUx.V(ctHome)} (now at {PowerUx.V(walker.transform.position)}, {Vector3.Distance(ctHome, walker.transform.position):F2} m off)"); }
+                    else CoreLog.Warn($"[selftest] {name}: no walker to put back home {PowerUx.V(ctHome)}");
+                }
+                catch (Exception e) { CoreLog.Warn($"[selftest] {name}: putting the walker back home threw {e.Message}"); }
+            }
+            string detail = $"grit canister {ctGrit} matched {ctGritOk}, dust white {ctDustOk}, a grit view reused for another cargo with its colour {ctReused} ({ctTinted.Count} view(s) showed grit), back to dust {(ctGrit >= 0 ? ctPutBack.ToString() : "n/a")}, {ctSamples} samples; wrong: [{string.Join("; ", ctBad)}]; seen: [{string.Join("; ", ctSeen)}]";
+            if (skip == null && ctBad.Count == 0 && ctGritOk && ctDustOk && !ctReused) skip = "the pool never reused a view that showed grit for another canister";
+            if (skip != null && ctBad.Count == 0) { CoreLog.Info($"[selftest] {name} not applicable: {skip} ({detail})"); return; }
+            bool ok = ctGritOk && ctDustOk && ctReused && ctBad.Count == 0 && (ctGrit < 0 || ctPutBack);
+            Assert(name, ok, skip != null ? $"{skip}; {detail}" : detail);
             if (ok) CoreLog.Info($"[selftest] {name}: {detail}");
         }
 
