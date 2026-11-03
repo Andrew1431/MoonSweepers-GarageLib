@@ -286,7 +286,7 @@ belt). Removal runs last because the game saves a few seconds after it.
 | Ports | Declared ports (and a port on a port-less donor) written into the cloned definition as `sl:<cargo>:<Name>`; `PortCargo` answers the declared cargo; the game shows "input"/"output" and "<name> input/output"; refusal at freeze for a port cargo no slot holds | | Belts placed by hand onto modded ports (dev `AutoBelt` builds through the game's `TryBuildConveyor`); ports inherited from a donor (no example uses them) |
 | Models | `Model` file on the donor template (donor renderers hidden, colliders kept unless `Footprint` is set), ports from its `Port_*` nodes, card picture rendered from it (the example burner); a missing file falls back to the donor model and declared ports | The donor's animated effects on a custom model | Donors with a non-unit `scale` or a skinned mesh (none of the donors checked so far has either) |
 | Routers | Splitter and merger hops on the `HandOff` prefix with `CargoRouted` per hop: round-robin over three outputs (12 hops, 4 each), skipping a removed output belt with nothing lost, mergers serving three inputs in turn, a 3 kg canister hopping whole, grit balanced to 0.01 kg through both boxes (BeltBoxes self-test, `beltboxes-*`); both boxes, five belts and every canister saved and reloaded; `Footprint` written into the clone (`halfFootprint` 0.70 × 0.70) with the collider swap under a `Model`; side-port U-belts (5 m between boxes); routers, belts and waiting canisters saved and reloaded, a router removed mid-traffic with its belts kept | Cut-in onto an existing belt; canisters visibly crossing the box | Belts placed by hand onto router ports (0.7 m port spacing); vanilla paths gated by `Routes` (true for a router clone), cut-in offers among them; routers in co-op (the host decides; clients untested) |
-| Power | Machines on a vanilla grid's surplus and batteries; fuel generators charge, supply modded machines and keep their charge across saves; a modded-only group gets a negative grid id | Fuel generators feeding vanilla machines; power links drawn to modded structures; `SupplyMode.Solar`; `Power` without a `Processor`; a generator's `RunningKw` (ignored) | |
+| Power | Machines on a vanilla grid's surplus and batteries; fuel generators charge, supply modded machines and vanilla machines in range (a pressure chamber run to full power and through a cycle from a generator's charge, `power-vanilla-fed`) and keep their charge across saves; a modded-only group gets a negative grid id | Vanilla grid totals and the vanilla panel's POWER row for a fuel-fed vanilla machine; power links drawn to modded structures; `SupplyMode.Solar`; `Power` without a `Processor`; a generator's `RunningKw` (ignored) | |
 | Co-op | Manifest built and compared with itself | Graceful degradation for a client missing a mod | Both two-player cases (identical mods; client missing a mod) |
 
 ## Power
@@ -306,9 +306,14 @@ solve never sees modded kinds. Details and evidence: `research/STRUCTURES_RECON.
   capped at `BatteryKwh`, and no cycle starts while the battery is full. It delivers at most `PeakKw`. Its `Power` is
   always 1, `SuppliedKw` is what it gave in the last solve, and it is listed in `world.powerNodes` as a panel node
   between solves. Its charge is saved with the production record.
-- **Not supported:** a fuel generator feeding vanilla machines (the vanilla grid's totals cannot be written from
-  managed code), power links drawn to modded structures, supply from `SupplyMode.Solar` definitions, and supply from a
-  `Power` definition without a `Processor` (it has no production state to hold charge).
+- **Vanilla machines** (nodes with demand that their own grid leaves below `Power` 1) within a fuel generator's
+  network take the unmet share of their demand from the network's generators, after the modded machines and in depot-id
+  order (`FuelTopUp`), out of the generators' `ChargeKwh`. Only `Power`, `UsedKw` and the status text ("Powered by
+  <generator>") change; `Grid` stays the machine's own, and a vanilla machine never changes a modded member's grid id.
+  The vanilla grid's totals still leave out the fuel supply (they cannot be written from managed code), so the
+  vanilla panel's POWER row reads "no panels in reach" for a fuel-fed machine.
+- **Not supported:** power links drawn to modded structures, supply from `SupplyMode.Solar` definitions, and supply
+  from a `Power` definition without a `Processor` (it has no production state to hold charge).
 - **A generator's `RunningKw` is ignored:** a fuel generator always reads `Power` 1 and `DemandKw` 0 and never draws
   from the grid, so setting `RunningKw` on a `ProducesPower` processor has no effect. Leave it 0.
 - **Do not patch `MoonWorld.TryPanel`:** a Harmony prefix on it killed the game natively after world load. See

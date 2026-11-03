@@ -487,6 +487,7 @@ namespace StructureLib
             ProcessorChecks(lamp);
             PowerChecks();
             PanelChecks();
+            VanillaFedChecks();
             SandPowerChecks();
             PortChecks();
             BeltChecks();
@@ -544,6 +545,7 @@ namespace StructureLib
         {
             if (cycleUntil >= 0f) TickCycle();
             if (PowerPending) TickPower();
+            if (VanillaFedPending) TickVanillaFed();
             if (sandOpen.Count > 0) TickSandPower();
             if (BeltPending) TickBeltChecks();
             if (OutPending) TickOutChecks();
@@ -552,7 +554,7 @@ namespace StructureLib
             if (BoxPending) TickBoxes();
             if (artUntil >= 0f) { TickCardArt(); return; }
             if (renderUntil >= 0f) { TickRendered(); return; }
-            if (saveUntil >= 0f && cycleUntil < 0f && !PowerPending && sandOpen.Count == 0 && !BeltPending && !OutPending && !ModelPending && !SandChainPending && !BoxPending) TickSaveWait();
+            if (saveUntil >= 0f && cycleUntil < 0f && !PowerPending && !VanillaFedPending && sandOpen.Count == 0 && !BeltPending && !OutPending && !ModelPending && !SandChainPending && !BoxPending) TickSaveWait();
         }
 
         // cardart-modded: CardArt answers something once nothing is pending, or after 5 s.
@@ -1119,7 +1121,7 @@ namespace StructureLib
         // with its battery full and the grinder idle, 2 kg more grit must not start a cycle within 10 s.
         const string BurnerId = "ryanhartwig.example-burner";
         static readonly Dictionary<string, float> powerOpen = new();
-        static int burnerDepot = -1, fullCycles;
+        static int burnerDepot = -1, fullCycles, vanillaOnBurner = -1;
         static float fullAt = -1f, fullUntil = -1f;
         static double fullGrit;
 
@@ -1195,10 +1197,14 @@ namespace StructureLib
             Poll("power-grid-joined", () => (b != null && g != null && b.Grid != 0 && b.Grid == g.Grid, text));
             Poll("power-burner-supplies", () => (b != null && (b.SuppliedKw > 0f || b.ChargeKwh > 0), text));
             Poll("power-grinder-runs-on-burner", () => (b != null && g != null && g.Running && g.Power > 0.5f && b.SuppliedKw > 0f, text));
+            if (vanillaOnBurner < 0 && Patches.PowerPatches.LastSolve.Fed.TryGetValue(burnerDepot, out var fed))
+                vanillaOnBurner = fed.FirstOrDefault(d => Patches.PowerPatches.LastSolve.VanillaPowerBefore.ContainsKey(d), -1);
             float now = Time.unscaledTime;
             if (fullAt >= 0f && now >= fullAt)
             {
                 fullAt = -1f;
+                // A vanilla machine on the burner (power-vanilla-fed) keeps drawing from it, so its battery does not fill.
+                if (vanillaOnBurner >= 0) { CoreLog.Info($"[selftest] power-no-burn-when-full not applicable: vanilla depot {vanillaOnBurner} draws from the burner, so its battery does not fill; {text}"); return; }
                 float battery = burner.Power?.BatteryKwh ?? 0f;
                 if (b == null || b.ChargeKwh < battery - 1e-6 || g == null || g.Running) { Assert("power-no-burn-when-full", false, $"60 s after the feed the battery is not full with the grinder idle: {text}"); return; }
                 var grit = MoonStructures.CargoDefinition(GritId);
