@@ -73,7 +73,7 @@ For vehicles, things to know:
 ## New structure mod (StructureLib)
 
 Buildings, machines, cargo and power sources go in `mods/<Name>/` on top of
-[StructureLib](src/StructureLib/README.md). [`examples/ExampleStructure`](examples/ExampleStructure) is the worked example; copy its shape:
+[StructureLib](src/StructureLib/README.md). [`mods/SandPower`](mods/SandPower) is the worked example; copy its shape:
 
 - `<Name>.csproj` with `AssemblyName` = the folder name and a `ProjectReference` to
   `$(RepoRoot)src\StructureLib\StructureLib.csproj` with `Private="false"`.
