@@ -359,6 +359,265 @@ namespace StructureLib
             return string.Join("; ", Patches.PowerPatches.LastSolve.Fed.Select(kv => $"{kv.Key} (network {(Patches.PowerPatches.LastSolve.NetworkOf.TryGetValue(kv.Key, out int n) ? n : -1)}) -> [{string.Join(", ", kv.Value)}]"));
         }
 
+        // cargo-tint (Patches/CanisterPatches.cs). Views are pooled: a view that showed tinted grit and is reused for a dust
+        // (or other) canister must come back white. The check drives the walker, so it starts once every other pending check is done (and,
+        // with the probe on, once its tour is over), at most 240 s after it opened:
+        //  1. The ground dust canister nearest the walker (within 40 m) that has a near view and another dust canister
+        //     within 2 m is borrowed. The walker goes 250 m away (the spot's near views go back to the pool), the canister
+        //     is made grit in place (MoveCanisterRecord; slot-2's PackDustCanister refuses new canisters, and a view
+        //     does not re-show a cargo changed under it), the walker comes back to 2.8 m off it, so the game places the
+        //     views again; a close-up screenshot is taken.
+        //  2. The walker goes 250 m away again, the canister is made dust again, the walker comes back: the views are
+        //     placed again from the pool, so a view that showed grit is reused for another canister.
+        // Every 0.5 s from the first return on, each near view (MoonCanisterStreaming.views, canister id -> view; cargo
+        // from world.canisters) must have _BaseColor on its own block (properties) and its dust renderer's block equal to
+        // grit's CanisterTint (within 0.01) for grit, a modded cargo's own tint for one that has it, white for every other
+        // cargo; a reading wrong for 1.5 s in a row is a failure.
+        // Pass: the grit canister's view matched, dust views read white, a view that showed grit was later seen with the
+        // right colour on another cargo (white, or that modded cargo's own tint),
+        // nothing read wrong. Not applicable when no dust canister could be borrowed. A failure, a throw or the end
+        // always makes the borrowed canister dust again.
+        static readonly int TintColor = Shader.PropertyToID("_BaseColor");
+        static float ctOpened = -1f, ctUntil = -1f, ctNext, ctStageAt;
+        static int ctStage, ctGrit = -1, ctSamples;
+        static bool ctGritOk, ctDustOk, ctReused, ctPutBack;
+        static byte ctGritValue;
+        static Color ctTint;
+        static Vector3 ctSpot, ctStand, ctFar, ctLook;
+        static readonly List<string> ctBad = new();
+        static readonly List<string> ctSeen = new();
+        static readonly Dictionary<int, int> ctTinted = new();          // view instance id -> the grit canister it showed
+        static readonly Dictionary<string, float> ctWrongSince = new();  // "view:canister:cargo" -> first time it read wrong
+
+        static bool TintPending => ctUntil >= 0f;
+
+        static void CargoTintChecks()
+        {
+            const string name = "cargo-tint";
+            var grit = MoonStructures.CargoDefinition(GritId);
+            if (grit?.CanisterTint == null) { CoreLog.Info($"[selftest] {name} not applicable: '{GritId}' is not registered with a CanisterTint"); return; }
+            var world = CoreState.World ?? CoreState.FindWorld();
+            var streaming = UnityEngine.Object.FindFirstObjectByType<MoonCanisterStreaming>();
+            if (world == null || streaming == null) { CoreLog.Info($"[selftest] {name} not applicable: no {(world == null ? "MoonWorld" : "MoonCanisterStreaming")}"); return; }
+            ctTint = grit.CanisterTint.Value;
+            ctGritValue = grit.Value;
+            ctOpened = Time.unscaledTime;
+            ctUntil = ctOpened + 300f;
+            ctStage = 0;
+            CoreLog.Info($"[selftest] {name} opened: grit value {ctGritValue} tint {PowerUx.C(ctTint)}; ActiveViews {streaming.ActiveViews}; waits for the other checks{(DevTools.PowerUxProbe?.Value == true ? " and the probe's tour" : "")}");
+        }
+
+        static bool OthersPending => cycleUntil >= 0f || PowerPending || VanillaFedPending || ArcPending || ArcShotPending || sandOpen.Count > 0 ||
+            BeltPending || OutPending || ModelPending || SandChainPending || BoxPending || artUntil >= 0f || renderUntil >= 0f;
+
+        // The canister nearest `near` (within the radius) that is a ground dust canister (not riding, carried or flying),
+        // has a near view now (so the game places one at its spot), and has another ground dust canister within 2 m.
+        static int BorrowableDust(MoonWorld world, MoonCanisterStreaming streaming, Vector3 near, float within)
+        {
+            var all = new List<(int id, Vector3 p)>();
+            foreach (var kv in world.canisters)
+            {
+                var c = kv.Value;
+                if (c == null || (byte)c.cargo != 0) continue;
+                if (world.IsCanisterRiding(kv.Key) || world.IsCanisterCarried(kv.Key) || world.IsCanisterFlying(kv.Key)) continue;
+                all.Add((kv.Key, c.position));
+            }
+            int best = -1; float bd = within;
+            foreach (var (id, p) in all)
+            {
+                if (!streaming.views.ContainsKey(id)) continue;
+                float d = Vector3.Distance(near, p);
+                if (d >= bd || !all.Any(o => o.id != id && Vector3.Distance(o.p, p) <= 2f)) continue;
+                bd = d; best = id;
+            }
+            return best;
+        }
+
+        // The canister's record again with another cargo, where it lies (MoveCanisterRecord, as SelfTest.Spawn does).
+        static bool Recargo(MoonWorld world, int id, MoonCargo cargo)
+        {
+            try
+            {
+                if (id < 0 || !world.canisters.ContainsKey(id)) return false;
+                var c = world.canisters.get_Item(id);
+                var rotation = new Il2CppSystem.Nullable<Quaternion>(c.rotation);
+                var moved = new MoonDroppedCanister(c.id, c.owner, c.kilograms, c.capacity, c.position, c.up, c.createdAt, rotation, cargo);
+                moved.physicalPose = c.physicalPose;
+                world.MoveCanisterRecord(moved, c.position, c.up, rotation);
+                return world.canisters.ContainsKey(id) && world.canisters.get_Item(id).cargo == cargo;
+            }
+            catch (Exception e) { CoreLog.Warn($"[selftest] cargo-tint: re-cargoing canister {id} to {(byte)cargo} threw {e.Message}"); return false; }
+        }
+
+        static bool Near(Color a, Color b) => Mathf.Abs(a.r - b.r) <= 0.01f && Mathf.Abs(a.g - b.g) <= 0.01f && Mathf.Abs(a.b - b.b) <= 0.01f;
+
+        // The two _BaseColor readings of a view: its own block and its dust renderer's block (null when either is missing).
+        static (Color own, Color dust)? ViewColours(MoonDustCanisterView v)
+        {
+            var own = v.properties;
+            var r = v.dustRenderer;
+            if (own == null || r == null) return null;
+            var b = new MaterialPropertyBlock();
+            r.GetPropertyBlock(b);
+            return (own.GetColor(TintColor), b.GetColor(TintColor));
+        }
+
+        static void Stand(MoonWalker walker, Vector3 at)
+        {
+            var ground = (CoreState.World ?? CoreState.FindWorld()).SurfaceAt(at.normalized, out Vector3 gUp, out bool _);
+            walker.Teleport(ground + gUp * 0.2f, true);
+        }
+
+        static void LookAt(MoonWalker walker, Vector3 target, float sign)
+        {
+            var t = walker.transform;
+            var up = t.position.normalized;
+            var to = target - (t.position + up * 1.6f);
+            var flat = Vector3.ProjectOnPlane(to, up);
+            walker.Face(flat.normalized, sign * Mathf.Atan2(Vector3.Dot(to, up), flat.magnitude) * Mathf.Rad2Deg);
+        }
+
+        static void TickCargoTint()
+        {
+            const string name = "cargo-tint";
+            float now = Time.unscaledTime;
+            var world = CoreState.World ?? CoreState.FindWorld();
+            var streaming = UnityEngine.Object.FindFirstObjectByType<MoonCanisterStreaming>();
+            var walker = UnityEngine.Object.FindFirstObjectByType<MoonWalker>();
+            if (world == null || streaming == null || walker == null) return;
+            try
+            {
+                if (ctStage == 0)
+                {
+                    bool probe = DevTools.PowerUxProbe?.Value == true;
+                    if ((OthersPending || (probe && !PowerUx.Tour.Finished)) && now < ctOpened + 240f) return;
+                    ctGrit = BorrowableDust(world, streaming, walker.transform.position, 40f);
+                    if (ctGrit < 0)
+                    {
+                        ctUntil = -1f;
+                        CoreLog.Info($"[selftest] {name} not applicable: no ground dust canister with a near view (and another beside it) within 40 m of the walker to borrow");
+                        return;
+                    }
+                    ctSpot = world.canisters.get_Item(ctGrit).position;
+                    var up = ctSpot.normalized;
+                    var away = Vector3.ProjectOnPlane(walker.transform.position - ctSpot, up).normalized;
+                    if (away.sqrMagnitude < 0.5f) away = Vector3.ProjectOnPlane(Vector3.right, up).normalized;
+                    ctStand = ctSpot + away * 2.8f;
+                    ctFar = ctSpot + away * 250f;
+                    ctLook = ctSpot + up * 0.15f;
+                    Stand(walker, ctFar);
+                    CoreLog.Info($"[selftest] {name}: started after {now - ctOpened:F1} s; borrowing dust canister {ctGrit} at {PowerUx.V(ctSpot)} (view {streaming.views.get_Item(ctGrit).GetInstanceID()}); walker 250 m off");
+                    ctStage = 1; ctStageAt = now + 3f;
+                    return;
+                }
+                if (ctStage >= 2) Sample(world, streaming, now);
+                if (now < ctStageAt) return;
+                switch (ctStage)
+                {
+                    case 1:
+                    {
+                        bool viewed = streaming.views.ContainsKey(ctGrit);
+                        bool made = Recargo(world, ctGrit, (MoonCargo)ctGritValue);
+                        Stand(walker, ctStand);
+                        CoreLog.Info($"[selftest] {name}: canister {ctGrit} near view while away {viewed}; made grit {made}; walker back to {PowerUx.V(ctStand)}");
+                        ctStage = 2; ctStageAt = now + 3f; return;
+                    }
+                    case 2: LookAt(walker, ctLook, -1f); ctStage = 3; ctStageAt = now + 1.5f; return;
+                    case 3: ShotLine(streaming, "close-up"); PowerUx.Tour.Shot($"cargo-tint: grit canister {ctGrit} among dust canisters"); ctStage = 4; ctStageAt = now + 1f; return;
+                    case 4:
+                        Stand(walker, ctFar);
+                        CoreLog.Info($"[selftest] {name}: walker 250 m off again; views that showed grit so far: [{string.Join(", ", ctTinted.Select(kv => $"{kv.Key} (canister {kv.Value})"))}]");
+                        ctStage = 5; ctStageAt = now + 3f; return;
+                    case 5:
+                    {
+                        bool viewed = streaming.views.ContainsKey(ctGrit);
+                        ctPutBack = Recargo(world, ctGrit, MoonCargo.Dust);
+                        Stand(walker, ctStand);
+                        CoreLog.Info($"[selftest] {name}: canister {ctGrit} near view while away {viewed}; made dust again {ctPutBack}; walker back; while away: {ViewsText(streaming)}");
+                        ctStage = 6; ctStageAt = now + 4f; return;
+                    }
+                    case 6: LookAt(walker, ctLook, -1f); CoreLog.Info($"[selftest] {name}: back: {ViewsText(streaming)}"); ctStage = 7; ctStageAt = now + 1.5f; return;
+                }
+                TintFinish(name, world, now);
+            }
+            catch (Exception e)
+            {
+                CoreLog.Warn($"[selftest] {name}: threw {e.GetType().Name}: {e.Message}");
+                TintFinish(name, world, now);
+            }
+        }
+
+        static void ShotLine(MoonCanisterStreaming streaming, string how)
+        {
+            var v = streaming.views.ContainsKey(ctGrit) ? streaming.views.get_Item(ctGrit) : null;
+            var got = v != null ? ViewColours(v) : null;
+            CoreLog.Info($"[selftest] cargo-tint shot ({how}): canister {ctGrit}: {(v == null ? "no near view" : got == null ? $"view {v.GetInstanceID()} no block" : $"view {v.GetInstanceID()} own {PowerUx.C(got.Value.own)} dust renderer {PowerUx.C(got.Value.dust)}")}; ActiveViews {streaming.ActiveViews}");
+        }
+
+        static void Sample(MoonWorld world, MoonCanisterStreaming streaming, float now)
+        {
+            if (now < ctNext || streaming.views == null) return;
+            ctNext = now + 0.5f;
+            ctSamples++;
+            var live = new HashSet<string>();
+            foreach (var kv in streaming.views)
+            {
+                int id = kv.Key;
+                var v = kv.Value;
+                if (v == null || !world.canisters.ContainsKey(id)) continue;
+                byte cargo = (byte)world.canisters.get_Item(id).cargo;
+                // Grit wants its tint; every other cargo its own CanisterTint when it is a modded one with a tint, else white.
+                var want = cargo == ctGritValue ? ctTint : (MoonStructures.IsModded((MoonCargo)cargo) ? MoonStructures.CargoDefinition((MoonCargo)cargo)?.CanisterTint : null) ?? Color.white;
+                var got = ViewColours(v);
+                int vid = v.GetInstanceID();
+                string text = got == null ? "no block" : $"own {PowerUx.C(got.Value.own)} dust renderer {PowerUx.C(got.Value.dust)}";
+                if (got == null || !Near(got.Value.own, want) || !Near(got.Value.dust, want))
+                {
+                    string key = $"{vid}:{id}:{cargo}";
+                    live.Add(key);
+                    if (!ctWrongSince.TryGetValue(key, out float since)) ctWrongSince[key] = since = now;
+                    if (now - since >= 1.5f && ctBad.Count < 6 && !ctBad.Any(b => b.StartsWith($"view {vid} canister {id} ", StringComparison.Ordinal)))
+                        ctBad.Add($"view {vid} canister {id} cargo {cargo}: {text} for {now - since:F1} s, want {PowerUx.C(want)}");
+                    continue;
+                }
+                if (cargo == ctGritValue)
+                {
+                    if (id == ctGrit && !ctGritOk) { ctGritOk = true; CoreLog.Info($"[selftest] cargo-tint: grit canister {id} view {vid} reads {text}"); }
+                    ctTinted[vid] = id;
+                }
+                else
+                {
+                    if (!ctDustOk && cargo == 0) CoreLog.Info($"[selftest] cargo-tint: dust canister {id} view {vid} reads {text}");
+                    if (cargo == 0) ctDustOk = true;
+                    if (ctTinted.TryGetValue(vid, out int was) && !ctReused)
+                    {
+                        ctReused = true;
+                        CoreLog.Info($"[selftest] cargo-tint: view {vid} showed grit canister {was} and now shows canister {id} of cargo {cargo}: {text}");
+                    }
+                }
+                if (ctSeen.Count < 6 && !ctSeen.Any(s => s.StartsWith($"view {vid} canister {id} ", StringComparison.Ordinal))) ctSeen.Add($"view {vid} canister {id} cargo {cargo}: {text}");
+            }
+            foreach (var k in ctWrongSince.Keys.Where(k => !live.Contains(k)).ToList()) ctWrongSince.Remove(k);
+        }
+
+        // The near views (instance:canister) and the pool size; a view that showed grit is marked *.
+        static string ViewsText(MoonCanisterStreaming s)
+        {
+            var parts = new List<string>();
+            foreach (var kv in s.views) if (kv.Value != null) { int vid = kv.Value.GetInstanceID(); parts.Add($"{vid}:{kv.Key}{(ctTinted.ContainsKey(vid) ? "*" : "")}"); }
+            return $"ActiveViews {s.ActiveViews}, pool {s.pool?.Count ?? -1}, views [{string.Join(" ", parts)}]";
+        }
+
+        static void TintFinish(string name, MoonWorld world, float now)
+        {
+            ctUntil = -1f;
+            if (!ctPutBack && ctGrit >= 0) ctPutBack = Recargo(world, ctGrit, MoonCargo.Dust);
+            bool ok = ctGritOk && ctDustOk && ctReused && ctBad.Count == 0;
+            string detail = $"grit canister {ctGrit} matched {ctGritOk}, dust white {ctDustOk}, a grit view reused for another cargo with its colour {ctReused} ({ctTinted.Count} view(s) showed grit), back to dust {ctPutBack}, {ctSamples} samples; wrong: [{string.Join("; ", ctBad)}]; seen: [{string.Join("; ", ctSeen)}]";
+            Assert(name, ok, detail);
+            if (ok) CoreLog.Info($"[selftest] {name}: {detail}");
+        }
+
         static string VanillaText(MoonProductionState s) => s == null ? "no state" :
             $"depot {s.Id} grid {s.Grid} power {s.Power:F2} demand {s.DemandKw:F1} kW used {s.UsedKw:F2} kW running {s.Running} progress {s.Progress:F3} cycles {s.Cycles} status '{s.Status}'";
     }

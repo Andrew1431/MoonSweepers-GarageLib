@@ -490,6 +490,7 @@ namespace StructureLib
             PanelChecks();
             VanillaFedChecks();
             ArcChecks();
+            CargoTintChecks();
             SandPowerChecks();
             PortChecks();
             BeltChecks();
@@ -550,6 +551,7 @@ namespace StructureLib
             if (VanillaFedPending) TickVanillaFed();
             if (ArcPending) TickArc();
             if (ArcShotPending) TickArcShot();
+            if (TintPending) TickCargoTint();
             if (sandOpen.Count > 0) TickSandPower();
             if (BeltPending) TickBeltChecks();
             if (OutPending) TickOutChecks();
@@ -558,7 +560,7 @@ namespace StructureLib
             if (BoxPending) TickBoxes();
             if (artUntil >= 0f) { TickCardArt(); return; }
             if (renderUntil >= 0f) { TickRendered(); return; }
-            if (saveUntil >= 0f && cycleUntil < 0f && !PowerPending && !VanillaFedPending && !ArcPending && sandOpen.Count == 0 && !BeltPending && !OutPending && !ModelPending && !SandChainPending && !BoxPending) TickSaveWait();
+            if (saveUntil >= 0f && cycleUntil < 0f && !PowerPending && !VanillaFedPending && !ArcPending && !TintPending && sandOpen.Count == 0 && !BeltPending && !OutPending && !ModelPending && !SandChainPending && !BoxPending) TickSaveWait();
         }
 
         // cardart-modded: CardArt answers something once nothing is pending, or after 5 s.

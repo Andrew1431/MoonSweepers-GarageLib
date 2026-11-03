@@ -25,7 +25,7 @@ namespace StructureLib
         static void BindPowerUx(ConfigFile cfg)
         {
             PowerUxProbe = cfg.Bind("Dev", "PowerUxProbe", false, "Dev build: the power-UX recon probe ([powerux] log lines): traces the look-at panel, the power solve, the power arcs and canister views, tours the walker's view over the AutoBuild depots and takes screenshots to BepInEx/cache/structurelib/powerux-<n>.png.");
-            PowerUxTest = cfg.Bind("Dev", "PowerUxTest", "", "Dev build: comma-separated PowerUxProbe experiments: fuel (raise the AutoBuilt pressure chamber's Power from the briquette generator after the solve), link (add the generator-chamber pair to powerLinks), anchor (add the generator to powerAnchors), arc (log PowerLinksView.ArcsDrawn on every tour shot and judge the build-tool and aim gate at the end of the tour), tint (tint modded-cargo canister views), far (walk 70 m away from the canisters and look back), gates (instead of the tour: aim the compactor, open the pause menu, then mount a vehicle (spawning one if none is out), logging the look-at panel each time).");
+            PowerUxTest = cfg.Bind("Dev", "PowerUxTest", "", "Dev build: comma-separated PowerUxProbe experiments: fuel (raise the AutoBuilt pressure chamber's Power from the briquette generator after the solve), link (add the generator-chamber pair to powerLinks), anchor (add the generator to powerAnchors), arc (log PowerLinksView.ArcsDrawn on every tour shot and judge the build-tool and aim gate at the end of the tour), tint (close-ups of the belt and ground canisters; the tint itself is the library's CanisterPatches), far (walk 70 m away from the canisters and look back), gates (instead of the tour: aim the compactor, open the pause menu, then mount a vehicle (spawning one if none is out), logging the look-at panel each time).");
             PowerUxTeleport = cfg.Bind("Dev", "PowerUxTeleport", 0f, "Dev build: with PowerUxProbe, 6 s after load move the walker this many metres to the free side of the base (away from every depot), before AutoBuild. 0 = stay.");
             PowerUxHome = cfg.Bind("Dev", "PowerUxHome", "", "Dev build: with PowerUxProbe, 6 s after load put the walker on the ground under this world point (x,y,z), before AutoBuild. The walker's position is saved, so a probe run that walked it away is undone here. Empty = stay.");
             CoreLog.Info($"[dev] PowerUxProbe={PowerUxProbe.Value} PowerUxTest='{PowerUxTest.Value}' PowerUxTeleport={PowerUxTeleport.Value}");
@@ -456,7 +456,6 @@ namespace StructureLib
                 {
                     if (Canisters.Watched(__instance.Id) || __instance.Id <= 0 || (byte)cargo > 2)
                         Once($"cargopost:{__instance.GetInstanceID()}:{(byte)cargo}", $"ShowCargo done (view {__instance.GetInstanceID()} Id {__instance.Id}, cargo {(byte)cargo}): {Canisters.Describe(__instance)}");
-                    if (Test("tint")) Canisters.Tint(__instance, cargo);
                 }
                 catch (Exception e) { CoreLog.Once("powerux-cargo", "[powerux] ShowCargo postfix threw: " + e, 3); }
             }
@@ -599,25 +598,6 @@ namespace StructureLib
                 foreach (var p in new[] { "_Fill", "_Heat", "_Glow", "_Level" }) if (b.HasFloat(p)) parts.Add($"{p} {b.GetFloat(p):F2}");
                 return string.Join(" ", parts);
             });
-
-            static readonly Color TestTint = new(0.25f, 0.2f, 0.18f, 1f);
-
-            // tint: the modded cargo's CanisterTint (or a test charcoal) as _BaseColor on the dust renderer's property block;
-            // a vanilla cargo on a reused view gets _BaseColor back to white. Logged once per (view, cargo).
-            internal static void Tint(MoonDustCanisterView v, MoonCargo cargo)
-            {
-                var r = v.dustRenderer;
-                if (r == null) return;
-                var b = new MaterialPropertyBlock();
-                r.GetPropertyBlock(b);
-                bool modded = (byte)cargo > 2;
-                var tint = modded ? (MoonStructures.CargoDefinition(cargo)?.CanisterTint ?? TestTint) : Color.white;
-                b.SetColor("_BaseColor", tint);
-                r.SetPropertyBlock(b);
-                // The view re-applies its own block (properties) on every RefreshFill; put the colour in it too.
-                v.properties?.SetColor("_BaseColor", tint);
-                Once($"tint:{v.GetInstanceID()}:{(byte)cargo}", $"tint: view {v.GetInstanceID()} Id {v.Id} cargo {(byte)cargo} -> _BaseColor {C(tint)}; {Block(r, null)}");
-            }
         }
 
         // A: walk to each target in turn (teleport 5 m off it, MoonWalker.Face), so the game's own Aimed/ShowPanel/ShowGrid
@@ -631,6 +611,8 @@ namespace StructureLib
             static Vector3 home;
             const float StepSeconds = 7.5f;
             internal static bool ForceHammer;
+            /// <summary>True once the tour has walked all its targets (cargo-tint waits for it before it moves the walker).</summary>
+            internal static bool Finished => t0 >= 0f && index >= targets.Count;
 
             internal static void Start(MoonWorld world)
             {

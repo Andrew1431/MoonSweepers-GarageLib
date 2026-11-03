@@ -47,6 +47,8 @@ namespace ExampleStructure
                 ShortName = "grit",
                 UnitKilograms = 3,
                 Price = 2m,
+                // Grey-blue grit in a near canister view (belt, ground, hand); far canisters still look like dust.
+                CanisterTint = new Color(0.55f, 0.55f, 0.60f),
             }, Guid);
 
             // A processor on the pressure chamber's model: grinds moon dust into example grit, 2 kg per 4 s cycle.
