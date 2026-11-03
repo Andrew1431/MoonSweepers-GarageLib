@@ -76,6 +76,78 @@ green and the chain run 34/0 again, the first card render 5 ticks after the stan
 Deferred minor findings of this plan: the `Minor deferred:` lines in the ledger
 (`grep "Minor deferred" .superpowers/sdd/2026-11-02-structurelib-belts-and-models/progress.md`), one per reviewed task.
 
+## BeltBoxes (third plan, 2026-11-02)
+
+Compact belt splitter and merger (`mods/BeltBoxes`: `ryanhartwig.box-splitter`, `ryanhartwig.box-merger`) on
+StructureLib routers. Spec `docs/superpowers/specs/2026-11-02-belt-boxes-design.md`, plan
+`docs/superpowers/plans/2026-11-02-belt-boxes.md`, recon `research/SPLITTERS_RECON.md`; ledger (git-ignored)
+`.superpowers/sdd/2026-11-02-belt-boxes/`. Library work on `structurelib-lib`, the mod on `beltboxes` (merged from the
+library after each library change). Nothing pushed; no PR yet.
+
+| Branch | Task | What | Commits |
+|---|---|---|---|
+| `structurelib-lib` | 1 | Box spike: donor, hop and prefix-call facts, side-port belts; dev probes | dda93ca |
+| `structurelib-lib` | 2–3 | Router rules (pure), `RouterDefinition`, `Footprint` with the collider swap, the hop on the `HandOff` prefix, `CargoRouted`; fix round 1 | 2cbdc8d, 0b10986, 7fcb494 |
+| `beltboxes` | 4 | The mod: both boxes, declared ports, README | dfb3c78, aa696b9 |
+| `beltboxes-models` → `beltboxes` | 5 | Models (`box_splitter.bin`, `box_merger.bin`), ports from the models | 284e7df, 4edeedc |
+| `structurelib-lib` | 6 | Box self-test (`DevBoxes.cs`), `[Dev] AutoBuildGap`, honest "not applicable" for checks whose setup a run lacks; README and recon; fix round 1 (two-box reload, removal in the reload run, strict conservation) | 028b729, e9be18b, eaadf43 |
+
+Unit tests: 148 green. In game (slot-2), the BeltBoxes self-test proved the following (after fix round 1).
+
+The chain run ended `46 passed, 0 failed`. Its line was chamber → grinder → splitter → (Forward, Left, Right) →
+merger → burner, with 5 m between the boxes.
+- `beltboxes-registered` and `beltboxes-model` (both boxes) passed.
+- `beltboxes-split-even`: 12 hops, 4 to each output.
+- `beltboxes-merge-fair`: six hops in turn order, two from each input, starting once two canisters queued at the end
+  of each input.
+- `beltboxes-conserve`: after the merge window, 21 kg of grit in and 21 kg accounted for, to 0.01 kg.
+- `beltboxes-heavy`: a 3 kg canister hopped and rode on at 3 kg, capacity 3.
+- `beltboxes-split-skips`: with the Forward belt removed, six hops went to Left and Right only, none lost; the belt
+  was rebuilt.
+- `beltboxes-save-clean`: a save with canisters stopped at the end of the splitter's input and of all three middle
+  belts wrote cleanly, with both boxes and 39 grit canisters in the sidecar. The grit balance over the whole run held
+  exactly: 62 kg in, 62 kg accounted for (burner, riding, and 1 kg removed by the test).
+- `power-node-registered` and `power-grid-joined` passed. The other three power checks were not applicable: the
+  burner is fed through the merger.
+
+The reload run ended `34 passed, 0 failed`.
+- `beltboxes-reload`: both boxes came back with their views, with all five belts at their ports. All 39 saved grit
+  canisters were restored; one had hopped before the check began. Once the sand holder was removed, the burner took
+  grit 0.7 s later.
+- `beltboxes-model` passed for both boxes.
+- `beltboxes-remove-clean` then removed the merger with a canister waiting at Back: nothing threw, and the belts were
+  kept.
+
+Standard library configs on the same DLL:
+- Belt input (`96,ryanhartwig.example-grinder,94`, ring) ended `34 passed, 0 failed`: all four `belt-in-*` checks and
+  `belt-canister-modded` passed.
+- Belt output and power (grinder, burner and lamp, with the burner fed by `AutoFeed`) ended `49 passed, 0 failed`:
+  all five power checks, `belt-out-emits`, `belt-chain-feeds` and `belt-save-clean` passed.
+- Both families in one run fail the belt-input checks, because the chamber's sand queues on the grinder's belt. That
+  is how the configs interact, and the README says so.
+
+The run without BeltBoxes (before fix round 1) ended `38 passed, 0 failed`. Since the fix, a burner fed straight by a
+machine with no `AutoFeed` fails the five power checks again, as it always used to. `Moon save failed` was 0 in every
+run. The report and logs are in `.superpowers/sdd/2026-11-02-belt-boxes/task-6-report.md` and `task-6-logs/`.
+
+**By hand for BeltBoxes** (not covered by any self-test):
+- The belt tool onto every port at the 0.7 m port spacing, the side ports included. The self-test builds belts through
+  `TryBuildConveyor`, never the tool.
+- Cut-in offers. The game's `Routes` is true for any 3–4-port clone, so the belt tool may offer to cut a placed box
+  into a belt. Check that and the other `Routes`-gated paths: they stay untested (the `HandOff` prefix keeps a box's
+  input belts from vanilla routing, nothing else).
+- Both models at player scale and in real lighting.
+- Removing a box or a belt mid-traffic with the remove tool. A removed belt drops its canisters in its path, and they
+  block a new belt there until they are picked up.
+- Placing both boxes from the build menu (the real ghost).
+- Co-op with two players (the host routes; clients untested).
+
+Hot paths touched on these branches, with no board claim:
+- `GarageLib.slnx`, `modpack.json` and the root `README.md` (Task 4, the mod's registration lines);
+- `examples/ExampleStructure/Plugin.cs` (the box probe, Task 1);
+- the library files under `src/StructureLib/` (`MoonStructures.cs`, `StructureDefinition.cs`, `PortDefinition.cs`,
+  `ModelSwap.cs`, `Injection.cs`, `Plugin.cs`, `Patches/BeltPatches.cs`, `Patches/ProductionPatches.cs`, the new
+  `Patches/RouterHop.cs` and `Pure/RouterRules.cs`, and the dev files).
 ## Power UX (2026-11-02/03)
 
 Spec `docs/superpowers/specs/2026-11-02-power-ux-design.md`, plan `docs/superpowers/plans/2026-11-02-power-ux.md`,

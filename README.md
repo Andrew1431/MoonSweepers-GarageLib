@@ -13,7 +13,8 @@ Maintainers: Andrew (Andrew1431) and Ryan (ryanhartwig), with equal say on what 
 | GarageLib | The library. Required by every vehicle. | [`src/GarageLib`](src/GarageLib) |
 | Ms Choppa | Flying utility helicopter, $12,000. Paused: not in the modpack or dev installs for now. | [`vehicles/MsChoppa`](vehicles/MsChoppa) |
 | StructureLib | The structure library: modded buildings, machines, cargo and fuel power. Required by structure mods. | [`src/StructureLib`](src/StructureLib) |
-| Modpack | GarageLib, Late Game Vehicles, StructureLib and the other mods in one zip. | [`modpack.json`](modpack.json) |
+| Belt Boxes | Compact box splitter and box merger: one belt into up to three, or up to three into one. | [`mods/BeltBoxes`](mods/BeltBoxes) |
+| Modpack | GarageLib, Late Game Vehicles, StructureLib, Belt Boxes and the other mods in one zip. | [`modpack.json`](modpack.json) |
 
 ## Installing (players)
 
@@ -36,6 +37,7 @@ src/GarageLib/          the library
 src/StructureLib/       the structure library (buildings, machines, cargo, power)
 vehicles/<Name>/        one folder per vehicle mod (own Plugin.cs, version, README, blend files)
 mods/<Name>/            any other mod: buildings, mechanics, tweaks (same shape: Plugin.cs with Version, README)
+mods/BeltBoxes/         box splitter and box merger (StructureLib routers)
 shared/Rotorcraft/      helicopter flight model, compiled into vehicles that fly
 examples/ExampleVehicle two test vehicles showing the API (not released)
 examples/ExampleStructure test structures showing the StructureLib API (not released)
