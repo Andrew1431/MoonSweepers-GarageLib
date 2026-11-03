@@ -121,7 +121,7 @@ public class PanelTextTests
         var r = l.Rows[l.Rows.Count - 1];
         Assert.Equal("3 done", r.Value);
         Assert.Equal(0f, r.Fill);
-        Assert.Equal(PanelColour.Muted, r.Colour);
+        Assert.Equal(PanelColour.Cyan, r.Colour);
         Assert.Equal("Idle", l.State);
         Assert.Equal(PanelColour.Amber, l.StateColour);
     }

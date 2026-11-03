@@ -22,21 +22,31 @@ namespace StructureLib.Patches
         static readonly Color Sand = new Color(0.86f, 0.66f, 0.38f, 1f);
         static readonly Color Stone = new Color(0.95f, 0.42f, 0.11f, 1f);
 
+        // Whether this ShowPanel call drew our panel (set by the prefix, read by the postfix of the same call).
+        static bool drawn;
+
         [HarmonyPatch(typeof(MoonProductionInteraction), nameof(MoonProductionInteraction.ShowPanel)), HarmonyPrefix]
         static bool ShowPanel(MoonProductionInteraction __instance, MoonWorld world, MoonDepotSnapshot record, bool power)
         {
             var d = record == null ? null : Remap.Live(record.kind);
             if (d == null) return true;
-            try
-            {
-                if (!Draw(__instance, world, record, power)) return true;
-            }
-            catch (Exception e)
-            {
-                CoreLog.Once("panel:" + record.id, $"Drawing the look-at panel of '{d.Id}' depot {record.id} threw: {e}", 2);
-                return true;
-            }
-            return false;
+            drawn = false;
+            try { drawn = Draw(__instance, world, record, power); }
+            catch (Exception e) { CoreLog.Once("panel:" + record.id, $"Drawing the look-at panel of '{d.Id}' depot {record.id} threw: {e}", 2); }
+            // Not drawn: the game's panel does not exist yet (vanilla's ShowPanel creates it on the session's first call),
+            // or Draw threw. Vanilla runs, and the postfix redraws or hides what it drew.
+            return !drawn;
+        }
+
+        // Same method as the prefix (no new patch target). After vanilla ran for a modded kind, draw ours now that the panel
+        // exists; if that fails too, hide it rather than leave the solar tracker's panel up.
+        [HarmonyPatch(typeof(MoonProductionInteraction), nameof(MoonProductionInteraction.ShowPanel)), HarmonyPostfix]
+        static void ShowPanelAfter(MoonProductionInteraction __instance, MoonWorld world, MoonDepotSnapshot record, bool power)
+        {
+            if (drawn || record == null || Remap.Live(record.kind) == null) return;
+            try { drawn = Draw(__instance, world, record, power); }
+            catch (Exception e) { CoreLog.Once("panel-after:" + record.id, $"Drawing the look-at panel of depot {record.id} after vanilla threw: {e}", 2); }
+            if (!drawn && __instance != null && __instance.look != null) __instance.look.Hide();
         }
 
         // Without the build tool vanilla shows a vanilla machine's production panel, never a modded one's. Generators and
@@ -53,9 +63,14 @@ namespace StructureLib.Patches
             if (!MoonSession.InGame || !MoonStructures.Frozen || MoonStructures.Disabled) return;
             var world = CoreState.World;
             if (world == null || inter == null) return;
-            if (inter.builder?.HoldingBuildTool == true) return;
+            // Aimed is asked here directly, so mirror vanilla: no look-at panel while a menu is open (pause, map, shops:
+            // the game's own MoonFramePacing.MenuOpen) or while the walker is mounted on a vehicle. (Not the cursor lock:
+            // it reads None while walking and Locked in a vehicle.)
+            if (MoonFramePacing.MenuOpen()) return;
+            if (inter.walker == null || !inter.walker.isActiveAndEnabled || inter.walker.Mounted) return;
+            if (inter.builder != null && inter.builder.HoldingBuildTool) return;
             // Carrying a canister turns the look-at panel off in vanilla.
-            if (inter.capsules?.IsCarrying == true) return;
+            if (inter.capsules != null && inter.capsules.IsCarrying) return;
             int id = inter.Aimed(world);
             if (id <= 0) return;
             var depots = world.depots;
@@ -67,13 +82,13 @@ namespace StructureLib.Patches
         }
 
         /// <summary>
-        /// Draws the panel of a modded generator or machine through <c>inter.look</c>. False for anything else (a router),
-        /// which the prefix then leaves to vanilla.
+        /// Draws the panel of a modded generator or machine through <c>inter.look</c>. False when the panel does not exist yet
+        /// and for anything else (a router: vanilla runs and the postfix hides its panel).
         /// </summary>
         internal static bool Draw(MoonProductionInteraction inter, MoonWorld world, MoonDepotSnapshot record, bool power)
         {
             var d = Remap.Live(record.kind);
-            var look = inter?.look;
+            var look = inter != null ? inter.look : null;
             if (d?.Processor == null || look == null || world == null) return false;
             var state = world.ProductionOf(record.id);
             var slots = d.Processor.Slots;
@@ -83,11 +98,12 @@ namespace StructureLib.Patches
             if (d.Power != null && d.Processor.ProducesPower)
             {
                 int fuel = slots.FindIndex(s => s.Role == SlotRole.Input);
-                byte cargo = fuel >= 0 ? slots[fuel].Cargo.Value : (byte)0;
+                // No Input slot: no fuel to name; the FUEL row reads 0 / 0 kg.
+                byte? cargo = fuel >= 0 ? slots[fuel].Cargo.Value : null;
                 double capacity = fuel >= 0 ? slots[fuel].Capacity : 0;
                 l = PanelText.Generator(d.Name, d.Power.Range, d.Power.PeakKw, state?.SuppliedKw ?? 0f, d.Power.BatteryKwh, state?.ChargeKwh ?? 0,
-                    CargoName((MoonCargo)cargo), CargoShortName((MoonCargo)cargo), Kg(state, fuel), capacity, state?.Running ?? false,
-                    PowerPatches.FedCountOf(record.id));
+                    cargo.HasValue ? CargoName((MoonCargo)cargo.Value) : "", cargo.HasValue ? CargoShortName((MoonCargo)cargo.Value) : "",
+                    Kg(state, fuel), capacity, state?.Running ?? false, PowerPatches.FedCountOf(record.id));
                 foreach (var r in l.Rows) rowCargo.Add(r.Label == "FUEL" ? cargo : null);
             }
             else if (!d.Processor.ProducesPower)

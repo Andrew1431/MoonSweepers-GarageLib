@@ -25,7 +25,7 @@ namespace StructureLib
         static void BindPowerUx(ConfigFile cfg)
         {
             PowerUxProbe = cfg.Bind("Dev", "PowerUxProbe", false, "Dev build: the power-UX recon probe ([powerux] log lines): traces the look-at panel, the power solve, the power arcs and canister views, tours the walker's view over the AutoBuild depots and takes screenshots to BepInEx/cache/structurelib/powerux-<n>.png.");
-            PowerUxTest = cfg.Bind("Dev", "PowerUxTest", "", "Dev build: comma-separated PowerUxProbe experiments: fuel (raise the AutoBuilt pressure chamber's Power from the briquette generator after the solve), link (add the generator-chamber pair to powerLinks), anchor (add the generator to powerAnchors), arc (draw an arc from the generator to the chamber with our own MoonPowerLinks), tint (tint modded-cargo canister views), far (walk 70 m away from the canisters and look back).");
+            PowerUxTest = cfg.Bind("Dev", "PowerUxTest", "", "Dev build: comma-separated PowerUxProbe experiments: fuel (raise the AutoBuilt pressure chamber's Power from the briquette generator after the solve), link (add the generator-chamber pair to powerLinks), anchor (add the generator to powerAnchors), arc (draw an arc from the generator to the chamber with our own MoonPowerLinks), tint (tint modded-cargo canister views), far (walk 70 m away from the canisters and look back), gates (instead of the tour: aim the compactor, open the pause menu, then mount a vehicle (spawning one if none is out), logging the look-at panel each time).");
             PowerUxTeleport = cfg.Bind("Dev", "PowerUxTeleport", 0f, "Dev build: with PowerUxProbe, 6 s after load move the walker this many metres to the free side of the base (away from every depot), before AutoBuild. 0 = stay.");
             PowerUxHome = cfg.Bind("Dev", "PowerUxHome", "", "Dev build: with PowerUxProbe, 6 s after load put the walker on the ground under this world point (x,y,z), before AutoBuild. The walker's position is saved, so a probe run that walked it away is undone here. Empty = stay.");
             CoreLog.Info($"[dev] PowerUxProbe={PowerUxProbe.Value} PowerUxTest='{PowerUxTest.Value}' PowerUxTeleport={PowerUxTeleport.Value}");
@@ -638,6 +638,15 @@ namespace StructureLib
                 targets.Clear();
                 var walker = Walker();
                 home = walker != null ? walker.transform.position : Vector3.zero;
+                if (Test("gates") && Compactor >= 0)
+                {
+                    // The look-at panel's Update gates: the compactor with the pause menu open, then from a vehicle.
+                    targets.Add((Compactor, "compactor: pause menu"));
+                    targets.Add((Compactor, "compactor: vehicle"));
+                    L($"tour: {string.Join(", ", targets.Select(t => $"{t.label} {t.id}"))}");
+                    index = -1; t0 = Time.unscaledTime - StepSeconds;
+                    return;
+                }
                 bool shortTour = Test("short");
                 foreach (int k in shortTour ? Array.Empty<int>() : new[] { MoonWorld.SolarPostKind, MoonWorld.SolarTwinKind, MoonWorld.SolarTrackerKind })
                 {
@@ -700,8 +709,57 @@ namespace StructureLib
                     else L($"tour: Aimed {aimed}; LookPitch {walker.LookPitch:F1}");
                 }
                 if (stage == 2 && dt > 3.0f) { stage = 3; Capture(inter, aimed, want, "hammer off"); }
+                string lbl = targets[index].label;
+                if (lbl.StartsWith("compactor: ")) { GateStep(inter, walker, world, aimed, want, dt, lbl.EndsWith("vehicle")); return; }
                 if (stage == 3 && dt > 3.2f) { stage = 4; if (want >= 0 || want == -5) { ForceHammer = true; L("tour: HoldingBuildTool forced true"); } else if (want <= -6) Aim(walker, target, -1f); }
                 if (stage == 4 && dt > 6.0f) { stage = 5; if (want >= 0 || want <= -5) Capture(inter, aimed, want, want <= -6 ? "pitch negated" : "hammer on"); }
+            }
+
+            static MoonPrototypeVehicle gateVehicle;
+
+            // Stage 3: open the pause menu (or mount the nearest vehicle); stage 5: capture; then close it again.
+            static void GateStep(MoonProductionInteraction inter, MoonWalker walker, MoonWorld world, int aimed, int want, float dt, bool vehicle)
+            {
+                if (stage == 3 && dt > 3.2f)
+                {
+                    stage = 4;
+                    if (!vehicle)
+                    {
+                        var menu = UnityEngine.Object.FindFirstObjectByType<MoonPauseMenu>();
+                        L($"tour: gates: pause menu {(menu == null ? "not found" : "found")}; Open {T(() => { menu.Open(); return "called"; })}; IsOpen {T(() => menu.IsOpen.ToString())}; MenuOpen {T(() => MoonFramePacing.MenuOpen().ToString())}");
+                        return;
+                    }
+                    var all = UnityEngine.Object.FindObjectsByType<MoonPrototypeVehicle>(FindObjectsSortMode.None);
+                    if (all == null || all.Length == 0)
+                    {
+                        var eq = UnityEngine.Object.FindFirstObjectByType<MoonPrototypeEquipment>();
+                        L($"tour: gates: no vehicle out; SpawnVehicle(0) {T(() => { return eq.SpawnVehicle(0).ToString(); })}");
+                        all = UnityEngine.Object.FindObjectsByType<MoonPrototypeVehicle>(FindObjectsSortMode.None);
+                    }
+                    gateVehicle = null; float best = float.MaxValue;
+                    foreach (var v in all) { float d = Vector3.Distance(v.transform.position, walker.transform.position); if (d < best) { best = d; gateVehicle = v; } }
+                    L($"tour: gates: {all?.Length ?? 0} vehicles, nearest {(gateVehicle == null ? "none" : $"{gateVehicle.name} {best:F1} m")}");
+                    if (gateVehicle == null) return;
+                    string first = T(() => gateVehicle.Enter().ToString());
+                    L($"tour: gates: Enter {first}; Mounted {walker.Mounted}");
+                    if (!walker.Mounted)
+                    {
+                        var p = walker.transform.position + walker.transform.right * 3f;
+                        var rb = gateVehicle.GetComponent<Rigidbody>();
+                        if (rb != null) { rb.position = p; rb.velocity = Vector3.zero; }
+                        gateVehicle.transform.position = p;
+                        L($"tour: gates: moved the vehicle to {V(p)}; Enter {T(() => gateVehicle.Enter().ToString())}; Mounted {walker.Mounted}");
+                    }
+                    return;
+                }
+                if (stage == 4 && dt > 6.0f)
+                {
+                    stage = 5;
+                    L($"tour: gates: MenuOpen {T(() => MoonFramePacing.MenuOpen().ToString())} Mounted {walker.Mounted} cursor {Cursor.lockState}");
+                    Capture(inter, inter != null ? inter.Aimed(world) : -9, want, vehicle ? "in a vehicle" : "pause menu open");
+                    if (!vehicle) { var menu = UnityEngine.Object.FindFirstObjectByType<MoonPauseMenu>(); L($"tour: gates: Resume {T(() => { menu.Resume(); return "called"; })}"); }
+                    else if (gateVehicle != null) L($"tour: gates: Exit {T(() => gateVehicle.Exit().ToString())}; Mounted {walker.Mounted}");
+                }
             }
 
             static void Capture(MoonProductionInteraction inter, int aimed, int want, string how)

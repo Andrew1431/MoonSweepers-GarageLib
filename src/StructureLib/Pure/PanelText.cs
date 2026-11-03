@@ -96,7 +96,7 @@ public static class PanelText
 
         var cycle = running
             ? new PanelRow("CYCLE", Fill(progress, 1), (progress * 100).ToString("F0", Inv) + "%" + RowSep + cycles.ToString(Inv) + " done", PanelColour.Cyan)
-            : new PanelRow("CYCLE", 0f, cycles.ToString(Inv) + " done", PanelColour.Muted);
+            : new PanelRow("CYCLE", 0f, cycles.ToString(Inv) + " done", PanelColour.Cyan);
 
         while (head.Count + slotRows.Count + 1 > maxRows && slotRows.Count > 0)
             slotRows.RemoveAt(slotRows.Count - 1);
