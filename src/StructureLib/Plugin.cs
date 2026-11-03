@@ -133,12 +133,14 @@ namespace StructureLib
                         CoreState.World = null;
                         CoreState.SaveRoot = null;
                         Sidecar.EndSession();
+                        PowerLinksView.Reset();
                     }
                 }
                 // Its own guard: a throw here must not stop the card renders that follow.
                 try { StructureMaterials.Upgrade(); }
                 catch (Exception e) { CoreLog.Once("materials-upgrade", "Upgrading model materials threw: " + e, 3); }
                 IconRenderer.Tick();
+                PowerLinksView.Tick();
                 Handshake.Tick();
 #if DEVBUILD
                 DevTools.Tick();

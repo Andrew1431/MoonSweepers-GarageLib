@@ -16,7 +16,7 @@ namespace StructureLib
     internal static partial class DevTools
     {
         internal static ConfigEntry<int> AutoLoadSlot;
-        internal static ConfigEntry<bool> AllowSlot1, RunSelfTest, ScreenshotMenu, AutoRemove, AutoSave, ForcePower, AutoBuildViaPlan;
+        internal static ConfigEntry<bool> AllowSlot1, RunSelfTest, ScreenshotMenu, AutoRemove, AutoSave, ForcePower, AutoBuildViaPlan, ForceArcs;
         internal static ConfigEntry<string> AutoBuild, AutoFeed;
         static float menuT, gameT, saveAt = -1f, feedAt = -1f, beltAt = -1f;
         static bool loadRequested, selfTestRan, menuShot, autoBuilt;
@@ -43,6 +43,7 @@ namespace StructureLib
             AutoSave = cfg.Bind("Dev", "AutoSave", false, "Dev build: request a save 10 s after the AutoBuild step (whether or not AutoBuild names anything). The self-test waits for that save and checks the structurelib.json sidecar.");
             ForcePower = cfg.Bind("Dev", "ForcePower", false, "Dev build: run every modded processor at full power (Power = 1) whatever its grid supplies. For isolating power problems; no self-test relies on it.");
             AutoBuildViaPlan = cfg.Bind("Dev", "AutoBuildViaPlan", false, "Dev build: AutoBuild places modded structures through the build menu's own path (PlanStructure, BeginStructureCheck, TryBuildStructure), which records a free pose (placedPose), instead of TryBuildDepot. Vanilla kinds still use TryBuildDepot.");
+            ForceArcs = cfg.Bind("Dev", "ForceArcs", false, "Dev build: draw the fuel-network power arcs (PowerLinksView) for every network every frame, without the build-tool and aim gate. For the arc-drawn self-test and screenshots.");
             BindBelts(cfg);
             BindModels(cfg);
             BindPowerUx(cfg);
@@ -50,7 +51,7 @@ namespace StructureLib
             RegisterBoxProbe = cfg.Bind("Dev", "RegisterBoxProbe", false, "Dev build: the example plugin also registers ryanhartwig.example-box-probe, a router (splitter: In on -X; Forward, Left, Right outputs) cloned from the floodlight (kind 4) with a 1.4 x 1.4 m Footprint. 15 s after load the donor's and the probe's definitions, prefab components and colliders (and the probe view's) are logged, and three dust canisters are put on the AutoBelt belt into the probe and followed for 10 s (CargoRouted count, riders on the in and out belts).");
             SelfTest.Subscribe();
             ScreenshotMenu = cfg.Bind("Dev", "ScreenshotMenu", false, "Dev build: 5 s after the self-test, open the build menu on the example lamp and save a screenshot to BepInEx/cache/structurelib/menu.png.");
-            CoreLog.Info($"[dev] AutoLoadSlot={AutoLoadSlot.Value} AllowSlot1={AllowSlot1.Value} SelfTest={RunSelfTest.Value} ScreenshotMenu={ScreenshotMenu.Value} AutoRemove={AutoRemove.Value} AutoSave={AutoSave.Value} ForcePower={ForcePower.Value} AutoBuildViaPlan={AutoBuildViaPlan.Value} AutoBuild='{AutoBuild.Value}' AutoFeed='{AutoFeed.Value}' AutoBelt='{AutoBelt.Value}' DumpCards={DumpCards.Value} RegisterBadPorts={RegisterBadPorts.Value} SunOverhead={SunOverhead.Value} RegisterBoxProbe={RegisterBoxProbe.Value}");
+            CoreLog.Info($"[dev] AutoLoadSlot={AutoLoadSlot.Value} AllowSlot1={AllowSlot1.Value} SelfTest={RunSelfTest.Value} ScreenshotMenu={ScreenshotMenu.Value} AutoRemove={AutoRemove.Value} AutoSave={AutoSave.Value} ForcePower={ForcePower.Value} AutoBuildViaPlan={AutoBuildViaPlan.Value} ForceArcs={ForceArcs.Value} AutoBuild='{AutoBuild.Value}' AutoFeed='{AutoFeed.Value}' AutoBelt='{AutoBelt.Value}' DumpCards={DumpCards.Value} RegisterBadPorts={RegisterBadPorts.Value} SunOverhead={SunOverhead.Value} RegisterBoxProbe={RegisterBoxProbe.Value}");
             // MoonStructures.Register reads this static at plugin Load time; prove the interop read works that early.
             try { CoreLog.Info($"[dev] MoonProductionSave.MaxSlots at Load = {MoonProductionSave.MaxSlots}"); }
             catch (Exception e) { CoreLog.Error("[dev] reading MoonProductionSave.MaxSlots at Load threw: " + e); }
@@ -488,6 +489,7 @@ namespace StructureLib
             PowerChecks();
             PanelChecks();
             VanillaFedChecks();
+            ArcChecks();
             SandPowerChecks();
             PortChecks();
             BeltChecks();
@@ -546,6 +548,8 @@ namespace StructureLib
             if (cycleUntil >= 0f) TickCycle();
             if (PowerPending) TickPower();
             if (VanillaFedPending) TickVanillaFed();
+            if (ArcPending) TickArc();
+            if (ArcShotPending) TickArcShot();
             if (sandOpen.Count > 0) TickSandPower();
             if (BeltPending) TickBeltChecks();
             if (OutPending) TickOutChecks();
@@ -554,7 +558,7 @@ namespace StructureLib
             if (BoxPending) TickBoxes();
             if (artUntil >= 0f) { TickCardArt(); return; }
             if (renderUntil >= 0f) { TickRendered(); return; }
-            if (saveUntil >= 0f && cycleUntil < 0f && !PowerPending && !VanillaFedPending && sandOpen.Count == 0 && !BeltPending && !OutPending && !ModelPending && !SandChainPending && !BoxPending) TickSaveWait();
+            if (saveUntil >= 0f && cycleUntil < 0f && !PowerPending && !VanillaFedPending && !ArcPending && sandOpen.Count == 0 && !BeltPending && !OutPending && !ModelPending && !SandChainPending && !BoxPending) TickSaveWait();
         }
 
         // cardart-modded: CardArt answers something once nothing is pending, or after 5 s.

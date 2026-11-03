@@ -194,6 +194,163 @@ namespace StructureLib
             catch (Exception e) { return "surroundings threw " + e.Message; }
         }
 
+        // arc-drawn (PowerLinksView): with [Dev] ForceArcs, within 60 s after power-vanilla-fed or
+        // power-grinder-runs-on-burner opened (the burner was fed), the library's MoonPowerLinks drew at least one arc in a
+        // frame. Not applicable without ForceArcs (the build-tool and aim gate is not driven here) or without either check.
+        static float arcOpened = -1f, arcUntil = -1f;
+
+        static bool ArcPending => arcUntil >= 0f;
+
+        static void ArcChecks()
+        {
+            const string name = "arc-drawn";
+            if (DevTools.ForceArcs == null || !DevTools.ForceArcs.Value) { CoreLog.Info($"[selftest] {name} not applicable: [Dev] ForceArcs is false"); return; }
+            if (!VanillaFedPending && !powerOpen.ContainsKey("power-grinder-runs-on-burner"))
+            {
+                CoreLog.Info($"[selftest] {name} not applicable: neither power-vanilla-fed nor power-grinder-runs-on-burner is open");
+                return;
+            }
+            arcOpened = Time.unscaledTime;
+            arcUntil = arcOpened + 60f;
+            CoreLog.Info($"[selftest] {name} opened: ArcsDrawn {PowerLinksView.ArcsDrawn}; fed {FedText()}");
+            UnblockArcMachines();
+        }
+
+        // A reused world (slot-2) keeps machines whose outputs filled in earlier runs: with nothing belting them away they
+        // never start a cycle, demand no power, and no generator feeds anything, so there is no arc to draw. With ForceArcs
+        // only, empty the full output slots of the example grinder and of the pressure chambers within 20 m of the burner,
+        // so they draw power in the next solves (from whichever fuel generator of the network draws first).
+        static void UnblockArcMachines()
+        {
+            var world = CoreState.World ?? CoreState.FindWorld();
+            if (world?.depots == null) return;
+            var grinder = MoonStructures.Definition(GrinderId);
+            var burner = MoonStructures.Definition(BurnerId);
+            int burnerAt = burner != null ? DepotOfKind(world, burner.Kind) : -1;
+            var targets = new List<(int depot, int firstOutput)>();
+            if (grinder != null && DepotOfKind(world, grinder.Kind) is int g && g >= 0) targets.Add((g, 2));
+            if (burnerAt >= 0)
+            {
+                var at = PowerUx.At(world, burnerAt);
+                foreach (var kv in world.depots)
+                    if (kv.Value != null && kv.Value.kind == MoonWorld.PressureChamberKind && Vector3.Distance(at, PowerUx.At(world, kv.Key)) <= 20f) targets.Add((kv.Key, 1));
+            }
+            foreach (var (depot, first) in targets) EmptyOutputs(world, depot, first);
+        }
+
+        static void EmptyOutputs(MoonWorld world, int depot, int first)
+        {
+            try
+            {
+                var s = world.ProductionOf(depot);
+                if (s?.stores == null) return;
+                for (int slot = first; slot < s.stores.Length; slot++)
+                {
+                    if (s.Fill(slot) < 0.999f) continue;
+                    double kg = s.Stored(slot);
+                    s.stores[slot].Clear();
+                    CoreLog.Info($"[selftest] arc-drawn: emptied the full output slot {slot} ({kg:F1} kg) of depot {depot} (kind {s.Kind}) so it can run");
+                }
+            }
+            catch (Exception e) { CoreLog.Warn($"[selftest] arc-drawn: emptying depot {depot}'s output threw {e.Message}"); }
+        }
+
+        static void TickArc()
+        {
+            const string name = "arc-drawn";
+            int arcs = PowerLinksView.ArcsDrawn;
+            float now = Time.unscaledTime;
+            if (arcs < 1 && now < arcUntil) return;
+            arcUntil = -1f;
+            Assert(name, arcs >= 1, $"ArcsDrawn {arcs} after {now - arcOpened:F1} s; fed {FedText()}");
+            if (arcs < 1) return;
+            CoreLog.Info($"[selftest] {name}: {arcs} arc(s) after {now - arcOpened:F1} s; fed {FedText()}");
+            // A side-on screenshot of the burner and the nearest pressure chamber within 20 m of it, once the probe's tour is
+            // over (it moves the walker for about 90 s from 24 s after load). Every chamber in that reach is loaded then: the
+            // briquette generator 28 (slot-2) draws first and covers one chamber alone, so the burner feeds the next ones.
+            var burner = MoonStructures.Definition(BurnerId);
+            var world = CoreState.World ?? CoreState.FindWorld();
+            shotGen = burner != null && world?.depots != null ? DepotOfKind(world, burner.Kind) : -1;
+            shotLoad.Clear();
+            if (shotGen >= 0)
+                foreach (var kv in world.depots)
+                    if (kv.Value != null && kv.Value.kind == MoonWorld.PressureChamberKind && Vector3.Distance(PowerUx.At(world, shotGen), PowerUx.At(world, kv.Key)) <= 20f) shotLoad.Add(kv.Key);
+            shotMember = shotLoad.Count > 0 ? shotLoad.OrderBy(d => Vector3.Distance(PowerUx.At(world, shotGen), PowerUx.At(world, d))).First() : -1;
+            if (shotMember >= 0 && DevTools.PowerUxProbe != null && DevTools.PowerUxProbe.Value) { shotAt = now + 100f; shotStage = 0; }
+        }
+
+        static readonly List<int> shotLoad = new();
+
+        static int shotGen = -1, shotMember = -1, shotStage;
+        static float shotAt = -1f, shotDeadline = -1f;
+        static Vector3 shotLook;
+
+        internal static bool ArcShotPending => shotAt >= 0f;
+
+        // arc-drawn's screenshot (BepInEx/cache/structurelib/powerux-<n>.png, after the tour's): load the chambers in reach,
+        // stand 14 m off the burner-chamber midpoint square to the pair (the freer side), wait for the burner to feed it, shoot.
+        static void TickArcShot()
+        {
+            float now = Time.unscaledTime;
+            if (now < shotAt) return;
+            var world = CoreState.World ?? CoreState.FindWorld();
+            var walker = UnityEngine.Object.FindFirstObjectByType<MoonWalker>();
+            if (world == null || walker == null) { shotAt = -1f; return; }
+            try
+            {
+                if (shotStage == 0)
+                {
+                    // Outputs emptied and dust loaded, so the chambers demand power again; the shot waits for the solve to
+                    // record the burner feeding the framed one (up to 20 s).
+                    foreach (int d in shotLoad)
+                    {
+                        EmptyOutputs(world, d, 1);
+                        var ms = world.ProductionOf(d);
+                        double room = ms != null ? ms.Capacity(0) - ms.Stored(0) : 0;
+                        if (room > 0.5) world.CrewProcessorLoad(MoonWorld.LocalPlayer, d, MoonCargo.Dust, room);
+                        CoreLog.Info($"[selftest] arc-drawn shot: loaded {room:F1} kg dust into chamber {d}");
+                    }
+                    var a = PowerUx.At(world, shotGen); var b = PowerUx.At(world, shotMember);
+                    var mid = (a + b) / 2f; var up = mid.normalized;
+                    var side = Vector3.Cross(up, (b - a).normalized).normalized;
+                    // The side whose view of the pair is open (no hit nearer than 60% of the way, not on a structure), then the
+                    // one furthest from every depot.
+                    Vector3 best = Vector3.zero, bestUp = up; float bestFree = -1f;
+                    foreach (float sgn in new[] { 1f, -1f })
+                    {
+                        var g = world.SurfaceAt((mid + side * sgn * 14f).normalized, out Vector3 gu, out bool onStructure);
+                        var eye = g + gu * 1.6f; var look = mid + up * 1.5f;
+                        bool blocked = Physics.Raycast(eye, (look - eye).normalized, out RaycastHit hit, Vector3.Distance(eye, look)) && hit.distance < 0.6f * Vector3.Distance(eye, look);
+                        float free = onStructure || blocked ? -0.5f : float.MaxValue;
+                        if (!onStructure) foreach (var kv in world.depots) free = Mathf.Min(free, Vector3.Distance(g, PowerUx.At(world, kv.Key)));
+                        CoreLog.Info($"[selftest] arc-drawn shot: side {sgn}: ground {PowerUx.V(g)} onStructure {onStructure} view blocked {blocked}, {free:F1} m from the nearest depot");
+                        if (free > bestFree) { bestFree = free; best = g; bestUp = gu; }
+                    }
+                    walker.Teleport(best + bestUp * 0.2f, true);
+                    shotLook = mid + up * 1.5f;
+                    CoreLog.Info($"[selftest] arc-drawn shot: burner {shotGen}, chamber {shotMember}; walker to {PowerUx.V(best)} ({bestFree:F1} m from the nearest depot), looking at {PowerUx.V(shotLook)}");
+                    shotStage = 1; shotAt = now + 4f; shotDeadline = now + 20f;
+                    return;
+                }
+                var t = walker.transform;
+                var wup = t.position.normalized;
+                var to = shotLook - (t.position + wup * 1.6f);
+                var flat = Vector3.ProjectOnPlane(to, wup);
+                walker.Face(flat.normalized, Mathf.Atan2(Vector3.Dot(to, wup), flat.magnitude) * Mathf.Rad2Deg);
+                bool fedNow = Patches.PowerPatches.LastSolve.Fed.TryGetValue(shotGen, out var fed) && fed.Contains(shotMember);
+                if (shotStage == 1) { if (fedNow || now >= shotDeadline) { shotStage = 2; shotAt = now + 1.5f; } return; }
+                shotAt = -1f;
+                CoreLog.Info($"[selftest] arc-drawn shot: ArcsDrawn {PowerLinksView.ArcsDrawn}; fed {FedText()}");
+                PowerUx.Tour.Shot("arc-drawn: burner and the machine it fed, side on");
+            }
+            catch (Exception e) { shotAt = -1f; CoreLog.Warn("[selftest] arc-drawn shot threw: " + e.Message); }
+        }
+
+        static string FedText()
+        {
+            return string.Join("; ", Patches.PowerPatches.LastSolve.Fed.Select(kv => $"{kv.Key} (network {(Patches.PowerPatches.LastSolve.NetworkOf.TryGetValue(kv.Key, out int n) ? n : -1)}) -> [{string.Join(", ", kv.Value)}]"));
+        }
+
         static string VanillaText(MoonProductionState s) => s == null ? "no state" :
             $"depot {s.Id} grid {s.Grid} power {s.Power:F2} demand {s.DemandKw:F1} kW used {s.UsedKw:F2} kW running {s.Running} progress {s.Progress:F3} cycles {s.Cycles} status '{s.Status}'";
     }
