@@ -142,6 +142,21 @@ the ghost's square, each step 7.5 to 8.5 m from the last or the run is cancelled
 | `MoonSquareGrid.Find` | 0x591110 | 800 | normal | Called (next cell from a world point). Not patched. |
 | `MoonSquareGrid.Center` / `Split` | 0x590E80 / 0x591700 | 128 / 80 | leaf | Not used by the mod. **Never patch.** |
 
+The `ReadInput` postfix binds `ref BuildInput __result` on the IL2CPP struct return and its writes reach the game, so
+no yaw-restore fallback is needed. In-game probe (`[Dev] RunProbe`, dev build, slot 2 copy with DevMoney, 2026-11-03),
+driven through `TestInput` with Shift stood in by a dev flag and the facing by a dev direction:
+
+- Plain wheel tick: `yaw 180.0 -> 270.0 N=1`. Five Shift + wheel ticks: `yaw 180.0 -> 180.0 N=6 wheel ticks cancelled 5`.
+- Run of 6 from a ghost 20 m out: `queued 5 pieces`, each `TryBuildStructure ok=True`, steps 7.961 to 7.962 m, reach
+  `30 -> 38.62 -> 30` up to `30 -> 54.17 -> 30` for the pieces past 32 m; depots +6, wallet −$12, notice `Built 6 of 6`.
+- A dust-canister copy in run cell 3: preview `GGRGG`, prompt `Run 6 · 1 blocked`, the click refused (`place` cleared),
+  depots +0, wallet unchanged.
+- `RunIgnoresReach = false`: preview `GGOOO`; `out of reach at 34.3 m ... run stops`, `Built 3 of 6 (stopped: out of reach)`.
+- After a reach-raised run, an unraised `TryBuildStructure` 40.7 m out: `Move closer to the build site`, reach 30.
+- No errors from Build QoL. Not tested in game: Shift + wheel by hand (the spike's pointer checks show `wheel` is
+  `Mouse.scroll.y`), a run across a cube-face seam, other square kinds than 101, the money check with a short wallet,
+  gamepad, multiplayer.
+
 ## Changelog
 
 - 0.1.0: First release. `KeepSelection`: keep the placed structure selected with a new ghost, with rotation kept.

@@ -133,6 +133,8 @@ namespace BuildQoL
 #if DEVBUILD
         internal static bool DevShift;          // the probe's stand-in for holding Shift
         internal static bool DevLog;            // per-piece log lines
+        internal static Vector3 DevFacing;      // the probe's stand-in for the camera direction (zero: use the camera)
+        internal static string DevCells = "";   // preview colours of cells 1..N-1: G green, R red, O out of reach
         internal static string LastNotice;
         internal static int Length => length;
         internal static bool Refusing => refuse;
@@ -238,7 +240,14 @@ namespace BuildQoL
 
         internal static void Update()
         {
-            if (qBuilder != null) BuildNext();
+            if (qBuilder == null) return;
+            try { BuildNext(); }
+            catch (Exception e)
+            {
+                Plugin.Once("run-build", "FoundationRun: building a run piece threw; the run stops: " + e);
+                if (tally != null) tally.Stop(RunPlan.Refused);
+                FinishRun();
+            }
         }
 
         // One queued piece per frame: TryBuildStructure spawns and saves (13 to 37 ms per piece).
@@ -355,7 +364,11 @@ namespace BuildQoL
             if (grid == null) return false;
             Vector3 c = w.GridCenter(mod, RunPlan.Encode(start)).normalized * radius;
             Vector3 up = c.normalized;
-            Vector3 facing = Vector3.ProjectOnPlane(cam.transform.forward, up);
+            Vector3 look = cam.transform.forward;
+#if DEVBUILD
+            if (DevFacing != Vector3.zero) look = DevFacing;
+#endif
+            Vector3 facing = Vector3.ProjectOnPlane(look, up);
             if (facing.sqrMagnitude < 1e-6f) facing = haveAxis ? lastAxis : Vector3.ProjectOnPlane(cam.transform.up, up);
             facing.Normalize();
             var ax = Axes(w, mod, start);
@@ -405,6 +418,9 @@ namespace BuildQoL
         {
             blocked = 0; outOfReach = 0;
             var mod = def.module;
+#if DEVBUILD
+            DevCells = "";
+#endif
             var walker = b.walker;
             Vector3 feet = walker != null ? walker.transform.position : centres[0];
             bool ignoreReach = FoundationRunTweak.RunIgnoresReach.Value;
@@ -419,6 +435,8 @@ namespace BuildQoL
                 var corners = w.GridCorners(mod, RunPlan.Encode(cells[k]));
                 if (corners != null)
                 {
+                    // Flat on the ground (TransformZ along the surface normal), readable from any camera angle.
+                    go.transform.rotation = Quaternion.LookRotation(centres[k].normalized);
                     lr.positionCount = corners.Length;
                     for (int j = 0; j < corners.Length; j++) lr.SetPosition(j, corners[j].normalized * (radius + OutlineLift));
                 }
@@ -429,6 +447,9 @@ namespace BuildQoL
                 if (!good) { blocked++; col = Red; }
                 else if (!ignoreReach && Vector3.Distance(feet, aim) > def.reach + 2f) { outOfReach++; col = Grey; }
                 else col = Green;
+#if DEVBUILD
+                DevCells += col == Red ? "R" : col == Grey ? "O" : "G";
+#endif
                 lr.startColor = col; lr.endColor = col;
             }
             affordable = Affordable(b, w, kind, def.priceDollars, cells.Count);
@@ -453,6 +474,7 @@ namespace BuildQoL
             var lr = go.AddComponent<LineRenderer>();
             lr.loop = true;
             lr.useWorldSpace = true;
+            lr.alignment = LineAlignment.TransformZ;
             lr.startWidth = lr.endWidth = 0.18f;
             lr.shadowCastingMode = UnityEngine.Rendering.ShadowCastingMode.Off;
             lr.receiveShadows = false;
