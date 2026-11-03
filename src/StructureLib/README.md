@@ -275,8 +275,8 @@ ryanhartwig.example-grinder:Grit out->ryanhartwig.example-burner:Grit in`, `SunO
 (`arc-drawn`), `DumpCards = true` (`model-card`). In one combined run the chamber's sand queues on the grinder's belt and the belt-input checks fail.
 
 Every standard config wants a fresh slot-2: with the game closed, replace
-`%USERPROFILE%\AppData\LocalLow\DragDropGames\MoonSweepers\MoonSessions\slot-2` with a clean copy (here
-`..\.scratch\slot-2-backup-task11` beside the repo) before the run; a reload run takes the slot its chain run saved
+`%USERPROFILE%\AppData\LocalLow\DragDropGames\MoonSweepers\MoonSessions\slot-2` with
+`..\.scratch\slot-2-backup-task11` (a clean copy of slot-2 kept outside the repo) before the run; a reload run takes the slot its chain run saved
 instead. The game autosaves into the loaded slot, so a used slot keeps earlier runs' depots: AutoBuild reuses them,
 their full outputs stop the machines, and a ring site next to them refuses the belt ("Turn too tight").
 
@@ -470,6 +470,6 @@ Status:
 | `MoonWorld.LocalCargoDeposit` (`Action<MoonCargo, double, int>`) | unsupported | Co-op wire event, as above. |
 | `MoonWorld.LocalCanister` / `RaiseLocalCanister` / `RaiseMachineCanister` / `ApplyCrewCanister` / `TruthHash` (`MoonDroppedCanister`, cargo inside) | unsupported | Co-op canister sync. Whether the cargo byte survives the wire is unknown; co-op is not supported. |
 | `MoonCrewSession` (co-op world stream, joins) | unknown | Not dumped. A joining client receives the host's serialized world, which (through `Serialize`) has no modded canisters. |
-| `MoonCanisterStreaming/FarShown.cargo` | unknown | Far-LOD canister drawing. A grit canister in the world (end-to-end run) logged no exceptions; how it is tinted was not looked at. |
+| `MoonCanisterStreaming/FarShown.cargo` | unknown | Far-LOD canister drawing. A grit canister in the world (end-to-end run) logged no exceptions; far canisters stay dust (not tinted); see `CanisterTint`. |
 | `MoonProductionState` | n/a | No `MoonCargo` member (slot stores are per owner; slot cargo comes from `ProcessorSpec.slotCargo`). |
 | Cargo carried by a walker or a vehicle (`MoonPlayerRecordSnapshot`, `MoonLoadoutSave`, `MoonOwnedVehicle` / `MoonOwnedVehicleSave`, `MoonVehicleStorageSnapshot`, `MoonInventorySnapshot`, `MoonToolContainerSnapshot`) | n/a (checked) | The dumps of these records have no `MoonCargo` or cargo-byte member (walkers and vehicle storage hold kilograms only), and there is no separate carried-canister save record. Whether a canister held in hand or riding a vehicle is saved through `state.canisters` + `state.cargo` (and so stripped like a dropped one) is not checked yet (a by-hand check). |

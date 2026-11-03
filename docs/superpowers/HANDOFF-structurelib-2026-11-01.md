@@ -89,11 +89,14 @@ own cyan arcs and one range ring with the build tool held on a fuel-network memb
 grit is tinted). Self-test checks: `panel-generator`, `panel-machine`, `panel-vanilla-untouched`, `power-vanilla-fed`,
 `arc-drawn` (`[Dev] ForceArcs`), `cargo-tint`; dev probe `PowerUxProbe` / `PowerUxTest` / `PowerUxTeleport` /
 `PowerUxHome`. Unit tests 180 green. Standard configs on a fresh slot-2 (Task 6): belt output + power 50/0, belt boxes
-chain 49/0, reload 37/0. `power-vanilla-fed` passed in Task 3's own run (a chamber AutoBuilt next to the burner); in
-the standard configs it is not applicable (no `96` in AutoBuild, or the line layout puts the chamber outside the
-burner's network). The by-hand test bed (slot-2 as this plan's runs left it: SandPower compactors 26 and 27, generator
-28, chambers 29, 41 and 46, example grinder 31 and burner 32; `[Dev] PowerUxProbe = true` with `PowerUxHome =
-22.39,1993.00,-29.77` puts the walker there) is kept at `C:\Users\ryguy\projects\moonsweep\.scratch\slot-2-power-ux-bed`;
+chain 49/0, reload 37/0; the first belt output + power attempt was 49/1 until `DumpCards` was added to the README
+config. `cargo-tint` passed only in the belt output + power config. `power-vanilla-fed` passed in none of the three
+standard configs, only in Task 3's own setup (a chamber AutoBuilt next to the burner); in the standard configs it is
+not applicable (no `96` in AutoBuild, or the line layout puts the chamber outside the burner's network). The by-hand
+test bed (slot-2 as this plan's runs left it: SandPower compactors 26 and 27, generator 28, chambers 29, 41 and 46,
+example grinder 31 and burner 32; `[Dev] PowerUxProbe = true` with `PowerUxHome = 39.57,1993.00,-26.00`, the walker
+spot that worked for the runs, puts the walker there; the recon point 22.39,1993.00,-29.77 is too crowded for
+AutoBuild) is kept at `C:\Users\ryguy\projects\moonsweep\.scratch\slot-2-power-ux-bed`;
 copy it over slot-2 to use it. slot-2 itself is now the belt boxes reload run's world.
 
 **By hand for this plan** (not covered by any self-test):

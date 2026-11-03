@@ -639,6 +639,9 @@ namespace StructureLib
                     ctPutBack = world.canisters.get_Item(ctGrit).cargo == MoonCargo.Dust || Recargo(world, ctGrit, MoonCargo.Dust);
             }
             catch (Exception e) { CoreLog.Warn($"[selftest] {name}: putting canister {ctGrit} back to dust threw {e.Message}"); }
+            // The world went away after the borrowed canister was made grit: it could not be put back, so the check fails
+            // rather than read not-applicable.
+            if (world == null && ctGrit >= 0 && ctStage >= 2 && !ctPutBack && ctBad.Count == 0) ctBad.Add($"canister {ctGrit} left grit");
             if (ctHomeSet)
             {
                 try

@@ -193,7 +193,7 @@ namespace StructureLib.Patches
                 if (!surplus.TryGetValue(g, out float left)) left = grid.supplyKw - grid.usedKw;
                 if (!charging.TryGetValue(g, out float charge)) charge = ChargingKw(vanilla, g);
                 if (!stored.TryGetValue(g, out double storedKwh)) storedKwh = grid.storedKwh;
-                var sources = Enumerable.Range(0, members.Count).Where(j => members[j].Source && networkOf[j] == networkOf[i]).ToList();
+                var sources = Enumerable.Range(0, modded).Where(j => members[j].Source && networkOf[j] == networkOf[i]).ToList();
                 float fuelKw = sources.Sum(j => members[j].AvailableKw);
 
                 var (satisfaction, fromSun, fromFuel, fromBattery) = GridShare.Draw(demand, left, fuelKw, storedKwh);
@@ -274,7 +274,12 @@ namespace StructureLib.Patches
 
         static string VanillaName(MoonWorld world, int kind)
         {
-            try { var name = world.BuildDefinition(kind)?.displayName; if (!string.IsNullOrEmpty(name)) return name; }
+            try
+            {
+                var def = world.BuildDefinition(kind);
+                var name = def != null ? def.displayName : null;
+                if (!string.IsNullOrEmpty(name)) return name;
+            }
             catch (Exception) { }
             return "kind " + kind;
         }

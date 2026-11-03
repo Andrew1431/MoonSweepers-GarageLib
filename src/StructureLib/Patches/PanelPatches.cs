@@ -28,11 +28,18 @@ namespace StructureLib.Patches
         [HarmonyPatch(typeof(MoonProductionInteraction), nameof(MoonProductionInteraction.ShowPanel)), HarmonyPrefix]
         static bool ShowPanel(MoonProductionInteraction __instance, MoonWorld world, MoonDepotSnapshot record, bool power)
         {
-            var d = record == null ? null : Remap.Live(record.kind);
-            if (d == null) return true;
+            // Cleared first: a throw reading the record must not leave the last call's true here and skip vanilla.
             drawn = false;
-            try { drawn = Draw(__instance, world, record, power); }
-            catch (Exception e) { CoreLog.Once("panel:" + record.id, $"Drawing the look-at panel of '{d.Id}' depot {record.id} threw: {e}", 2); }
+            StructureDefinition d = null;
+            int id = -1;
+            try
+            {
+                d = record == null ? null : Remap.Live(record.kind);
+                if (d == null) return true;
+                id = record.id;
+                drawn = Draw(__instance, world, record, power);
+            }
+            catch (Exception e) { CoreLog.Once("panel:" + id, $"Drawing the look-at panel of '{d?.Id}' depot {id} threw: {e}", 2); }
             // Not drawn: the game's panel does not exist yet (vanilla's ShowPanel creates it on the session's first call),
             // or Draw threw. Vanilla runs, and the postfix redraws or hides what it drew.
             return !drawn;
@@ -43,10 +50,24 @@ namespace StructureLib.Patches
         [HarmonyPatch(typeof(MoonProductionInteraction), nameof(MoonProductionInteraction.ShowPanel)), HarmonyPostfix]
         static void ShowPanelAfter(MoonProductionInteraction __instance, MoonWorld world, MoonDepotSnapshot record, bool power)
         {
-            if (drawn || record == null || Remap.Live(record.kind) == null) return;
-            try { drawn = Draw(__instance, world, record, power); }
-            catch (Exception e) { CoreLog.Once("panel-after:" + record.id, $"Drawing the look-at panel of depot {record.id} after vanilla threw: {e}", 2); }
-            if (!drawn && __instance != null && __instance.look != null) __instance.look.Hide();
+            if (drawn || record == null) return;
+            bool modded = false;
+            int id = -1;
+            try
+            {
+                if (Remap.Live(record.kind) == null) return;
+                modded = true;
+                id = record.id;
+                drawn = Draw(__instance, world, record, power);
+            }
+            catch (Exception e) { CoreLog.Once("panel-after:" + id, $"Drawing the look-at panel of depot {id} after vanilla threw: {e}", 2); }
+            if (drawn || !modded) return;
+            try
+            {
+                var look = __instance != null ? __instance.look : null;
+                if (look != null) look.Hide();
+            }
+            catch (Exception e) { CoreLog.Once("panel-hide:" + id, $"Hiding the look-at panel of depot {id} after vanilla threw: {e}", 2); }
         }
 
         // Without the build tool vanilla shows a vanilla machine's production panel, never a modded one's. Generators and
@@ -60,7 +81,8 @@ namespace StructureLib.Patches
 
         static void ShowWithoutTool(MoonProductionInteraction inter)
         {
-            if (!MoonSession.InGame || !MoonStructures.Frozen || MoonStructures.Disabled) return;
+            // No modded machine registered: nothing to show, and no game call every frame to find that out.
+            if (!MoonStructures.HasMachines || !MoonSession.InGame || !MoonStructures.Frozen || MoonStructures.Disabled) return;
             var world = CoreState.World;
             if (world == null || inter == null) return;
             // Aimed is asked here directly, so mirror vanilla: no look-at panel while a menu is open (pause, map, shops:

@@ -46,7 +46,11 @@ namespace StructureLib
             "MoonCleaners.MoonDepotSave:MaxStructureKind", "MoonCleaners.MoonDepotBuilder:ConveyorKind",
             // The look-at panel (Patches/PanelPatches.cs).
             "MoonCleaners.MoonProductionInteraction:ShowPanel", "MoonCleaners.MoonProductionInteraction:Aimed", "MoonCleaners.MoonProductionInteraction:look",
-            "MoonCleaners.MoonLookPanel:Show", "MoonCleaners.MoonLookPanel:SetRow", "MoonCleaners.MoonLookPanel:Rows",
+            "MoonCleaners.MoonLookPanel:Show", "MoonCleaners.MoonLookPanel:SetRow", "MoonCleaners.MoonLookPanel:Rows", "MoonCleaners.MoonLookPanel:Hide",
+            // The power arcs (PowerLinksView.cs).
+            "MoonCleaners.MoonPowerLinks:.ctor(MoonWorld,Transform)", "MoonCleaners.MoonPowerLinks:Begin", "MoonCleaners.MoonPowerLinks:Arc",
+            "MoonCleaners.MoonPowerLinks:Ring", "MoonCleaners.MoonPowerLinks:End", "MoonCleaners.MoonPowerLinks:Clear", "MoonCleaners.MoonPowerLinks:Dispose",
+            "MoonCleaners.MoonWorld:PowerAnchor", "MoonCleaners.MoonDepotBuilder:HoldingBuildTool", "MoonCleaners.MoonProductionInteraction:builder",
             // The canister tint (Patches/CanisterPatches.cs).
             "MoonCleaners.MoonDustCanisterView:ShowCargo", "MoonCleaners.MoonDustCanisterView:properties", "MoonCleaners.MoonDustCanisterView:dustRenderer",
         };
@@ -90,10 +94,26 @@ namespace StructureLib
         }
 
         // Fields, properties (interop exposes game statics as properties) and methods, public or not, static or instance.
+        // ".ctor(A,B)" is an instance constructor with exactly those parameter type names (every interop type has a
+        // .ctor(IntPtr), so a bare ".ctor" would prove nothing).
         static bool HasMember(string typeName, string member)
         {
             var t = typeof(MoonWorld).Assembly.GetType(typeName);
-            return t != null && t.GetMember(member, MemberTypes.Field | MemberTypes.Property | MemberTypes.Method, AllMembers).Length > 0;
+            if (t == null) return false;
+            if (member.StartsWith(".ctor(", StringComparison.Ordinal) && member.EndsWith(")", StringComparison.Ordinal))
+            {
+                var want = member.Substring(6, member.Length - 7).Split(',', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries);
+                foreach (var c in t.GetConstructors(BindingFlags.Public | BindingFlags.NonPublic | BindingFlags.Instance))
+                {
+                    var ps = c.GetParameters();
+                    if (ps.Length != want.Length) continue;
+                    bool match = true;
+                    for (int i = 0; i < ps.Length && match; i++) match = ps[i].ParameterType.Name == want[i];
+                    if (match) return true;
+                }
+                return false;
+            }
+            return t.GetMember(member, MemberTypes.Field | MemberTypes.Property | MemberTypes.Method, AllMembers).Length > 0;
         }
 
         const BindingFlags AllMembers = BindingFlags.Public | BindingFlags.NonPublic | BindingFlags.Static | BindingFlags.Instance;
@@ -142,7 +162,9 @@ namespace StructureLib
                 try { StructureMaterials.Upgrade(); }
                 catch (Exception e) { CoreLog.Once("materials-upgrade", "Upgrading model materials threw: " + e, 3); }
                 IconRenderer.Tick();
-                PowerLinksView.Tick();
+                // Its own guard too: a throw every frame here must not starve the handshake, the dev tools or Ensure.
+                try { PowerLinksView.Tick(); }
+                catch (Exception e) { CoreLog.Once("power-links-tick", "PowerLinksView.Tick threw: " + e, 3); }
                 Handshake.Tick();
 #if DEVBUILD
                 DevTools.Tick();
