@@ -36,12 +36,15 @@ namespace StructureLib.Patches
             return false;
         }
 
+        // A 23-byte native leaf (2 kg for Stone, 1 for any other value): every value answers from the table recorded
+        // before patching or from its CargoDefinition, never by the original (see LeafTables).
         [HarmonyPatch(typeof(MoonWorld), nameof(MoonWorld.UnitKilograms)), HarmonyPrefix]
         static bool UnitKilograms(MoonCargo cargo, ref double __result)
         {
             var d = Live(cargo);
-            if (d == null) return true;
-            __result = d.UnitKilograms;
+            __result = d != null
+                ? LeafTables.Modded(LeafTables.UnitKilograms, (byte)cargo, d.UnitKilograms, d.Id)
+                : LeafTables.Vanilla(LeafTables.UnitKilograms, (byte)cargo);
             return false;
         }
 

@@ -41,6 +41,9 @@ namespace StructureLib
             "MoonCleaners.MoonConveyorSnapshot:start", "MoonCleaners.MoonConveyorSnapshot:id",
             "MoonCleaners.MoonWorld:EntranceClear", "MoonCleaners.MoonWorld:WaitingAtEnd", "MoonCleaners.MoonWorld:BeltStartingAt", "MoonCleaners.MoonWorld:BeltEndingAt",
             "MoonCleaners.MoonDepotBuildDefinition:halfFootprint", "MoonCleaners.MoonWorld:nextCanisterId", "MoonCleaners.MoonWorld:riders",
+            // The leaf tables (Patches/LeafTables.cs) and the game domain they are bounded to.
+            "MoonCleaners.MoonWorld:HexPieceKind", "MoonCleaners.MoonWorld:IsRobotDock", "MoonCleaners.MoonWorld:MapKindOf",
+            "MoonCleaners.MoonDepotSave:MaxStructureKind", "MoonCleaners.MoonDepotBuilder:ConveyorKind",
         };
 
         public override void Load()
@@ -60,6 +63,9 @@ namespace StructureLib
             }
 
             ClassInjector.RegisterTypeInIl2Cpp<CoreDriver>();
+            // Before any patch: the short native leaves' prefixes answer vanilla kinds from these tables and never call
+            // the original (calling it through the detour crashes; see Patches/LeafTables.cs).
+            LeafTables.Snapshot();
             var h = new Harmony(Guid);
             int ok = 0, failed = 0;
             foreach (var t in new[] { typeof(FreezePatches), typeof(DefinitionPatches), typeof(PowerPatches), typeof(CatalogPatches), typeof(ModelPatches), typeof(BuildPatches), typeof(SavePatches), typeof(CargoPatches), typeof(ProductionPatches), typeof(HandshakePatches), typeof(PortPatches), typeof(BeltPatches) })
