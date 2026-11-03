@@ -1,0 +1,177 @@
+using BepInEx;
+using BepInEx.Logging;
+using BepInEx.Unity.IL2CPP;
+using MoonCleaners;
+using StructureLib;
+using UnityEngine;
+
+namespace ExampleStructure
+{
+    // Example consumer: a floodlight clone sold in the Services tab, tagged with a small cube so tests can find its model,
+    // one modded cargo kind, example grit, a processor that grinds moon dust into it, and a generator that burns it.
+    [BepInPlugin(Guid, "StructureLib Example Structure", "0.1.0")]
+    [BepInDependency(StructureLib.Plugin.Guid)]
+    public class Plugin : BasePlugin
+    {
+        public const string Guid = "com.ryanhartwig.structurelib.examplestructure";
+        internal static readonly ManualLogSource L = BepInEx.Logging.Logger.CreateLogSource("ExampleStructure");
+
+        public override void Load()
+        {
+            MoonStructures.Register(new StructureDefinition
+            {
+                Id = "ryanhartwig.example-lamp",
+                Name = "Example lamp",
+                Category = "Services",
+                Note = "StructureLib example.",
+                Price = 50m,
+                BaseStructure = 4, // floodlight
+                DecorateModel = (go, ctx) =>
+                {
+                    var tag = GameObject.CreatePrimitive(PrimitiveType.Cube);
+                    tag.name = "ExampleLampTag";
+                    var collider = tag.GetComponent<Collider>();
+                    if (collider != null) Object.Destroy(collider);
+                    tag.transform.SetParent(go.transform, false);
+                    tag.transform.localScale = Vector3.one * 0.2f;
+                    L.LogInfo($"Decorated {go.name}: added ExampleLampTag");
+                },
+            }, Guid);
+
+            // A modded cargo kind. Value 250 is what the world holds; structurelib.json records the id.
+            var grit = MoonStructures.RegisterCargo(new CargoDefinition
+            {
+                Id = "ryanhartwig.example-grit",
+                Value = 250,
+                Name = "example grit",
+                ShortName = "grit",
+                UnitKilograms = 3,
+                Price = 2m,
+                // Grey-blue grit in a near canister view (belt, ground, hand); far canisters still look like dust.
+                CanisterTint = new Color(0.55f, 0.55f, 0.60f),
+            }, Guid);
+
+            // A processor on the pressure chamber's model: grinds moon dust into example grit, 2 kg per 4 s cycle.
+            MoonStructures.Register(new StructureDefinition
+            {
+                Id = "ryanhartwig.example-grinder",
+                Name = "Example grinder",
+                Category = "Production",
+                Note = "StructureLib example: grinds moon dust into example grit.",
+                Price = 100m,
+                BaseStructure = MoonWorld.PressureChamberKind,
+                Processor = new ProcessorDefinition
+                {
+                    RunningKw = 1,
+                    CycleSeconds = 4,
+                    Slots =
+                    {
+                        Slot.Input("Dust", Cargo.Dust, 10),
+                        Slot.Batch("Grinding", Cargo.Dust, 2),
+                        Slot.Output("Grit", grit, 10),
+                    },
+                },
+                // Belt ports at the pressure chamber's own IN and OUT (deck height 0.85; belts flow along local +X).
+                Ports = new()
+                {
+                    PortDefinition.In("Dust in", Cargo.Dust, new Vector3(-2.95f, 0.85f, 0f), Vector3.right),
+                    PortDefinition.Out("Grit out", grit, new Vector3(2.95f, 0.85f, 0f), Vector3.right),
+                },
+            }, Guid);
+
+            // A fuel generator on the solar post's model (the battery bank prefab has no MoonProductionView; see the recon
+            // note, "Power sources (Task 11)"): burns 1 kg of example grit per 5 s cycle into its 2 kWh
+            // battery (two cycles fill it) and supplies up to 12 kW to machines within 20 m: enough for a vanilla pressure
+            // chamber's 10 kW plus the example grinder (the power-vanilla-fed self-test).
+            MoonStructures.Register(new StructureDefinition
+            {
+                Id = "ryanhartwig.example-burner",
+                Name = "Example burner",
+                Category = "Power",
+                Note = "StructureLib example: burns example grit for power.",
+                Price = 100m,
+                BaseStructure = MoonWorld.SolarPostKind,
+                // Shown instead of the solar post (blender/example_burner.py); its Port_Grit in node sits exactly on the declared
+                // port below, and model ports win.
+                Model = "example_burner.bin",
+                Power = new PowerDefinition { PeakKw = 12, BatteryKwh = 2, Range = 20, SupplyMode = SupplyMode.Fuel },
+                Processor = new ProcessorDefinition
+                {
+                    RunningKw = 0,
+                    CycleSeconds = 5,
+                    ProducesPower = true,
+                    Slots =
+                    {
+                        Slot.Input("Grit", grit, 10),
+                        Slot.Batch("Burning", grit, 1),
+                    },
+                },
+                // The solar post has no ports; this adds one at its -X footprint edge, flowing +X like every donor's.
+                Ports = new() { PortDefinition.In("Grit in", grit, new Vector3(-0.90f, 0.85f, 0f), Vector3.right) },
+            }, Guid);
+
+            // Dev builds of StructureLib only ([Dev] RegisterBadPorts): a structure whose input port takes sand while no
+            // slot does. The library must drop it when the registry freezes; the self-test checks that it did.
+            if (StructureLibDevFlag("RegisterBadPorts"))
+                MoonStructures.Register(new StructureDefinition
+                {
+                    Id = BadPortsId,
+                    Name = "Example bad ports",
+                    Category = "Production",
+                    Price = 100m,
+                    BaseStructure = MoonWorld.PressureChamberKind,
+                    Processor = new ProcessorDefinition
+                    {
+                        RunningKw = 1,
+                        CycleSeconds = 4,
+                        Slots = { Slot.Input("Dust", Cargo.Dust, 10), Slot.Batch("Grinding", Cargo.Dust, 2), Slot.Output("Grit", grit, 10) },
+                    },
+                    Ports = new() { PortDefinition.In("Sand in", Cargo.Sand, new Vector3(-2.95f, 0.85f, 0f), Vector3.right) },
+                }, Guid);
+
+            // Dev builds of StructureLib only ([Dev] RegisterBoxProbe): a router, a 1.4 m box splitter on the floodlight
+            // (kind 4: no game script, one collider; MoonWorld.Routes answers true for this 4-port clone, as for any 3-4
+            // port definition, but the HandOff prefix answers first and never hands a router's belt to vanilla, even
+            // with its port unresolved during a load, so the hop is StructureLib's). One input on -X,
+            // outputs on the other three faces, all flowing outward; round-robin in this port order (Forward, Left,
+            // Right). Router ports carry no cargo (any cargo passes), so Cargo here is ignored. DevBelts.cs BoxSpike logs
+            // its definition and view and belts to it.
+            if (StructureLibDevFlag("RegisterBoxProbe"))
+                MoonStructures.Register(new StructureDefinition
+                {
+                    Id = BoxProbeId,
+                    Name = "Box probe",
+                    Category = "Logistics",
+                    Note = "StructureLib dev probe: a box splitter.",
+                    Price = 5m,
+                    BaseStructure = 4, // vanilla floodlight
+                    Router = new RouterDefinition { Mode = RouterMode.Splitter },
+                    Footprint = new Vector2(1.4f, 1.4f),
+                    Ports = new()
+                    {
+                        PortDefinition.In("In", Cargo.Dust, new Vector3(-0.70f, 0.85f, 0f), Vector3.right),
+                        PortDefinition.Out("Forward", Cargo.Dust, new Vector3(0.70f, 0.85f, 0f), Vector3.right),
+                        PortDefinition.Out("Left", Cargo.Dust, new Vector3(0f, 0.85f, 0.70f), Vector3.forward),
+                        PortDefinition.Out("Right", Cargo.Dust, new Vector3(0f, 0.85f, -0.70f), Vector3.back),
+                    },
+                }, Guid);
+        }
+
+        public const string BadPortsId = "ryanhartwig.example-bad-ports";
+        public const string BoxProbeId = "ryanhartwig.example-box-probe";
+
+        // A [Dev] bool from StructureLib's own config (it loads first, as our dependency). False when absent (release builds).
+        static bool StructureLibDevFlag(string key)
+        {
+            try
+            {
+                if (BepInEx.Unity.IL2CPP.IL2CPPChainloader.Instance.Plugins.TryGetValue(StructureLib.Plugin.Guid, out var info) &&
+                    info.Instance is BasePlugin lib &&
+                    lib.Config.TryGetEntry<bool>(new BepInEx.Configuration.ConfigDefinition("Dev", key), out var entry))
+                    return entry.Value;
+            }
+            catch (System.Exception e) { L.LogWarning($"Reading StructureLib's [Dev] {key} failed: {e.Message}"); }
+            return false;
+        }
+    }
+}

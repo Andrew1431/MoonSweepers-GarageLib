@@ -1,0 +1,38 @@
+== MoonCleaners.MoonDustCanisterView : UnityEngine.MonoBehaviour
+  P UnityEngine.Transform dustFill
+  P UnityEngine.Renderer dustRenderer
+  P UnityEngine.MeshFilter gauge
+  P Il2CppInterop.Runtime.InteropTypes.Arrays.Il2CppReferenceArray`1<UnityEngine.Mesh> gaugeLevels
+  P UnityEngine.Texture sandTexture
+  P UnityEngine.GameObject stoneBlock
+  P UnityEngine.Renderer stoneRenderer
+  P UnityEngine.Collider stoneCollider
+  P UnityEngine.Color stoneGlow
+  P MoonCleaners.MoonWorld _World_k__BackingField
+  P System.Int32 _Id_k__BackingField
+  P MoonCleaners.MoonCargo _Cargo_k__BackingField
+  P UnityEngine.MaterialPropertyBlock properties
+  P UnityEngine.MaterialPropertyBlock stoneProperties
+  P System.Int32 shownLevel
+  P System.Boolean cargoShown
+  P UnityEngine.Texture dustTexture
+  P System.Single shownHeat
+  P System.Boolean lobbyLit
+  P Il2CppInterop.Runtime.InteropTypes.Arrays.Il2CppReferenceArray`1<UnityEngine.Collider> colliders
+  P System.Boolean passThrough
+  P System.Boolean shown
+  P UnityEngine.Vector3 shownAt
+  P UnityEngine.Quaternion shownRotation
+  P System.Double shownKilograms
+  P MoonCleaners.MoonWorld World
+  P System.Int32 Id
+  P MoonCleaners.MoonCargo Cargo
+  M Void Bind(MoonWorld world, Int32 id)
+  M Void Show(MoonDroppedCanister c, Vector3 point, Quaternion rotation)
+  M Void RefreshFill(MoonDroppedCanister c)
+  M Void ShowCargo(MoonCargo cargo)
+  M Boolean UsesCollider(Collider collider)
+  M Void ShowHeat(MoonDroppedCanister c)
+  M Void .ctor()
+  M Void .ctor()
+  M Void .ctor(IntPtr pointer)

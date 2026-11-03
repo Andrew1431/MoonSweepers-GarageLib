@@ -1,0 +1,16 @@
+== MoonCleaners.MoonDroppedCanister : Il2CppSystem.ValueType
+  P System.Int32 id
+  P System.String owner
+  P System.Double kilograms
+  P System.Double capacity
+  P UnityEngine.Vector3 position
+  P UnityEngine.Vector3 up
+  P UnityEngine.Quaternion rotation
+  P System.Boolean physicalPose
+  P System.Single createdAt
+  P MoonCleaners.MoonCargo cargo
+  P System.Boolean IsDust
+  M Void .ctor()
+  M Void .ctor(Int32 id, String owner, Double kg, Double capacity, Vector3 position, Vector3 up, Single createdAt, Nullable`1 rotation, MoonCargo cargo)
+  M Void .ctor(IntPtr pointer)
+  M Void .ctor()

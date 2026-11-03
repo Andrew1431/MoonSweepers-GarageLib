@@ -1,0 +1,20 @@
+== MoonCleaners.MoonBuildInfo : Il2CppSystem.Object
+  P static System.String Channel
+  P static MoonCleaners.MoonBuildInfo/Stamp stamp
+  P static System.Boolean loaded
+  P static System.String Version
+  P static System.String Commit
+  P static System.String BuiltUtc
+  P static System.Boolean Production
+  P static System.String Label
+  M static Stamp Load()
+  M Void .ctor()
+  M Void .ctor(IntPtr pointer)
+== MoonCleaners.MoonBuildInfo/Stamp : Il2CppSystem.Object
+  P System.String commit
+  P System.String builtUtc
+  P System.String channel
+  P System.Boolean modified
+  M Void .ctor()
+  M Void .ctor()
+  M Void .ctor(IntPtr pointer)

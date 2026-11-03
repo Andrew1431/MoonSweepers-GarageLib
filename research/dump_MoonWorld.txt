@@ -1803,10 +1803,592 @@
   M Void WriteCrewWaypoints(BinaryWriter writer)
   M Void SnapshotWaypoints(MoonLooseDustSnapshot snapshot)
   M Void RestoreWaypoints(MoonLooseDustSnapshot snapshot)
-  M Void .ctor()
+  M Boolean Method_Private_Boolean_Vector3_byref___c__DisplayClass98_0_0(Vector3 v, __c__DisplayClass98_0& )
+  M Vector3 Method_Private_Vector3_Int32_Int32_byref___c__DisplayClass132_0_0(Int32 gi, Int32 gj, __c__DisplayClass132_0& )
+  M static Int32 Method_Internal_Static_Int32_Int32_Int32_byref___c__DisplayClass153_0_0(Int32 i, Int32 j, __c__DisplayClass153_0& )
+  M static Double Method_Internal_Static_Double_byref___c__DisplayClass251_0_0(__c__DisplayClass251_0& )
+  M static Single Method_Internal_Static_Single_Single_Single_Single_Single_0(Single value, Single lo, Single hi, Single half)
   M Boolean _InitializeCollectorSpawn_b__470_0(MoonDepotSnapshot d)
   M Boolean _InitializeCollectorSpawn_b__470_1(MoonConveyorSnapshot c)
   M Boolean _CollectorLayoutV2_b__471_2(MoonDepotSnapshot d)
   M Boolean _CollectorLayoutV2_b__471_3(MoonConveyorSnapshot c)
+  M static Int32 Method_Internal_Static_Int32_IEnumerable_1_Int32_byref___c__DisplayClass591_0_0(IEnumerable`1 ids, __c__DisplayClass591_0& )
+  M static Void Method_Internal_Static_Void_Int32_String_byref___c__DisplayClass592_0_0(Int32 id, String owner, __c__DisplayClass592_0& )
+  M Void Method_Private_Void_MoonDepotSnapshot_byref___c__DisplayClass607_0_0(MoonDepotSnapshot d, __c__DisplayClass607_0& )
+  M static Void Method_Internal_Static_Void_Int32_byref___c__DisplayClass615_0_0(Int32 v, __c__DisplayClass615_0& )
+  M static Void Method_Internal_Static_Void_Int32_byref___c__DisplayClass617_0_0(Int32 v, __c__DisplayClass617_0& )
+  M static Void Method_Internal_Static_Void_Vector3_byref___c__DisplayClass617_0_0(Vector3 v, __c__DisplayClass617_0& )
+  M static Boolean Method_Internal_Static_Boolean_Vector3_byref___c__DisplayClass731_0_0(Vector3 p, __c__DisplayClass731_0& )
+  M static Void Method_Internal_Static_Void_Single_byref___c__DisplayClass777_0_0(Single c, __c__DisplayClass777_0& )
+  M static Vector2 Method_Internal_Static_Vector2_Int32_byref_Vector2_byref___c__DisplayClass883_0_0(Int32 e, Vector2& direction, __c__DisplayClass883_0& )
+  M static Vector2 Method_Internal_Static_Vector2_Int32_Vector2_byref___c__DisplayClass883_0_0(Int32 other, Vector2 fallback, __c__DisplayClass883_0& )
+  M static Single Method_Internal_Static_Single_Vector2_byref___c__DisplayClass883_0_0(Vector2 p, __c__DisplayClass883_0& )
+  M static Single Method_Internal_Static_Single_Vector2_Vector2_0(Vector2 u, Vector2 v)
+  M static Boolean Method_Internal_Static_Boolean_Vector2_Vector2_Vector2_Vector2_Single_0(Vector2 p, Vector2 r, Vector2 q0, Vector2 q1, Single tolerance)
+  M static Boolean Method_Internal_Static_Boolean_Il2CppStructArray_1_Vector2_Il2CppStructArray_1_Vector2_byref___c__DisplayClass968_0_0(Il2CppStructArray`1 from, Il2CppStructArray`1 into, __c__DisplayClass968_0& )
+  M Boolean Method_Private_Boolean_Vector3_byref___c__DisplayClass970_0_0(Vector3 at, __c__DisplayClass970_0& )
+  M static Single Method_Internal_Static_Single_Vector3_Vector3_Vector3_0(Vector3 point, Vector3 s, Vector3 e)
+  M Void Method_Private_Void_Vector2_byref___c__DisplayClass1077_0_0(Vector2 local, __c__DisplayClass1077_0& )
+  M Single Method_Private_Single_MoonFoundationModule_Int32_byref___c__DisplayClass1077_0_0(MoonFoundationModule fit, Int32 turn, __c__DisplayClass1077_0& )
+  M Single Method_Private_Single_Vector3_Vector3_byref___c__DisplayClass1077_0_0(Vector3 corner, Vector3 neighbourTop, __c__DisplayClass1077_0& )
+  M MoonConveyorSnapshot Method_Private_MoonConveyorSnapshot_ConveyorPlan_byref___c__DisplayClass1273_0_0(ConveyorPlan part, __c__DisplayClass1273_0& )
+  M static Boolean Method_Internal_Static_Boolean_Vector3_byref___c__DisplayClass1303_0_0(Vector3 point, __c__DisplayClass1303_0& )
+  M static Vector3 Method_Internal_Static_Vector3_Vector3_byref___c__DisplayClass1303_0_0(Vector3 point, __c__DisplayClass1303_0& )
+  M static Void Method_Internal_Static_Void_Single_Single_Single_Single_Single_Single_byref___c__DisplayClass1308_0_0(Single x0, Single x1, Single z0, Single z1, Single y0, Single y1, __c__DisplayClass1308_0& )
+  M static Void Method_Internal_Static_Void_Vector3_byref___c__DisplayClass1594_0_byref___c__DisplayClass1594_1_0(Vector3 d, __c__DisplayClass1594_0& , __c__DisplayClass1594_1& )
+  M Void Method_Private_Void_Int32_byref___c__DisplayClass1604_0_0(Int32 r, __c__DisplayClass1604_0& )
+  M static Boolean Method_Internal_Static_Boolean_Int32_byref___c__DisplayClass1617_0_0(Int32 id, __c__DisplayClass1617_0& )
   M Boolean _ReinforcePrototypeCanister_b__1689_0(Int32 c)
+  M static Boolean Method_Internal_Static_Boolean_Vector3_byref___c__DisplayClass1796_0_0(Vector3 v, __c__DisplayClass1796_0& )
+  M static Boolean Method_Internal_Static_Boolean_Vector3_byref___c__DisplayClass1797_0_0(Vector3 v, __c__DisplayClass1797_0& )
+  M Void Method_Private_Void_Int32_StructurePlan_byref___c__DisplayClass1799_0_0(Int32 id, StructurePlan plan, __c__DisplayClass1799_0& )
+  M Void .ctor()
+  M Void .ctor()
+  M Void .ctor(IntPtr pointer)
+== MoonCleaners.MoonWorld/__c : Il2CppSystem.Object
+  P static MoonCleaners.MoonWorld/__c __9
+  P static Il2CppSystem.Comparison`1<UnityEngine.Vector2> __9__189_0
+  P static Il2CppSystem.Comparison`1<UnityEngine.Vector2> __9__191_0
+  P static Il2CppSystem.Func`2<MoonCleaners.MoonCapsuleCatcher,UnityEngine.Vector3> __9__303_0
+  P static Il2CppSystem.Func`2<MoonCleaners.MoonCapsuleCatcher,UnityEngine.Vector3> __9__305_0
+  P static Il2CppSystem.Func`2<MoonCleaners.MoonCapsuleCatcher,UnityEngine.Vector3> __9__320_0
+  P static Il2CppSystem.Func`2<MoonCleaners.MoonCapsuleCatcher,UnityEngine.Vector3> __9__321_0
+  P static Il2CppSystem.Predicate`1<System.Single> __9__323_0
+  P static Il2CppSystem.Predicate`1<System.Single> __9__327_0
+  P static Il2CppSystem.Comparison`1<Il2CppSystem.ValueTuple`3<System.Single,UnityEngine.Vector3,UnityEngine.Quaternion>> __9__340_0
+  P static Il2CppSystem.Comparison`1<Il2CppSystem.ValueTuple`3<System.Single,UnityEngine.Vector3,UnityEngine.Vector3>> __9__552_0
+  P static Il2CppSystem.Comparison`1<Il2CppSystem.ValueTuple`2<System.Single,System.String>> __9__709_0
+  P static Il2CppSystem.Comparison`1<Il2CppSystem.ValueTuple`3<System.Int32,UnityEngine.Vector3,UnityEngine.Vector3>> __9__930_0
+  P static Il2CppSystem.Comparison`1<MoonCleaners.MoonDepotSnapshot> __9__953_0
+  P static Il2CppSystem.Comparison`1<UnityEngine.Vector2> __9__1076_0
+  P static Il2CppSystem.Comparison`1<MoonCleaners.MoonWorld/MachineSnapOption> __9__1255_1
+  P static Il2CppSystem.Comparison`1<MoonCleaners.MoonDepotSnapshot> __9__1289_0
+  P static Il2CppSystem.Predicate`1<System.Byte> __9__1593_1
+  P static Il2CppSystem.Comparison`1<MoonCleaners.MoonDepotSnapshot> __9__1755_0
+  P static Il2CppSystem.Comparison`1<MoonCleaners.MoonDepotSnapshot> __9__1799_1
+  M Int32 _OrderedRoofPolygon_b__189_0(Vector2 a, Vector2 b)
+  M Int32 _CompleteWallRing_b__191_0(Vector2 x, Vector2 y)
+  M Vector3 _GatherCatchers_b__303_0(MoonCapsuleCatcher c)
+  M Vector3 _CatchersAllFull_b__305_0(MoonCapsuleCatcher c)
+  M Vector3 _CatcherMouth_b__320_0(MoonCapsuleCatcher c)
+  M Vector3 _CatcherSeat_b__321_0(MoonCapsuleCatcher c)
+  M Boolean _ReserveCatch_b__323_0(Single t)
+  M Boolean _BookCatch_b__327_0(Single t)
+  M Int32 _JoinCatwalk_b__340_0(ValueTuple`3 a, ValueTuple`3 b)
+  M Int32 _RouteConveyor_b__552_0(ValueTuple`3 a, ValueTuple`3 b)
+  M Int32 _CrewJoinFiles_b__709_0(ValueTuple`2 a, ValueTuple`2 b)
+  M Int32 _WriteRobotPoses_b__930_0(ValueTuple`3 a, ValueTuple`3 b)
+  M Int32 _WriteFoundationStyles_b__953_0(MoonDepotSnapshot a, MoonDepotSnapshot b)
+  M Int32 _FitWorldHex_b__1076_0(Vector2 a, Vector2 b)
+  M Int32 _SnapMachine_b__1255_1(MachineSnapOption a, MachineSnapOption b)
+  M Int32 _MapRobotsInto_b__1289_0(MoonDepotSnapshot a, MoonDepotSnapshot b)
+  M Boolean _InitializeProgress_b__1593_1(Byte s)
+  M Int32 _RobotDocksOf_b__1755_0(MoonDepotSnapshot a, MoonDepotSnapshot b)
+  M Int32 _SharedWallJoints_b__1799_1(MoonDepotSnapshot a, MoonDepotSnapshot b)
+  M Int32 __cctor_b__1984_0(ValueTuple`2 a, ValueTuple`2 b)
+  M Void .ctor()
+  M Void .ctor()
+  M Void .ctor(IntPtr pointer)
+== MoonCleaners.MoonWorld/AutomaticWallJoint : Il2CppSystem.Object
+  P System.Int32 corner
+  P System.Int32 firstWall
+  P System.Int32 secondWall
+  P Il2CppInterop.Runtime.InteropTypes.Arrays.Il2CppStructArray`1<System.Int32> walls
+  P Il2CppInterop.Runtime.InteropTypes.Arrays.Il2CppStructArray`1<System.Int32> supports
+  P MoonCleaners.MoonWorld/StructurePlan plan
+  M Void .ctor()
+  M Void .ctor()
+  M Void .ctor(IntPtr pointer)
+== MoonCleaners.MoonWorld/BakeCollisionJob : System.ValueType
+  F UnityEngine.EntityId meshId
+  M Void Execute()
+  M Object BoxIl2CppObject()
+  M Void .ctor()
+== MoonCleaners.MoonWorld/CanisterOp : System.Enum
+  E Upsert = 1
+  E Taken = 2
+  E Released = 3
+  E Removed = 4
+== MoonCleaners.MoonWorld/CatcherSpot : System.ValueType
+  F System.Int32 id
+  F System.Int32 group
+  F UnityEngine.Vector3 mouth
+  F UnityEngine.Vector3 up
+  F System.Single distance
+  F System.Single groupDistance
+  F System.Double room
+  F System.Boolean full
+  M Object BoxIl2CppObject()
+  M Void .ctor()
+== MoonCleaners.MoonWorld/CatwalkEnd : System.ValueType
+  F System.Int32 id
+  F UnityEngine.Vector3 point
+  F UnityEngine.Vector3 outward
+  F System.Single width
+  M Object BoxIl2CppObject()
+  M Void .ctor()
+== MoonCleaners.MoonWorld/Chunk : Il2CppSystem.Object
+  P System.Int32 face
+  P System.Int32 x
+  P System.Int32 y
+  P UnityEngine.Vector3 direction
+  P UnityEngine.MeshFilter filter
+  P UnityEngine.MeshCollider collider
+  P UnityEngine.Mesh coarse
+  P UnityEngine.Mesh detailed
+  P System.Boolean loadFailed
+  P Il2CppSystem.Threading.Tasks.Task`1<MoonCleaners.MoonWorld/ChunkMeshData> detailTask
+  P UnityEngine.Mesh collisionMesh
+  P UnityEngine.Mesh collisionStaging
+  P UnityEngine.GameObject dustSheet
+  P UnityEngine.GameObject dustBank
+  P Il2CppSystem.Threading.Tasks.Task`1<MoonCleaners.MoonDustBankGeometry/Batch> bankTask
+  P MoonCleaners.MoonDustBankGeometry/Batch bankBatch
+  P System.Int32 bankBatchIndex
+  P Il2CppSystem.Collections.Generic.Dictionary`2<System.Int32,MoonCleaners.MoonWorld/DustEdgePage> bankMeshes
+  P UnityEngine.Texture boundBankTexture
+  P System.Int32 bankRevision
+  P System.Int32 bankBuildingRevision
+  P System.Single nextBankBuild
+  P System.Single handPaintedAt
+  P System.Single nextQuietUpload
+  P Il2CppInterop.Runtime.InteropTypes.Arrays.Il2CppStructArray`1<System.Int32> collisionTriangles
+  P Unity.Jobs.JobHandle collisionJob
+  P System.Boolean collisionPending
+  P System.Int32 collisionRevision
+  P System.Int32 bakingRevision
+  P System.Single collisionReadyAt
+  P System.Int32 bankInterestHash
+  P System.Int32 regionBankInterestHash
+  P Il2CppSystem.Collections.Generic.HashSet`1<System.Int32> regionBankInterest
+  P Il2CppSystem.Collections.Generic.List`1<MoonCleaners.MoonPageSnapshot> bankPages
+  P Il2CppSystem.Collections.Generic.HashSet`1<System.Int32> bankActiveSet
+  P Il2CppSystem.Collections.Generic.HashSet`1<System.Int32> bankDistantSet
+  P MoonCleaners.MoonDustBankGeometry/Cache bankCache
+  P System.Boolean near
+  P MoonCleaners.MoonCleanMask cleaning
+  P System.Boolean archived
+  P System.Boolean progressDirty
+  P System.Single compactAfter
+  P Il2CppInterop.Runtime.InteropTypes.Arrays.Il2CppStructArray`1<System.Byte> coarseRemaining
+  P UnityEngine.Texture2D coarseTexture
+  P Il2CppSystem.Threading.Tasks.Task`1<MoonCleaners.MoonWorld/LoadedCleaning> loading
+  P System.Int32 strokesWaiting
+  P System.Single loadAskedAt
+  P MoonCleaners.MoonChunkSnapshot pendingSnapshot
+  P System.Int32 progressRevision
+  P System.Int32 snapshotRevision
+  P System.Single lastDustChange
+  P System.Single cleaningLoadedAt
+  P Il2CppInterop.Runtime.InteropTypes.Arrays.Il2CppStructArray`1<UnityEngine.Vector3> coarseVertices
+  P Il2CppInterop.Runtime.InteropTypes.Arrays.Il2CppStructArray`1<UnityEngine.Vector3> detailedVertices
+  P Il2CppInterop.Runtime.InteropTypes.Arrays.Il2CppStructArray`1<System.Single> coarseSeen
+  P Il2CppInterop.Runtime.InteropTypes.Arrays.Il2CppStructArray`1<UnityEngine.Vector3> uncutGrid
+  P Il2CppInterop.Runtime.InteropTypes.Arrays.Il2CppStructArray`1<UnityEngine.Vector3> gridNormals
+  P Il2CppInterop.Runtime.InteropTypes.Arrays.Il2CppStructArray`1<UnityEngine.Vector3> uncutVertices
+  P Il2CppInterop.Runtime.InteropTypes.Arrays.Il2CppStructArray`1<UnityEngine.Vector3> detailNormals
+  P Il2CppInterop.Runtime.InteropTypes.Arrays.Il2CppStructArray`1<UnityEngine.Color> gridColors
+  P Il2CppInterop.Runtime.InteropTypes.Arrays.Il2CppStructArray`1<UnityEngine.Color> detailColors
+  P Il2CppInterop.Runtime.InteropTypes.Arrays.Il2CppStructArray`1<UnityEngine.Vector2> detailUV
+  P Il2CppSystem.Collections.Generic.HashSet`1<System.Int32> refinedCells
+  P UnityEngine.Vector3 groundEye
+  P System.Single groundScale
+  M Void .ctor()
+  M Void .ctor()
+  M Void .ctor(IntPtr pointer)
+== MoonCleaners.MoonWorld/ChunkMeshData : Il2CppSystem.Object
+  P Il2CppInterop.Runtime.InteropTypes.Arrays.Il2CppStructArray`1<UnityEngine.Vector3> vertices
+  P Il2CppInterop.Runtime.InteropTypes.Arrays.Il2CppStructArray`1<UnityEngine.Vector3> normals
+  P Il2CppInterop.Runtime.InteropTypes.Arrays.Il2CppStructArray`1<UnityEngine.Color> colors
+  P Il2CppInterop.Runtime.InteropTypes.Arrays.Il2CppStructArray`1<UnityEngine.Vector2> atlas
+  M Void .ctor()
+  M Void .ctor()
+  M Void .ctor(IntPtr pointer)
+== MoonCleaners.MoonWorld/ConveyorPlan : Il2CppSystem.Object
+  P UnityEngine.Vector3 start
+  P UnityEngine.Vector3 startDirection
+  P UnityEngine.Vector3 end
+  P UnityEngine.Vector3 endDirection
+  P System.Int32 startStructure
+  P System.Int32 endStructure
+  P System.Int32 startBelt
+  P System.Int32 endBelt
+  P System.Int32 replaces
+  P UnityEngine.Vector3 startUp
+  P UnityEngine.Vector3 endUp
+  M Void .ctor()
+  M Void .ctor()
+  M Void .ctor(IntPtr pointer)
+== MoonCleaners.MoonWorld/ConveyorPort : Il2CppSystem.ValueType
+  P UnityEngine.Vector3 position
+  P UnityEngine.Vector3 direction
+  P System.Boolean output
+  P System.Int32 structure
+  P System.Int32 belt
+  P System.Boolean occupied
+  P System.String label
+  M Void .ctor()
+  M Void .ctor(IntPtr pointer)
+  M Void .ctor()
+== MoonCleaners.MoonWorld/CrewRider : System.ValueType
+  F System.Int32 id
+  F System.Int32 belt
+  F System.Int32 place
+  F System.Single distance
+  F System.Boolean moving
+  M Object BoxIl2CppObject()
+  M Void .ctor()
+== MoonCleaners.MoonWorld/CrewRun : Il2CppSystem.Object
+  P System.Boolean active
+  P MoonCleaners.CrewStroke stroke
+  P System.Single since
+  P System.String credit
+  P Il2CppSystem.Collections.Generic.List`1<UnityEngine.Vector3> joints
+  M Void .ctor()
+  M Void .ctor()
+  M Void .ctor(IntPtr pointer)
+== MoonCleaners.MoonWorld/CrewTruth : System.Enum
+  E Depots = 0
+  E Belts = 1
+  E Capsules = 2
+  E Sections = 3
+  E Upgrades = 4
+== MoonCleaners.MoonWorld/DepotPlacementCheck : Il2CppSystem.Object
+  P MoonCleaners.MoonWorld world
+  P Il2CppSystem.Collections.IEnumerator steps
+  P MoonCleaners.MoonWorld/StructurePlan Plan
+  P UnityEngine.Vector3 _Direction_k__BackingField
+  P System.Single _Yaw_k__BackingField
+  P System.Int32 _Kind_k__BackingField
+  P System.Boolean _Done_k__BackingField
+  P System.Boolean _Valid_k__BackingField
+  P System.String _Reason_k__BackingField
+  P System.Single _CompletedAt_k__BackingField
+  P System.Int32 _Slices_k__BackingField
+  P System.Double _LastSliceMilliseconds_k__BackingField
+  P UnityEngine.Vector3 Direction
+  P System.Single Yaw
+  P System.Int32 Kind
+  P System.Boolean Done
+  P System.Boolean Valid
+  P System.String Reason
+  P System.Single CompletedAt
+  P System.Int32 Slices
+  P System.Double LastSliceMilliseconds
+  M Void Advance(Double milliseconds)
+  M Void .ctor()
+  M Void .ctor()
+  M Void .ctor(IntPtr pointer)
+== MoonCleaners.MoonWorld/DustEdgePage : Il2CppSystem.Object
+  P UnityEngine.GameObject gameObject
+  P UnityEngine.Mesh mesh
+  P UnityEngine.MeshRenderer renderer
+  M Void .ctor()
+  M Void .ctor()
+  M Void .ctor(IntPtr pointer)
+== MoonCleaners.MoonWorld/DustFragmentSample : Il2CppSystem.ValueType
+  P MoonCleaners.MoonWorld/Chunk chunk
+  P UnityEngine.Vector2 uv
+  M Void .ctor()
+  M Void .ctor(IntPtr pointer)
+  M Void .ctor()
+== MoonCleaners.MoonWorld/FarRobot : Il2CppSystem.Object
+  P System.Int32 hex
+  P System.Double work
+  P System.Double need
+  P System.Double kilograms
+  P UnityEngine.Vector3 at
+  P System.Single idleUntil
+  P System.Single last
+  P Il2CppSystem.Collections.Generic.Dictionary`2<System.Int32,System.Single> passed
+  M Void .ctor()
+  M Void .ctor()
+  M Void .ctor(IntPtr pointer)
+== MoonCleaners.MoonWorld/FarRobotSpec : Il2CppSystem.Object
+  P System.Single rate
+  P System.Int32 rings
+  P System.Boolean roams
+  P System.Double bin
+  M Void .ctor()
+  M Void .ctor()
+  M Void .ctor(IntPtr pointer)
+== MoonCleaners.MoonWorld/GarageOffer : Il2CppSystem.Object
+  P System.Int32 vehicle
+  P Il2CppSystem.Decimal price
+  P System.String summary
+  M Void .ctor()
+  M Void .ctor()
+  M Void .ctor(IntPtr pointer)
+== MoonCleaners.MoonWorld/HeldStroke : Il2CppSystem.ValueType
+  P MoonCleaners.MoonWorld/QueuedStroke stroke
+  P MoonCleaners.MoonWorld/Chunk chunk
+  M Void .ctor()
+  M Void .ctor(IntPtr pointer)
+  M Void .ctor()
+== MoonCleaners.MoonWorld/LoadedCleaning : Il2CppSystem.Object
+  P MoonCleaners.MoonChunkSnapshot snapshot
+  P MoonCleaners.MoonCleanMask mask
+  P Il2CppInterop.Runtime.InteropTypes.Arrays.Il2CppStructArray`1<System.Int32> refinedRegions
+  M Void .ctor()
+  M Void .ctor()
+  M Void .ctor(IntPtr pointer)
+== MoonCleaners.MoonWorld/MachineSnapOption : System.ValueType
+  F System.Int32 belt
+  F System.Int32 port
+  F System.Int32 machine
+  F System.Int32 machinePort
+  F System.Boolean beltEnd
+  F System.Single score
+  M Object BoxIl2CppObject()
+  M Void .ctor()
+== MoonCleaners.MoonWorld/MapRobot : Il2CppSystem.ValueType
+  P System.Int32 dock
+  P System.Int32 number
+  P MoonCleaners.MoonWorld/MapRobotKind kind
+  P System.String owner
+  P System.String status
+  P UnityEngine.Vector3 position
+  P System.Boolean near
+  P System.Boolean on
+  P System.Double kilograms
+  P System.Double bin
+  M Void .ctor()
+  M Void .ctor(IntPtr pointer)
+  M Void .ctor()
+== MoonCleaners.MoonWorld/MapRobotKind : System.Enum
+  E MkI = 0
+  E MkII = 1
+  E Joonas = 2
+== MoonCleaners.MoonWorld/PanelSpec : Il2CppSystem.ValueType
+  P System.String name
+  P System.Single peakKw
+  P System.Single batteryKwh
+  P System.Single range
+  P System.Single tiltDeg
+  P System.Single maxTiltDeg
+  P System.Boolean tracker
+  M Void .ctor()
+  M Void .ctor(IntPtr pointer)
+  M Void .ctor()
+== MoonCleaners.MoonWorld/PlayerPlace : System.ValueType
+  F UnityEngine.Vector3 position
+  F UnityEngine.Vector3 heading
+  F System.Single pitch
+  F MoonCleaners.MoonWalker/CameraView view
+  M Object BoxIl2CppObject()
+  M Void .ctor()
+== MoonCleaners.MoonWorld/PlayerScore : Il2CppSystem.Object
+  P System.String player
+  P System.Double kilograms
+  P System.Double distance
+  P System.Int32 sections
+  M Void .ctor()
+  M Void .ctor()
+  M Void .ctor(IntPtr pointer)
+== MoonCleaners.MoonWorld/PowerNode : Il2CppSystem.Object
+  P MoonCleaners.MoonDepotSnapshot record
+  P MoonCleaners.MoonProductionState state
+  P UnityEngine.Vector3 position
+  P UnityEngine.Vector3 up
+  P UnityEngine.Quaternion rotation
+  P UnityEngine.Vector2 half
+  P System.Boolean panel
+  P MoonCleaners.MoonWorld/PanelSpec spec
+  P System.Int32 parent
+  M Void .ctor()
+  M Void .ctor()
+  M Void .ctor(IntPtr pointer)
+== MoonCleaners.MoonWorld/PressTile : Il2CppSystem.ValueType
+  P UnityEngine.Vector3 pose
+  P UnityEngine.Quaternion rotation
+  P Il2CppInterop.Runtime.InteropTypes.Arrays.Il2CppStructArray`1<UnityEngine.Vector2> polygon
+  P UnityEngine.Vector2 min
+  P UnityEngine.Vector2 max
+  P System.Boolean polish
+  M Void .ctor()
+  M Void .ctor(IntPtr pointer)
+  M Void .ctor()
+== MoonCleaners.MoonWorld/ProcessorSpec : Il2CppSystem.Object
+  P System.String name
+  P System.String product
+  P System.Single runningKw
+  P System.Single cycleSeconds
+  P Il2CppInterop.Runtime.InteropTypes.Arrays.Il2CppStringArray slotNames
+  P Il2CppInterop.Runtime.InteropTypes.Arrays.Il2CppStructArray`1<MoonCleaners.MoonCargo> slotCargo
+  P Il2CppInterop.Runtime.InteropTypes.Arrays.Il2CppStructArray`1<System.Double> slotCapacity
+  P System.Int32 output
+  M Void .ctor()
+  M Void .ctor()
+  M Void .ctor(IntPtr pointer)
+== MoonCleaners.MoonWorld/PurchaseKind : System.Enum
+  E Tool = 0
+  E Container = 1
+  E TreeNode = 2
+  E VehicleUpgrade = 3
+== MoonCleaners.MoonWorld/QueuedStroke : Il2CppSystem.ValueType
+  P System.Int32 player
+  P System.String inventoryId
+  P System.String vehicleStorageId
+  P System.String credit
+  P UnityEngine.Vector3 from
+  P UnityEngine.Vector3 to
+  P UnityEngine.Vector3 fromRight
+  P UnityEngine.Vector3 toRight
+  P UnityEngine.Vector3 push
+  P System.Single width
+  P System.Single depth
+  P System.Single dose
+  P System.Single edge
+  P Il2CppSystem.Action`2<System.Int32,System.Double> completed
+  P System.Single queued
+  M Void .ctor()
+  M Void .ctor(IntPtr pointer)
+  M Void .ctor()
+== MoonCleaners.MoonWorld/Rider : Il2CppSystem.ValueType
+  P System.Int32 belt
+  P System.Single distance
+  P System.Single lag
+  P System.Boolean moving
+  P MoonCleaners.MoonConveyorPath placedOn
+  P UnityEngine.Vector3 placedAt
+  M Void .ctor()
+  M Void .ctor(IntPtr pointer)
+  M Void .ctor()
+== MoonCleaners.MoonWorld/SavedWorldDefinition : Il2CppSystem.Object
+  P System.Int32 seed
+  P System.Int32 chunksPerFace
+  P System.Int32 coarseResolution
+  P System.Int32 detailMultiplier
+  P System.Single radius
+  P System.Single terrainHeight
+  P System.Single craterDensity
+  P System.Single smallCraterRadius
+  P System.Single largeCraterRadius
+  P System.Single craterDepthRatio
+  P System.Single slopeLimit
+  P System.Single spawnClearRadius
+  P System.Single spawnRidgeHeight
+  P System.Single dustCoverage
+  P System.Single dustPatchSize
+  P System.Single dustDensity
+  P System.Single dustThicknessMin
+  P System.Single dustThicknessMax
+  P System.Single regionDiameter
+  P System.Single regionProgressSpacing
+  P System.Boolean showExampleCleanTrail
+  P System.Boolean spawnCraterEnabled
+  P System.Single spawnCraterFloorRadius
+  P System.Single spawnCraterDepth
+  P System.Single spawnValleyRadius
+  P System.Single spawnValleyWallWidth
+  P System.Single spawnValleyRimHeight
+  P System.Single spawnValleyPeakHeight
+  P System.Single spawnValleyOuterWidth
+  P System.Single spawnValleyPassAzimuth
+  P System.Single spawnValleyPassWidth
+  P System.Single spawnValleyRoughness
+  P System.Int32 sessionResetRevision
+  M Void .ctor()
+  M Void .ctor(MoonSettings s)
+  M Void .ctor(IntPtr pointer)
+== MoonCleaners.MoonWorld/SiteSeal : Il2CppSystem.Object
+  P UnityEngine.Vector3 position
+  P UnityEngine.Quaternion inverse
+  P MoonCleaners.MoonLunarSite/Seal seal
+  M Void .ctor()
+  M Void .ctor()
+  M Void .ctor(IntPtr pointer)
+== MoonCleaners.MoonWorld/StripShare : Il2CppSystem.Object
+  P System.Int32 left
+  P System.Int32 changed
+  P System.Double kilograms
+  P Il2CppSystem.Action`2<System.Int32,System.Double> completed
+  M Void Done(Int32 strip, Double taken)
+  M Void .ctor()
+  M Void .ctor()
+  M Void .ctor(IntPtr pointer)
+== MoonCleaners.MoonWorld/StrokeSpans : Il2CppSystem.Object
+  P Il2CppSystem.Collections.Generic.List`1<Il2CppInterop.Runtime.InteropTypes.Arrays.Il2CppStructArray`1<UnityEngine.Vector2>> polygons
+  P Il2CppSystem.Collections.Generic.List`1<System.Int32> counts
+  P Il2CppSystem.Collections.Generic.List`1<UnityEngine.Vector3> corners
+  P System.Single grow
+  P MoonCleaners.MoonCleanMask/RowSpan Row
+  P UnityEngine.Rect _Extent_k__BackingField
+  P UnityEngine.Rect Extent
+  M Boolean Set(MoonWorld world, Chunk c, MoonToolFootprint footprint, Single reach, Int32 samples)
+  M Boolean RowOf(Single v, Single& uMin, Single& uMax)
+  M Void .ctor()
+  M Void .ctor()
+  M Void .ctor(IntPtr pointer)
+== MoonCleaners.MoonWorld/StructurePlan : Il2CppSystem.Object
+  P System.Int32 kind
+  P System.Int32 support
+  P UnityEngine.Vector3 position
+  P UnityEngine.Quaternion rotation
+  P System.Boolean snapped
+  P System.String hint
+  P MoonCleaners.MoonFoundationModule module
+  P System.Int32 cell
+  P Il2CppInterop.Runtime.InteropTypes.Arrays.Il2CppStructArray`1<System.Int32> belts
+  P Il2CppInterop.Runtime.InteropTypes.Arrays.Il2CppStructArray`1<System.Int32> joined
+  P System.Int32 shiftBelt
+  P System.Boolean shiftEnd
+  P UnityEngine.Vector3 shiftTo
+  P UnityEngine.Vector3 shiftDirection
+  P UnityEngine.Vector3 shiftUp
+  P System.Single shift
+  P System.Int32 cutBelt
+  P MoonCleaners.MoonWorld/ConveyorPlan cutBefore
+  P MoonCleaners.MoonWorld/ConveyorPlan cutAfter
+  P System.Boolean raised
+  P System.Boolean free
+  M Void .ctor()
+  M Void .ctor()
+  M Void .ctor(IntPtr pointer)
+== MoonCleaners.MoonWorld/TeamWallet : Il2CppSystem.Object
+  P Il2CppSystem.Decimal Balance
+  P Il2CppSystem.Action`2<System.String,Il2CppSystem.Decimal> Changed
+  P Il2CppSystem.Decimal Item
+  M Void add_Changed(Action`2 value)
+  M Void remove_Changed(Action`2 value)
+  M Void .ctor()
+  M Void .ctor()
+  M Void .ctor(IntPtr pointer)
+== MoonCleaners.MoonWorld/UpgradeState : Il2CppSystem.Object
+  P System.Int32 inventoryTier
+  P Il2CppSystem.Collections.Generic.SortedDictionary`2<System.String,System.Int32> tools
+  P Il2CppSystem.Collections.Generic.SortedDictionary`2<System.String,System.Int32> containers
+  P Il2CppSystem.Collections.Generic.SortedDictionary`2<System.String,System.Int32> tree
+  P System.Boolean Empty
+  M UInt64 Hash(UInt64 h)
+  M Void Write(BinaryWriter w)
+  M static UpgradeState Read(BinaryReader r)
+  M Void .ctor()
+  M Void .ctor()
+  M Void .ctor(IntPtr pointer)
+== MoonCleaners.MoonWorld/VehicleHandover : Il2CppSystem.ValueType
+  P System.Int32 index
+  P System.String storage
+  P UnityEngine.Vector3 position
+  P UnityEngine.Quaternion rotation
+  P System.Double kilograms
+  P System.Double capacity
+  P System.Boolean lights
+  M Void Write(BinaryWriter w)
+  M static Boolean Read(BinaryReader r, VehicleHandover& h)
+  M Void .ctor()
+  M Void .ctor(IntPtr pointer)
+  M Void .ctor()
+== MoonCleaners.MoonWorld/WallVertex : Il2CppSystem.Object
+  P UnityEngine.Vector3 position
+  P UnityEngine.Vector3 up
+  P System.Int32 corner
+  P System.Int32 support
+  P Il2CppSystem.Collections.Generic.List`1<System.Int32> walls
+  P Il2CppSystem.Collections.Generic.List`1<System.Int32> supports
+  P Il2CppSystem.Collections.Generic.List`1<UnityEngine.Vector3> rays
+  P Il2CppSystem.Collections.Generic.List`1<UnityEngine.Vector3> origins
+  P Il2CppSystem.Collections.Generic.List`1<UnityEngine.Vector3> ups
+  M Void .ctor()
+  M Void .ctor()
   M Void .ctor(IntPtr pointer)

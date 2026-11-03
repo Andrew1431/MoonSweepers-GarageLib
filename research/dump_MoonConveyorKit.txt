@@ -1,0 +1,37 @@
+== MoonCleaners.MoonConveyorKit : UnityEngine.ScriptableObject
+  P Il2CppInterop.Runtime.InteropTypes.Arrays.Il2CppReferenceArray`1<UnityEngine.Material> materials
+  P Il2CppInterop.Runtime.InteropTypes.Arrays.Il2CppReferenceArray`1<MoonCleaners.MoonConveyorKit/Profile> profiles
+  P MoonCleaners.MoonConveyorKit/Piece tread
+  P MoonCleaners.MoonConveyorKit/Piece coupler
+  P MoonCleaners.MoonConveyorKit/Piece lamp
+  P MoonCleaners.MoonConveyorKit/Piece saddle
+  P MoonCleaners.MoonConveyorKit/Piece feet
+  P MoonCleaners.MoonConveyorKit/Piece columns
+  P MoonCleaners.MoonConveyorKit/Piece endcap
+  P MoonCleaners.MoonConveyorKit/Piece brace
+  P System.Int32 beltMaterial
+  P System.Single treadPitch
+  P System.Single jointSpacing
+  P System.Single deckHeight
+  P System.Single columnInset
+  P System.Single treadEndGap
+  P System.Single columnsHeight
+  P System.Single legLow
+  P System.Single legTop
+  P System.Single braceFrom
+  P System.Single braceGap
+  P System.Single supportGap
+  P System.Single pricePerMetre
+  P System.Single minLength
+  P System.Single maxLength
+  P System.Single minRadius
+  P System.Single maxSlope
+  P System.Single minHeight
+  P System.Single maxHeight
+  P UnityEngine.Material hologram
+  P static MoonCleaners.MoonConveyorKit loaded
+  M static MoonConveyorKit Load()
+  M Decimal Price(Single length)
+  M Void .ctor()
+  M Void .ctor()
+  M Void .ctor(IntPtr pointer)

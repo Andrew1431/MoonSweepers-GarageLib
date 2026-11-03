@@ -1,0 +1,27 @@
+== MoonCleaners.MoonBuildCard : UnityEngine.MonoBehaviour
+  P UnityEngine.RectTransform art
+  P MoonCleaners.MoonRadialGlow glow
+  P Il2CppSystem.Action placed
+  P Il2CppSystem.Action shown
+  P Il2CppSystem.Action hidden
+  P static System.Single Rise
+  P static System.Single Grow
+  P System.Single glowAlpha
+  P System.Single hover
+  P System.Boolean pointed
+  P System.Boolean selected
+  P System.Boolean restKnown
+  P UnityEngine.Vector2 rest
+  M Void OnPointerEnter(PointerEventData data)
+  M Void OnPointerExit(PointerEventData data)
+  M Void OnSelect(BaseEventData data)
+  M Void OnDeselect(BaseEventData data)
+  M Void OnPointerClick(PointerEventData data)
+  M Void OnSubmit(BaseEventData data)
+  M Void OnEnable()
+  M Void OnDisable()
+  M Void Update()
+  M Void Apply()
+  M Void .ctor()
+  M Void .ctor()
+  M Void .ctor(IntPtr pointer)

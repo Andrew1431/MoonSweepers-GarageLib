@@ -1,0 +1,26 @@
+== MoonCleaners.MoonWorld/ConveyorPlan : Il2CppSystem.Object
+  P UnityEngine.Vector3 start
+  P UnityEngine.Vector3 startDirection
+  P UnityEngine.Vector3 end
+  P UnityEngine.Vector3 endDirection
+  P System.Int32 startStructure
+  P System.Int32 endStructure
+  P System.Int32 startBelt
+  P System.Int32 endBelt
+  P System.Int32 replaces
+  P UnityEngine.Vector3 startUp
+  P UnityEngine.Vector3 endUp
+  M Void .ctor()
+  M Void .ctor()
+  M Void .ctor(IntPtr pointer)
+== MoonCleaners.MoonWorld/ConveyorPort : Il2CppSystem.ValueType
+  P UnityEngine.Vector3 position
+  P UnityEngine.Vector3 direction
+  P System.Boolean output
+  P System.Int32 structure
+  P System.Int32 belt
+  P System.Boolean occupied
+  P System.String label
+  M Void .ctor()
+  M Void .ctor(IntPtr pointer)
+  M Void .ctor()

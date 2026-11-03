@@ -12,19 +12,44 @@
    <Project><PropertyGroup><GameDir>D:\SteamLibrary\steamapps\common\Moon Sweepers</GameDir></PropertyGroup></Project>
    ```
 
-4. Build everything once: `dotnet build GarageLib.slnx -c Release`. Each build copies the DLLs into
+4. Build everything once: `dotnet build GarageLib.slnx -c Release` (the `.slnx` needs .NET SDK 9.0.200 or newer; on an
+   older SDK build per project, `dotnet build src\GarageLib -c Release`, or use `dev.ps1`). Each build copies the DLLs into
    `BepInEx/plugins/<Name>/`, so you only need to launch the game afterwards (close it first: Windows locks the DLLs). If you used the player
 installer, BepInEx is off for plain Steam starts: launch modded with the desktop shortcut or
 `steam.exe -applaunch 5335510 --doorstop-enabled true`, or set `enabled = true` in the game's `doorstop_config.ini`.
 
-## New vehicle
+## Dev loop
 
 ```powershell
-.\new-vehicle.ps1 -Name RoverX -Author yourname -Title "Rover X"
+.\dev.ps1 -Only GarageLib -Tail
 ```
 
-That creates `vehicles/RoverX/` with a `Plugin.cs` that registers a vehicle, and adds it to the solution.
-Things to know:
+That closes the game if a build or launch needs it closed, builds the named projects (all of them without `-Only`), installs them into the game, launches `MoonSweepers.exe` and tails the log for your projects (by plugin name and folder name) and BepInEx. The game folder is `MOONSWEEPERS_DIR`, else `GameDir` from `Directory.Build.local.props`, else the default Steam folder. Switches:
+
+- `-Only A,B`: build just those projects.
+- `-Release`: build without the `[Dev]` helpers.
+- `-NoBuild`: skip the build (relaunch or tail only).
+- `-NoLaunch`: stop after the build; with `-NoBuild -Tail` it follows the running game's log and leaves the game running.
+- `-Tail`: follow the log for your projects and BepInEx.
+- `-TailTimeoutSeconds N`: how long to wait for the log file to appear (default 60).
+- `-WhatIf`: print the plan and do nothing.
+
+## New package
+
+```powershell
+.\new-package.ps1 -Kind vehicle|mod|lib -Name RoverX -Author yourname [-Title "Rover X"]
+```
+
+The kind decides where it lands, and every kind is added to the solution:
+
+- `vehicle`: `vehicles/RoverX/`, a `Plugin.cs` that registers a vehicle with GarageLib.
+- `mod`: `mods/RoverX/`, a plain plugin with no library references (the csproj has commented lines for GarageLib and StructureLib).
+- `lib`: `src/RoverX/`, a library other mods depend on, with a public `Guid` and a `Version` (libraries are released packages).
+
+A name can't be reused across kinds, because every project installs to `BepInEx/plugins/<Name>/`.
+`.\new-vehicle.ps1 -Name RoverX -Author yourname` still works for one release; it just calls `new-package.ps1 -Kind vehicle`.
+
+For vehicles, things to know:
 
 - **Ids are forever.** `Guid` (`com.yourname.roverx`) and `VehicleId` (`yourname.rover-x`) can't change after a
   release: players' configs and saves refer to them.
@@ -37,11 +62,41 @@ Things to know:
 - **Custom controllers apply gravity themselves.** The moon is a sphere centred on the origin, so "up" is
   `position.normalized`, and gravity is `MoonSettings.gravity`. See `examples/ExampleVehicle` (hover) and
   `vehicles/MsChoppa` (flight).
-- **Models from Blender:** `src/GarageLib/MeshModel.cs` loads a mesh exported with
-  `shared/blender/export_mesh_model.py` from an embedded resource and maps Blender material names onto the
-  game's materials. Ms Choppa is the worked example.
+- **Models from Blender:** `shared/MeshModel/MeshModel.cs` (compiled into GarageLib as `GarageLib.MeshModel`) loads
+  a mesh exported with `shared/blender/export_mesh_model.py` from an embedded resource and maps Blender material
+  names onto the game's materials. Ms Choppa is the worked example.
+- **Model files ship by themselves:** the install target and `package.ps1` copy every `*.bin` beside a project's
+  csproj into its plugin folder and its zip.
 - **Bump `Version`** in your `Plugin.cs` and add a changelog line to your README when you change something players
   will get.
+
+## New structure mod (StructureLib)
+
+Buildings, machines, cargo and power sources go in `mods/<Name>/` on top of
+[StructureLib](src/StructureLib/README.md). [`examples/ExampleStructure`](examples/ExampleStructure) is the worked example; copy its shape:
+
+- `<Name>.csproj` with `AssemblyName` = the folder name and a `ProjectReference` to
+  `$(RepoRoot)src\StructureLib\StructureLib.csproj` with `Private="false"`.
+- `Plugin.cs` with `public const string Guid` (`com.yourname.<name>`) and `public const string Version`,
+  `[BepInDependency(StructureLib.Plugin.Guid)]`, and every `MoonStructures.Register` / `RegisterCargo` call in
+  `Load()`. `package.ps1` picks the folder up from the `Version` constant.
+- A `README.md` with the numbers players see and a changelog.
+- Add the project to `GarageLib.slnx` (folder `/mods/`) and the package name to `modpack.json` to ship it in the
+  modpack.
+
+Things to know:
+
+- **Ids are forever.** The plugin GUID, every structure id (`yourname.structure`) and every cargo id and value can't
+  change after a release: saves and co-op peers refer to them.
+- **Claim cargo values.** A new cargo needs a byte value in 3..255 claimed in
+  [`docs/cargo-registry.md`](docs/cargo-registry.md) before you use it; two mods with the same value are both dropped.
+- **Start from a vanilla structure.** `BaseStructure` lends the model, footprint and build rules. A machine needs a
+  donor with a production view (the stone press, the pressure chamber; for a generator, the solar post).
+- **Know the limits.** The [StructureLib status table](src/StructureLib/README.md#status) lists what works, what is
+  unsupported (walker loading, fuel generators feeding vanilla machines) and what is untested (belts, co-op).
+- **Test with the dev self-test.** Dev builds of StructureLib add a `[Dev]` section to
+  `BepInEx/config/com.ryanhartwig.structurelib.cfg`: `AutoLoadSlot`, `AutoBuild` (structure ids or vanilla kinds),
+  `AutoFeed` (load cargo into a built machine) and `SelfTest`, which logs `[selftest] PASS` / `FAIL` lines.
 
 ## Testing
 

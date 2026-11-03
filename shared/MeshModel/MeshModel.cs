@@ -10,9 +10,19 @@ namespace GarageLib;
 // it as GameObjects.
 // Coordinates are already converted to Unity's; see the exporter for the format. Game-agnostic: materials come from
 // the caller's factory so each game can use its own shaders.
+// Compiled into GarageLib (public API) and StructureLib (STRUCTURELIB defined: internal there, so a mod referencing both
+// assemblies sees one GarageLib.MeshModel and gets no CS0433).
+#if STRUCTURELIB
+internal sealed class MeshModel
+#else
 public sealed class MeshModel
+#endif
 {
+#if STRUCTURELIB
+    internal sealed class Node
+#else
     public sealed class Node
+#endif
     {
         public string Name;
         public int Parent;

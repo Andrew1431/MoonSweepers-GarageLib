@@ -1,0 +1,44 @@
+== MoonCleaners.MoonPressureChamberView : MoonCleaners.MoonProductionView
+  P UnityEngine.Transform needle
+  P UnityEngine.Vector3 needleAxis
+  P System.Single needleDegreesPerMpa
+  P UnityEngine.Transform reliefCap
+  P UnityEngine.Vector3 reliefAxis
+  P System.Single reliefTravel
+  P UnityEngine.Transform strokeIndicator
+  P UnityEngine.Vector3 strokeAxis
+  P System.Single strokeTravel
+  P UnityEngine.Transform valveLever
+  P UnityEngine.Vector3 leverAxis
+  P System.Single leverOpenDegrees
+  P UnityEngine.Renderer intakeLights
+  P UnityEngine.Renderer outputLights
+  P UnityEngine.Renderer pressureLights
+  P UnityEngine.Renderer sightDust
+  P UnityEngine.Renderer sightSand
+  P System.Single sightBottom
+  P System.Single sightTop
+  P UnityEngine.Renderer feedLight
+  P UnityEngine.Renderer statusRing
+  P UnityEngine.Renderer ventLight
+  P UnityEngine.Color feedLightOn
+  P UnityEngine.Color statusRingOn
+  P UnityEngine.Color ventLightOn
+  P static System.Single OperatingMpa
+  P static System.Single LitAtMpa
+  P UnityEngine.Quaternion needleRest
+  P UnityEngine.Quaternion leverRest
+  P UnityEngine.Vector3 reliefRest
+  P UnityEngine.Vector3 strokeRest
+  P System.Boolean rested
+  P System.Single shownPressure
+  P System.Single lastIntake
+  P System.Single lastOutput
+  M Void Awake()
+  M Void Rest()
+  M Void Pose(Single mpa, Single lever, Single relief, Single stroke)
+  M Void Animate(MoonProductionState s, Single dt)
+  M Single HumLevel(MoonProductionState s)
+  M Void .ctor()
+  M Void .ctor()
+  M Void .ctor(IntPtr pointer)

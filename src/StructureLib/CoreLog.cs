@@ -1,0 +1,73 @@
+using System;
+using System.Collections.Generic;
+using BepInEx.Logging;
+using MoonCleaners;
+using UnityEngine;
+
+namespace StructureLib
+{
+    internal static class CoreLog
+    {
+        internal static ManualLogSource Source;
+        internal static bool Verbose;
+        static readonly Dictionary<string, int> counts = new();
+
+        internal static void Info(string m) => Source?.LogInfo(m);
+        internal static void Warn(string m) => Source?.LogWarning(m);
+        internal static void Error(string m) => Source?.LogError(m);
+        internal static void Debug(string m) { if (Verbose) Source?.LogInfo("[v] " + m); }
+
+        // Hot-path tracing: logs the first few hits of each key, then goes quiet.
+        internal static void Once(string key, string m, int limit = 5)
+        {
+            counts.TryGetValue(key, out int n);
+            if (n >= limit) return;
+            counts[key] = n + 1;
+            Source?.LogInfo(n + 1 == limit ? m + " (further hits muted)" : m);
+        }
+
+        // Steam ids in logs get shared when people post logs; keep only the tail (same rule as GarageLib's Redact).
+        internal static string Redact(string s)
+        {
+            if (string.IsNullOrEmpty(s)) return s;
+            int i = s.IndexOf("steam-", StringComparison.Ordinal);
+            if (i < 0) return s;
+            int end = i + 6;
+            while (end < s.Length && char.IsDigit(s[end])) end++;
+            string digits = s.Substring(i + 6, end - i - 6);
+            return s.Substring(0, i) + "steam-…" + (digits.Length > 4 ? digits[^4..] : digits) + s.Substring(end);
+        }
+    }
+
+    // Main-thread state shared by the patches.
+    internal static class CoreState
+    {
+        internal static MoonWorld World;
+        /// <summary>Save folder of the loaded session (MoonProgressStore.Root).</summary>
+        internal static string SaveRoot;
+
+        internal static MoonWorld FindWorld()
+        {
+            if (World != null && World.Pointer != IntPtr.Zero && World) return World;
+            var all = UnityEngine.Object.FindObjectsByType<MoonWorld>(FindObjectsSortMode.None);
+            World = all != null && all.Length > 0 ? all[0] : null;
+            if (World != null) CaptureRoot(World);
+            return World;
+        }
+
+        internal static void CaptureRoot(MoonWorld w)
+        {
+            try
+            {
+                var store = w?.progressStore;
+                string root = store?.Root;
+                if (!string.IsNullOrEmpty(root) && root != SaveRoot)
+                {
+                    SaveRoot = root;
+                    CoreLog.Info($"Save root: {CoreLog.Redact(root)}");
+                }
+            }
+            catch (Exception e) { CoreLog.Once("root", "Reading progressStore.Root failed: " + e.Message); }
+        }
+    }
+}

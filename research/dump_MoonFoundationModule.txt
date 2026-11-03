@@ -1,0 +1,72 @@
+== MoonCleaners.MoonFoundationModule : Il2CppSystem.Object
+  P System.String assetId
+  P MoonCleaners.MoonFoundationModule/Shape shape
+  P Il2CppInterop.Runtime.InteropTypes.Arrays.Il2CppStructArray`1<UnityEngine.Vector2> polygon
+  P Il2CppInterop.Runtime.InteropTypes.Arrays.Il2CppStructArray`1<UnityEngine.Vector3> surface
+  P UnityEngine.Vector3 boundsCenter
+  P UnityEngine.Vector3 boundsSize
+  P Il2CppInterop.Runtime.InteropTypes.Arrays.Il2CppStructArray`1<UnityEngine.Vector3> solidSamples
+  P System.Single low
+  P System.Single high
+  P System.Single spanLength
+  P System.Int32 fitsKind
+  P System.Boolean worldHex
+  P System.Boolean worldSquare
+  P Il2CppInterop.Runtime.InteropTypes.Arrays.Il2CppStructArray`1<UnityEngine.Vector2> outline
+  P System.Boolean aimTurn
+  P System.Boolean variant
+  P Il2CppInterop.Runtime.InteropTypes.Arrays.Il2CppStructArray`1<System.Int32> copes
+  P Il2CppInterop.Runtime.InteropTypes.Arrays.Il2CppStructArray`1<UnityEngine.Vector3> ports
+  P Il2CppInterop.Runtime.InteropTypes.Arrays.Il2CppStructArray`1<UnityEngine.Vector2> portDirections
+  P Il2CppInterop.Runtime.InteropTypes.Arrays.Il2CppStructArray`1<System.Single> portWidths
+  P Il2CppInterop.Runtime.InteropTypes.Arrays.Il2CppStructArray`1<UnityEngine.Vector2> catwalkOutline
+  P System.Boolean catwalkDeck
+  P System.Single supportLevel
+  P System.Single supportWidth
+  P System.Boolean buildingKit
+  P System.Boolean slidingDoor
+  P System.Int32 wallDivisions
+  P System.Single cornerAngle
+  P Il2CppInterop.Runtime.InteropTypes.Arrays.Il2CppStructArray`1<UnityEngine.Vector2> junctionRays
+  P Il2CppInterop.Runtime.InteropTypes.Arrays.Il2CppStructArray`1<UnityEngine.Vector3> junctionDirections
+  P Il2CppInterop.Runtime.InteropTypes.Arrays.Il2CppStructArray`1<UnityEngine.Vector3> junctionOrigins
+  P Il2CppInterop.Runtime.InteropTypes.Arrays.Il2CppStructArray`1<UnityEngine.Vector3> junctionUps
+  P UnityEngine.Vector2 openingHalfSize
+  P Il2CppInterop.Runtime.InteropTypes.Arrays.Il2CppStructArray`1<UnityEngine.Vector3> occupiedCenters
+  P Il2CppInterop.Runtime.InteropTypes.Arrays.Il2CppStructArray`1<UnityEngine.Vector3> occupiedSizes
+  P Il2CppInterop.Runtime.InteropTypes.Arrays.Il2CppStructArray`1<UnityEngine.Vector2> meshPolygon
+  P Il2CppInterop.Runtime.InteropTypes.Arrays.Il2CppStructArray`1<UnityEngine.Vector3> meshSurface
+  P System.Boolean WorldGrid
+  P System.Boolean Partial
+  P System.Boolean CatwalkSupport
+  P System.Boolean BuildingPart
+  P System.Boolean MultiLevel
+  P System.Boolean Deck
+  P System.Boolean Concrete
+  P System.Boolean Flat
+  P Il2CppInterop.Runtime.InteropTypes.Arrays.Il2CppStructArray`1<UnityEngine.Vector2> Footprint
+  M Single SurfaceHeight(Vector2 point)
+  M Single Plane(Vector3 a, Vector3 b, Vector3 c, Vector2 point)
+  M Boolean Folded(Int32& odd)
+  M Boolean Contains(Vector2 point, Single inset)
+  M static Boolean InsidePolygon(Il2CppStructArray`1 polygon, Vector2 point, Single inset)
+  M static Single Method_Internal_Static_Single_Vector3_byref___c__DisplayClass54_0_0(Vector3 v, __c__DisplayClass54_0& )
+  M Void .ctor()
+  M Void .ctor()
+  M Void .ctor(IntPtr pointer)
+== MoonCleaners.MoonFoundationModule/Shape : System.Enum
+  E Foundation = 0
+  E Ramp = 1
+  E Stairs = 2
+  E Filler = 3
+  E Post = 4
+  E Span = 5
+  E SideRail = 6
+  E EdgeRail = 7
+  E Wall = 8
+  E Roof = 9
+  E Corner = 10
+  E UpperFloor = 11
+  E InteriorStairs = 12
+  E Landing = 13
+  E Catwalk = 14

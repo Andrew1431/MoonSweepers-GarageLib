@@ -12,7 +12,8 @@ Maintainers: Andrew (Andrew1431) and Ryan (ryanhartwig), with equal say on what 
 |---|---|---|
 | GarageLib | The library. Required by every vehicle. | [`src/GarageLib`](src/GarageLib) |
 | Ms Choppa | Flying utility helicopter, $12,000. Paused: not in the modpack or dev installs for now. | [`vehicles/MsChoppa`](vehicles/MsChoppa) |
-| Modpack | GarageLib + every vehicle in one zip. | [`modpack.json`](modpack.json) |
+| StructureLib | The structure library: modded buildings, machines, cargo and fuel power. Required by structure mods. | [`src/StructureLib`](src/StructureLib) |
+| Modpack | GarageLib, Late Game Vehicles, StructureLib and the other mods in one zip. | [`modpack.json`](modpack.json) |
 
 ## Installing (players)
 
@@ -32,21 +33,24 @@ mod and its vehicles wait in that file until you reinstall it.
 
 ```
 src/GarageLib/          the library
+src/StructureLib/       the structure library (buildings, machines, cargo, power)
 vehicles/<Name>/        one folder per vehicle mod (own Plugin.cs, version, README, blend files)
 mods/<Name>/            any other mod: buildings, mechanics, tweaks (same shape: Plugin.cs with Version, README)
 shared/Rotorcraft/      helicopter flight model, compiled into vehicles that fly
 examples/ExampleVehicle two test vehicles showing the API (not released)
-templates/Vehicle/      what new-vehicle.ps1 copies
+examples/ExampleStructure test structures showing the StructureLib API (not released)
+tests/StructureLib.Tests unit tests for StructureLib's game-free logic
+templates/Vehicle|Mod|Lib/ what new-package.ps1 copies
 research/               interop dumps and design notes from reverse engineering the game
 ```
 
-## Making a vehicle
+## Making a package
 
 See [CONTRIBUTING.md](CONTRIBUTING.md). Short version:
 
 ```powershell
-.\new-vehicle.ps1 -Name RoverX -Author yourname
-dotnet build vehicles\RoverX -c Release
+.\new-package.ps1 -Kind vehicle -Name RoverX -Author yourname
+.\dev.ps1 -Only RoverX -Tail   # close the game, build, install, launch, follow the log
 ```
 
 ## Releasing

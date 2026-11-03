@@ -1,0 +1,37 @@
+== MoonCleaners.MoonDepotConstruction : UnityEngine.MonoBehaviour
+  P MoonCleaners.MoonWorld world
+  P System.Single nextRefresh
+  P Il2CppSystem.Collections.Generic.Dictionary`2<System.Int32,UnityEngine.GameObject> propViews
+  P Il2CppSystem.Collections.Generic.Dictionary`2<UnityEngine.Transform,System.Int32> viewRoots
+  P System.Int32 _PendingSpawns_k__BackingField
+  P Il2CppSystem.Collections.Generic.List`1<Il2CppSystem.ValueTuple`2<System.Single,MoonCleaners.MoonDepotSnapshot>> toSpawn
+  P Il2CppSystem.Collections.Generic.Dictionary`2<System.Int32,UnityEngine.Vector3> robotsAt
+  P System.Int32 PendingSpawns
+  P static System.Single SpawnBudgetMs
+  M Void RefreshRailJoints(Vector3 a, Vector3 b)
+  M Void RefreshArchitectureJoints(Int32 support)
+  M Void Keep(Int32 id, GameObject root)
+  M Void Forget(GameObject root)
+  M Void Awake()
+  M Void RestoreExistingViews()
+  M GameObject ViewOf(Int32 id)
+  M Int32 StructureAt(Collider collider)
+  M GameObject TakeView(Int32 id)
+  M static Void DiscardView(GameObject root)
+  M Void Remove(Int32 id)
+  M Boolean Spawn(MoonDepotSnapshot data)
+  M static GameObject SkinOf(MoonDepotBuildDefinition def, Int32 style)
+  M Void Redraw(MoonDepotSnapshot record)
+  M Void Update()
+  M Void OnDestroy()
+  M static Boolean Method_Internal_Static_Boolean_Vector3_byref___c__DisplayClass0_0_0(Vector3 p, __c__DisplayClass0_0& )
+  M Void .ctor()
+  M Void .ctor()
+  M Void .ctor(IntPtr pointer)
+== MoonCleaners.MoonDepotConstruction/__c : Il2CppSystem.Object
+  P static MoonCleaners.MoonDepotConstruction/__c __9
+  P static Il2CppSystem.Comparison`1<Il2CppSystem.ValueTuple`2<System.Single,MoonCleaners.MoonDepotSnapshot>> __9__26_0
+  M Int32 _Update_b__26_0(ValueTuple`2 a, ValueTuple`2 b)
+  M Void .ctor()
+  M Void .ctor()
+  M Void .ctor(IntPtr pointer)

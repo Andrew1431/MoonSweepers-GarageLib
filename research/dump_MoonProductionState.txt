@@ -1,0 +1,50 @@
+== MoonCleaners.MoonProductionState : Il2CppSystem.Object
+  P System.Int32 _Id_k__BackingField
+  P System.Int32 _Kind_k__BackingField
+  P Il2CppInterop.Runtime.InteropTypes.Arrays.Il2CppReferenceArray`1<Il2CppSystem.Collections.Generic.Dictionary`2<System.String,System.Double>> stores
+  P System.Single _Progress_k__BackingField
+  P System.Boolean _Running_k__BackingField
+  P System.Single _Power_k__BackingField
+  P System.Single _DemandKw_k__BackingField
+  P System.Single _UsedKw_k__BackingField
+  P System.String powerStatus
+  P System.String flowStatus
+  P System.Single flowUntil
+  P System.Int32 _Grid_k__BackingField
+  P System.Double _ChargeKwh_k__BackingField
+  P System.Single _SuppliedKw_k__BackingField
+  P System.Single _BatteryKw_k__BackingField
+  P System.Single _SunFactor_k__BackingField
+  P System.Boolean _Daylight_k__BackingField
+  P UnityEngine.Vector3 _SunAim_k__BackingField
+  P System.Single _TrackerTilt_k__BackingField
+  P System.Single lastInput
+  P System.Single nextEmit
+  P System.Single lastCycle
+  P System.Int32 _Cycles_k__BackingField
+  P System.Int32 hostCycles
+  P System.Int32 Id
+  P System.Int32 Kind
+  P System.Single Progress
+  P System.Boolean Running
+  P System.Single Power
+  P System.Single DemandKw
+  P System.Single UsedKw
+  P System.String Status
+  P System.Int32 Grid
+  P System.Double ChargeKwh
+  P System.Single SuppliedKw
+  P System.Single BatteryKw
+  P System.Single SunFactor
+  P System.Boolean Daylight
+  P UnityEngine.Vector3 SunAim
+  P System.Single TrackerTilt
+  P System.Int32 Cycles
+  P System.Boolean Empty
+  M Void Flow(String status)
+  M Double Stored(Int32 slot)
+  M Double Capacity(Int32 slot)
+  M Single Fill(Int32 slot)
+  M Void .ctor()
+  M Void .ctor()
+  M Void .ctor(IntPtr pointer)

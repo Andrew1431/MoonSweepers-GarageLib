@@ -1,0 +1,9 @@
+== MoonCleaners.MoonProductionSnapshot : Il2CppSystem.Object
+  P System.Int32 id
+  P System.Single progress
+  P System.Boolean running
+  P System.Double charge
+  P Il2CppSystem.Collections.Generic.List`1<Il2CppSystem.Collections.Generic.List`1<MoonCleaners.MoonWalletSnapshot>> stores
+  M Void .ctor()
+  M Void .ctor()
+  M Void .ctor(IntPtr pointer)

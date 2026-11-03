@@ -4,4 +4,9 @@
     <RootNamespace>GarageLib</RootNamespace>
     <GenerateDocumentationFile>true</GenerateDocumentationFile>
   </PropertyGroup>
+
+  <ItemGroup>
+    <!-- The .bin model reader, shared with StructureLib. -->
+    <Compile Include="$(RepoRoot)shared\MeshModel\MeshModel.cs" Link="Shared\MeshModel.cs" />
+  </ItemGroup>
 </Project>

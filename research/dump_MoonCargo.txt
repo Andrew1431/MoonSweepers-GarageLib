@@ -1,0 +1,4 @@
+== MoonCleaners.MoonCargo : System.Enum
+  E Dust = 0
+  E Sand = 1
+  E Stone = 2

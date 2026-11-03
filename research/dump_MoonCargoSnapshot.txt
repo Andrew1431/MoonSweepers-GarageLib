@@ -1,0 +1,6 @@
+== MoonCleaners.MoonCargoSnapshot : Il2CppSystem.Object
+  P System.Int32 id
+  P System.Byte cargo
+  M Void .ctor()
+  M Void .ctor()
+  M Void .ctor(IntPtr pointer)

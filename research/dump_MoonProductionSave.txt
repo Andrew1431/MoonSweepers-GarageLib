@@ -1,0 +1,7 @@
+== MoonCleaners.MoonProductionSave : Il2CppSystem.Object
+  P static System.Int32 MaxSlots
+  P static System.Int32 MaxShares
+  M static Void Write(BinaryWriter w, MoonLooseDustSnapshot state)
+  M static Void Read(BinaryReader r, MoonLooseDustSnapshot state)
+  M Void .ctor()
+  M Void .ctor(IntPtr pointer)

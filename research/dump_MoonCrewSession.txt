@@ -1,0 +1,459 @@
+== MoonCleaners.MoonCrewSession : UnityEngine.MonoBehaviour
+  P System.Single nextPing
+  P System.Int32 pings
+  P System.UInt64 clockHost
+  P Il2CppSystem.Collections.Generic.List`1<Il2CppSystem.ValueTuple`2<System.Double,System.Double>> clockSamples
+  P static System.Single DustSumsEvery
+  P static System.Single DustAskEvery
+  P static System.Single DustAskSeconds
+  P static System.Int32 DustAskMost
+  P static System.Int32 DustSumsPerWord
+  P static System.Int32 DustServeBacklog
+  P static System.Int32 DustSweepPages
+  P System.Single nextDustSums
+  P System.Single nextDustAsk
+  P System.Single nextDustRetry
+  P Il2CppSystem.Collections.Generic.List`1<Il2CppSystem.ValueTuple`3<System.Int32,System.Int32,System.UInt64>> dustSums
+  P Il2CppSystem.Collections.Generic.List`1<Il2CppSystem.ValueTuple`3<System.UInt64,System.Int32,System.Int32>> dustAsk
+  P Il2CppSystem.Collections.Generic.Dictionary`2<Il2CppSystem.ValueTuple`3<System.UInt64,System.Int32,System.Int32>,System.Single> dustAsking
+  P Il2CppSystem.Collections.Generic.List`1<Il2CppSystem.ValueTuple`4<System.UInt64,System.Int32,System.Int32,System.Single>> dustServe
+  P Il2CppSystem.Collections.Generic.List`1<Il2CppSystem.ValueTuple`2<System.Int32,System.Int32>> dustWantedHere
+  P Il2CppSystem.Collections.Generic.List`1<Il2CppSystem.ValueTuple`3<System.UInt64,System.Int32,System.Int32>> dustRetry
+  P Il2CppSystem.Collections.Generic.Dictionary`2<System.UInt64,Il2CppSystem.Collections.Generic.List`1<Il2CppSystem.ValueTuple`2<System.Int32,System.Int32>>> dustAskBy
+  P static System.Single DustServeBudgetMs
+  P Il2CppSystem.Collections.Generic.Dictionary`2<System.UInt64,System.Boolean> dustMembers
+  P Il2CppSystem.Collections.Generic.HashSet`1<System.UInt64> dustBacklogged
+  P Il2CppSystem.Collections.Generic.HashSet`1<System.Int32> flightsSent
+  P Il2CppSystem.Collections.Generic.HashSet`1<System.Int32> flightsNow
+  P System.Single nextIntake
+  P System.Single intakeHeartbeat
+  P Il2CppInterop.Runtime.InteropTypes.Arrays.Il2CppStructArray`1<System.Byte> lastIntake
+  P System.Single nextLandmarks
+  P System.Single landmarkHeartbeat
+  P System.Int32 landmarkRevision
+  P System.Single nextVehicleList
+  P System.Single vehicleListHeartbeat
+  P System.Single nextVehicleReport
+  P System.Single vehicleReportHeartbeat
+  P System.Int32 vehicleListRevision
+  P Il2CppInterop.Runtime.InteropTypes.Arrays.Il2CppStructArray`1<System.Byte> lastVehicleReport
+  P System.Single nextRobots
+  P System.Single robotsHeartbeat
+  P System.Int32 robotsRevision
+  P static System.Single RobotWordReach
+  P static System.Single RobotWordEvery
+  P static System.Single RobotFarWordEvery
+  P System.Single nextRobotPoses
+  P System.Single nextFarRobotPoses
+  P Il2CppSystem.Collections.Generic.List`1<MoonCleaners.MoonRobotVacuum> robotsDue
+  P Il2CppSystem.Collections.Generic.List`1<Il2CppSystem.ValueTuple`2<System.Int32,System.Boolean>> sectionsOut
+  P System.Single nextSections
+  P static System.Single SendRate
+  P static System.Single Timeout
+  P static System.Byte PoseMessage
+  P static System.Byte Protocol
+  P static MoonCleaners.MoonCrewSession _Instance_k__BackingField
+  P Il2CppSystem.Collections.Generic.Dictionary`2<System.UInt64,MoonCleaners.MoonRemotePlayer> remotes
+  P Il2CppInterop.Runtime.InteropTypes.Arrays.Il2CppStructArray`1<System.Byte> sendBuffer
+  P Il2CppSystem.IO.MemoryStream sendStream
+  P Il2CppSystem.IO.BinaryWriter writer
+  P Il2CppInterop.Runtime.InteropTypes.Arrays.Il2CppStructArray`1<System.Byte> receiveBuffer
+  P System.Single nextSend
+  P MoonCleaners.MoonWalker local
+  P MoonCleaners.MoonPlayerVisual localVisual
+  P System.Int32 _PacketsSent_k__BackingField
+  P System.Int32 _PacketsReceived_k__BackingField
+  P Il2CppInterop.Runtime.InteropTypes.Arrays.Il2CppStructArray`1<System.IntPtr> incoming
+  P Steamworks.Callback`1<Steamworks.SteamNetworkingMessagesSessionRequest_t> sessionRequested
+  P System.Single nextBrushedNote
+  P Il2CppSystem.Collections.Generic.Dictionary`2<System.UInt64,System.Single> lastTalk
+  P static System.Single TruthEvery
+  P static System.Single TruthPatience
+  P static System.Single TruthAskAgain
+  P System.Single nextTruth
+  P System.Int32 truthDomain
+  P Il2CppSystem.Collections.Generic.Dictionary`2<Il2CppSystem.ValueTuple`2<System.Byte,System.Int32>,System.Single> truthMismatch
+  P Il2CppSystem.Collections.Generic.Dictionary`2<Il2CppSystem.ValueTuple`2<System.Byte,System.Int32>,System.Single> truthAsked
+  P Il2CppSystem.Collections.Generic.Dictionary`2<Il2CppSystem.ValueTuple`2<System.Byte,System.Int32>,System.UInt64> truthTaken
+  P System.Int32 _TruthAskedCount_k__BackingField
+  P System.Int32 _TruthTakenCount_k__BackingField
+  P Il2CppSystem.Collections.Generic.Dictionary`2<System.UInt64,System.Single> vehicleAsks
+  P System.Single nextWaypoints
+  P System.Single waypointHeartbeat
+  P System.Boolean waypointsDirty
+  P static System.Int32 WorldChannel
+  P static System.Int32 TransferChannel
+  P static System.Int32 PieceSize
+  P static System.Single HostSilence
+  P static System.Single UnavailableLimit
+  P MoonCleaners.MoonWorld bound
+  P Il2CppSystem.Collections.Generic.List`1<Il2CppSystem.ValueTuple`2<System.UInt64,Il2CppInterop.Runtime.InteropTypes.Arrays.Il2CppStructArray`1<System.Byte>>> waiting
+  P System.Single nextStructures
+  P System.Single nextWallet
+  P System.Single walletHeartbeat
+  P System.Boolean walletDirty
+  P System.Single nextPlayerState
+  P System.Single playerStateHeartbeat
+  P Il2CppInterop.Runtime.InteropTypes.Arrays.Il2CppStructArray`1<System.Byte> lastPlayerState
+  P System.Single nextMachineStorage
+  P System.Single machineStorageHeartbeat
+  P Il2CppInterop.Runtime.InteropTypes.Arrays.Il2CppStructArray`1<System.Byte> lastMachineStorage
+  P System.Single nextBelts
+  P System.Single nextProduction
+  P System.Single productionHeartbeat
+  P Il2CppInterop.Runtime.InteropTypes.Arrays.Il2CppStructArray`1<System.Byte> lastProduction
+  P System.Single nextRadio
+  P System.Single radioHeartbeat
+  P System.Single radioSentAt
+  P System.Boolean radioDirty
+  P System.UInt32 radioSeq
+  P Il2CppSystem.Collections.Generic.Dictionary`2<System.UInt64,System.UInt32> radioCounted
+  P Il2CppSystem.Collections.Generic.Dictionary`2<System.UInt64,System.UInt32> counted
+  P System.UInt32 actionSeq
+  P Il2CppSystem.Collections.Generic.List`1<Il2CppSystem.ValueTuple`3<System.UInt32,Il2CppSystem.Decimal,System.Int32>> predicted
+  P Il2CppSystem.Decimal hostDollars
+  P MoonCleaners.MoonCrewSession/CrewJoin join
+  P System.Single nextRequest
+  P System.Int32 transferId
+  P Il2CppInterop.Runtime.InteropTypes.Arrays.Il2CppReferenceArray`1<Il2CppInterop.Runtime.InteropTypes.Arrays.Il2CppStructArray`1<System.Byte>> pieces
+  P System.Int32 piecesReceived
+  P Il2CppSystem.Collections.Generic.HashSet`1<System.UInt64> sending
+  P Il2CppSystem.Collections.Generic.Dictionary`2<System.UInt64,MoonCleaners.MoonCrewSession/WorldStream> streams
+  P System.UInt64 downloadHost
+  P System.Int32 downloadTransfer
+  P Il2CppSystem.Collections.Generic.Dictionary`2<System.String,MoonCleaners.MoonCrewSession/IncomingFile> incomingFiles
+  P Il2CppSystem.Collections.Generic.List`1<System.String> wantedFiles
+  P System.String notice
+  P System.Single noticeUntil
+  P Il2CppSystem.Collections.Generic.Dictionary`2<System.UInt64,System.Int32> idBlocks
+  P static System.Int32 StreamBacklog
+  P MoonCleaners.CrewStroke outgoing
+  P System.Boolean hasOutgoing
+  P System.Single flushStroke
+  P Il2CppSystem.Collections.Generic.Dictionary`2<System.UInt32,System.String> dustSources
+  P static System.Single BeltWordReach
+  P Il2CppSystem.Collections.Generic.HashSet`1<System.UInt64> beltsEmptyFor
+  P Il2CppSystem.IO.MemoryStream beltWord
+  P Il2CppSystem.IO.BinaryWriter beltWriter
+  P System.Int32 waitingAt
+  P System.Single nextSky
+  P System.UInt32 lastCounted
+  P UnityEngine.GUIStyle noticeStyle
+  P static System.UInt32 LastAction
+  P static MoonCleaners.MoonCrewSession Instance
+  P Il2CppSystem.Collections.Generic.IEnumerable`1<MoonCleaners.MoonRemotePlayer> Crewmates
+  P System.Int32 PacketsSent
+  P System.Int32 PacketsReceived
+  P System.Int32 TruthAskedCount
+  P System.Int32 TruthTakenCount
+  P System.Boolean Joining
+  M Void UpdateClock()
+  M Boolean HandleClock(UInt64 sender, Il2CppStructArray`1 data)
+  M Void BindDust(MoonWorld world)
+  M Void UnbindDust(MoonWorld world)
+  M Void TickDust()
+  M static List`1 ReadSums(BinaryReader r)
+  M Void HearDustSums(BinaryReader r)
+  M Void OnDustPagesWanted(Int32 chunk, List`1 pages)
+  M Void HearDustSumsUp(UInt64 from, BinaryReader r)
+  M Void Want(UInt64 from, Int32 chunk, Int32 page)
+  M Void RetryDust()
+  M Void AskDust(Boolean joined)
+  M Void HearDustPage(UInt64 from, BinaryReader r)
+  M Void HearDustWanted(UInt64 from, BinaryReader r)
+  M Void ServeDust()
+  M Void TickFlights()
+  M Void HandleFlight(BinaryReader r)
+  M static Void PressIntake(Int32 station)
+  M static Void IntakeChanged()
+  M Void TickIntake()
+  M Void CrewTrayDeposit(Int32 station, Double kg, Decimal worth)
+  M Void HandleIntake(Kind kind, UInt64 sender, BinaryReader r, Boolean host)
+  M static Void Kitchen(MoonKitchen kitchen, KitchenAction action)
+  M Void HandleKitchen(BinaryReader r)
+  M Void OnLandmarkRaise(Int32 index)
+  M Void TickLandmarks()
+  M Void HandleLandmarks(Kind kind, UInt64 sender, BinaryReader r, Boolean host, String player)
+  M static Boolean Finite(Vector2 v)
+  M static Void Write(BinaryWriter w, Vector2 v)
+  M static Vector2 Read2(BinaryReader r)
+  M MemoryStream Lounge(Kind kind, MoonGameLounge lounge, BinaryWriter& w)
+  M Void LoungeSpot(MoonGameLounge lounge, Int32 spot, Boolean taken)
+  M Void ChessState(MoonGameLounge lounge, Int32 seq, String fen, Int32 from, Int32 to, Boolean answer)
+  M Void ChessAsk(MoonGameLounge lounge)
+  M Void HockeyMallet(MoonGameLounge lounge, Int32 side, Vector2 at, Vector2 velocity)
+  M Void HockeyPuck(MoonGameLounge lounge, Int32 owner, Vector2 at, Vector2 velocity, Boolean goal, Int32 s0, Int32 s1)
+  M Void HockeyScore(MoonGameLounge lounge, Int32 s0, Int32 s1, Int32 scorer)
+  M Void HockeyAsk(MoonGameLounge lounge)
+  M Void HandleLounge(Kind kind, UInt64 sender, BinaryReader r)
+  M static Void MugDropped(UInt64 id, Vector3 position, Quaternion rotation, Vector3 velocity, Vector3 spin)
+  M static Void MugRested(UInt64 id, Vector3 position, Quaternion rotation)
+  M static Void MugPicked(UInt64 id)
+  M static BinaryWriter MugWord(MugOp op, UInt64 id, MemoryStream& m)
+  M static Void WriteRotation(BinaryWriter w, Quaternion q)
+  M static Quaternion ReadRotation(BinaryReader r)
+  M Void HandleMug(UInt64 sender, BinaryReader r)
+  M Void OnVehicleBought(Int32 garage, Int32 vehicle)
+  M Void OnVehicleStored(String storage)
+  M Void OnVehicleRecalled(String storage)
+  M Void TickOwnedVehicles()
+  M Void HandleOwnedVehicles(Kind kind, UInt64 sender, BinaryReader r, Boolean host, String player)
+  M Void TickFarRobotPoses()
+  M Boolean Far(MoonRobotVacuum robot, Vector3 from, Single reachSquared)
+  M Void TickRobotPoses()
+  M Void SendRobotPoses()
+  M Void OnRobotLaunch(MoonJoonasRig rig, Int32 catcher, Single launchTime, Single arrivalTime, Double kilograms)
+  M Void HandleRobotWords(Kind kind, UInt64 sender, BinaryReader r)
+  M Void OnRobotSwitch(Int32 dock, Boolean on)
+  M Void TickRobots()
+  M Void HandleRobots(Kind kind, UInt64 sender, BinaryReader r, Boolean host, String player)
+  M Void OnRegionCommitted(Int32 id, Boolean empty)
+  M Void TickSections()
+  M Void ApplySections(BinaryReader r)
+  M static Void ResetState()
+  M static Void Create()
+  M Void OnEnable()
+  M Void OnDisable()
+  M Void Update()
+  M Void LateUpdate()
+  M Void FindLocalPlayer()
+  M Void SendPose()
+  M Boolean SendBytes(UInt64 to, Il2CppStructArray`1 data, Int32 length, Int32 channel, Boolean reliable)
+  M Int32 PendingReliable(UInt64 to)
+  M Void Write(Vector3 v)
+  M Void WriteVehicle(MoonWorld world)
+  M static Int32 ReadVehicle(BinaryReader reader, State& state, String& storage)
+  M Void Receive()
+  M Void ReceiveTransfer(UInt64 sender, Il2CppStructArray`1 data)
+  M Void Handle(UInt64 sender, Int32 size)
+  M static Vector3 Read(BinaryReader reader)
+  M static Boolean Finite(Vector3 v)
+  M static Quaternion Normalize(Quaternion q)
+  M static Boolean IsMember(UInt64 id)
+  M Void DropMissing()
+  M Void ForgetCrew()
+  M Void ClearRemotes()
+  M Void RunOver(MoonRemotePlayer crewmate, Int32 vehicle)
+  M Void RanOver(UInt64 from, BinaryReader r)
+  M Void Brush(MoonRemotePlayer crewmate, Vector3 at)
+  M Void Brushed(UInt64 from, BinaryReader r)
+  M Void ShowTrick(String trick, Decimal pay, Boolean wipeout)
+  M Void SawTrick(UInt64 from, BinaryReader r)
+  M Void OnTrickMoney(Decimal pay)
+  M static Void Said(String text)
+  M Void HandleTalk(UInt64 sender, BinaryReader r)
+  M Void ResetTruth()
+  M Void TickTruth()
+  M Void WriteTruthDigest(BinaryWriter w, CrewTruth domain)
+  M Void HearTruthDigest(BinaryReader r)
+  M Void SendTruth(UInt64 to, BinaryReader r)
+  M Void HearTruthPart(BinaryReader r)
+  M Void DenyCanister(UInt64 crewmate, Int32 id, String holder)
+  M Boolean AskForVehicle(MoonRemoteVehicle vehicle, MoonPrototypeEquipment asker)
+  M Void GiveVehicle(UInt64 to, BinaryReader r)
+  M Void TookVehicle(UInt64 from, BinaryReader r)
+  M Void OnWaypointsChanged()
+  M Void OnWaypointCommand(Boolean add, Vector3 direction, Int32 id)
+  M Void TickWaypoints()
+  M Void HandleWaypoints(Kind kind, UInt64 sender, BinaryReader r, Boolean host)
+  M static Void JoinShift()
+  M static Void JoinListedShift(UInt64 lobby, String crewName)
+  M Void BeginJoin(CrewJoin j)
+  M IEnumerator Join(CrewJoin j)
+  M Void UpdateJoining()
+  M Void EndJoin(CrewJoin j, String why, Boolean leave)
+  M Void Offered(CrewJoin j, Boolean signed, Int32 idBlock)
+  M Int32 AssignIdBlock(MoonWorld world, UInt64 crewmate)
+  M IEnumerator SendWorld(UInt64 to)
+  M IEnumerator StreamWorld(UInt64 to, WorldStream stream, Dictionary`2 files, List`1 order)
+  M Void WantedFiles(UInt64 sender, BinaryReader r)
+  M static Dictionary`2 ReadWorld(MoonWorld world, String player, List`1 first, List`1 rest)
+  M static Il2CppStructArray`1 PackWorld(Dictionary`2 files, List`1 first, List`1 rest)
+  M static Il2CppStructArray`1 PackWorld(MoonWorld world)
+  M Void ReceivePiece(UInt64 sender, BinaryReader r)
+  M Void ReceiveChunkPiece(UInt64 sender, BinaryReader r)
+  M Void TickDownload()
+  M static String UnpackWorld(Il2CppStructArray`1 blob, UInt64 host)
+  M Void ShowContract()
+  M Void DeclineCrew()
+  M Void UpdateWorld()
+  M Void UpdateHostPresence()
+  M Void Bind(MoonWorld world)
+  M Void Unbind()
+  M Void OnStroke(CrewStroke s)
+  M Void FlushStroke()
+  M Void OnCanister(CanisterOp op, MoonDroppedCanister c)
+  M Void OnCanisterThrown(Int32 id, Vector3 position, Quaternion rotation, Vector3 velocity, Vector3 spin)
+  M BinaryWriter HostAction(Kind kind, MemoryStream& message)
+  M Void OnDeposit(Double kilograms, Int32 station)
+  M Void NoteDustSource()
+  M Void OnPackagerLoad(Int32 packager, Double kilograms)
+  M Void OnGarageUnload(Int32 garage, Double kilograms)
+  M Void OnGarageHood(MoonGarage garage, Single drop, Boolean flowing)
+  M Void OnProcessorLoad(Int32 machine, MoonCargo cargo, Double kilograms)
+  M Void OnCargoDeposit(MoonCargo cargo, Double kilograms, Int32 station)
+  M Void OnPurchase(PurchaseKind kind, String id, Int32 level)
+  M Void OnBuildMoney(Decimal amount)
+  M Void OnSection(Int32 region)
+  M Void OnMoneyChanged(String player, Decimal delta)
+  M Void SettlePredictions()
+  M Void OnRadioChanged()
+  M Void OnRadioCommand(MoonRadioCommand command)
+  M Void SendRadio()
+  M Void SendPlayerState()
+  M Void SendMachineStorage()
+  M Void SendProduction()
+  M Void SendBelts()
+  M Void OnBoardDrawn(MoonWhiteboard board, Vector2 from, Vector2 to, Color color, Single radius, Int32 stroke)
+  M Void OnBoardUndid(MoonWhiteboard board, Boolean redo)
+  M Void OnBoardWiped(MoonWhiteboard board)
+  M Void SendWallet()
+  M Void ReceiveWorld(UInt64 sender, Il2CppStructArray`1 data)
+  M Void HandleWaiting()
+  M static Boolean FromMember(UInt64 sender)
+  M Void HandleWorld(UInt64 sender, Il2CppStructArray`1 data)
+  M Void SendSky()
+  M Void DustBack(UInt64 to, UInt32 seq, Double kilograms)
+  M Boolean Count(UInt64 sender, BinaryReader r)
+  M Void ForgetCrewmate(UInt64 id)
+  M static MemoryStream Message(Kind kind)
+  M Void SendToCrew(MemoryStream message)
+  M Boolean SendTo(UInt64 to, MemoryStream message, Int32 channel)
+  M static Void Write(BinaryWriter w, Vector3 v)
+  M static Boolean OnBoard(Vector2 uv)
+  M Void Notify(String message)
+  M Void OnGUI()
+  M Boolean Method_Private_Boolean_byref___c__DisplayClass273_0_0(__c__DisplayClass273_0& )
+  M Void .ctor()
+  M Void .ctor()
+  M Void .ctor(IntPtr pointer)
+== MoonCleaners.MoonCrewSession/__c : Il2CppSystem.Object
+  P static MoonCleaners.MoonCrewSession/__c __9
+  P static Steamworks.Callback`1+DispatchDelegate<Steamworks.SteamNetworkingMessagesSessionRequest_t> __9__146_0
+  M Void _OnEnable_b__146_0(SteamNetworkingMessagesSessionRequest_t request)
+  M Void .ctor()
+  M Void .ctor()
+  M Void .ctor(IntPtr pointer)
+== MoonCleaners.MoonCrewSession/CrewJoin : Il2CppSystem.Object
+  P System.UInt64 lobby
+  P System.UInt64 host
+  P System.Single startedAt
+  P System.Single heardAt
+  P System.Single unavailableSince
+  P System.Single progress
+  P System.Boolean shown
+  P System.Boolean offered
+  P System.Boolean contract
+  P System.Boolean ownSaved
+  P System.Boolean ready
+  P System.Boolean failed
+  P System.Int32 idBlock
+  P System.String root
+  P System.String crewName
+  P System.Single Progress
+  P System.Boolean Ready
+  P System.Boolean Failed
+  P System.Boolean Aside
+  P System.String Caption
+  M Void Cancel()
+  M Void .ctor()
+  M Void .ctor(UInt64 lobby, UInt64 host, String crewName)
+  M Void .ctor(IntPtr pointer)
+== MoonCleaners.MoonCrewSession/IncomingFile : Il2CppSystem.Object
+  P Il2CppInterop.Runtime.InteropTypes.Arrays.Il2CppStructArray`1<System.Byte> bytes
+  P Il2CppInterop.Runtime.InteropTypes.Arrays.Il2CppStructArray`1<System.Boolean> got
+  P System.Int32 received
+  M Void .ctor()
+  M Void .ctor()
+  M Void .ctor(IntPtr pointer)
+== MoonCleaners.MoonCrewSession/Kind : System.Enum
+  E Stroke = 10
+  E Structures = 11
+  E Canister = 12
+  E Deposit = 13
+  E PackagerLoad = 14
+  E Purchase = 15
+  E BuildMoney = 16
+  E Wallet = 17
+  E Contract = 18
+  E Radio = 19
+  E WorldRequest = 20
+  E WorldPiece = 21
+  E WorldUnavailable = 22
+  E ProcessorLoad = 23
+  E CargoDeposit = 24
+  E WorldOffer = 25
+  E Section = 26
+  E RadioRequest = 27
+  E ClockPing = 28
+  E ClockPong = 29
+  E GarageUnload = 30
+  E PlayerState = 31
+  E MachineStorage = 32
+  E Board = 33
+  E VehicleAsk = 34
+  E VehicleGive = 35
+  E RunOver = 36
+  E Trick = 37
+  E TrickMoney = 38
+  E LoungeSpot = 39
+  E Chess = 40
+  E ChessAsk = 41
+  E HockeyMallet = 42
+  E HockeyPuck = 43
+  E HockeyScore = 44
+  E HockeyAsk = 45
+  E WaypointRequest = 46
+  E Waypoints = 47
+  E Belts = 48
+  E VehicleBought = 49
+  E VehicleReport = 50
+  E VehicleList = 51
+  E VehicleStored = 52
+  E LandmarkRaise = 53
+  E Landmarks = 54
+  E VehicleRecalled = 55
+  E GarageHood = 56
+  E CanisterThrow = 57
+  E ChunkPiece = 58
+  E ChunkWanted = 59
+  E Intake = 60
+  E IntakePress = 61
+  E Sections = 62
+  E Production = 63
+  E CanisterFlight = 64
+  E Kitchen = 65
+  E RobotSwitch = 66
+  E RobotsOff = 67
+  E RobotPoses = 68
+  E RobotLaunch = 69
+  E TruthDigest = 70
+  E TruthWanted = 71
+  E TruthPart = 72
+  E CanisterDenied = 73
+  E DustSums = 74
+  E DustWanted = 75
+  E DustPage = 76
+  E Sky = 77
+  E DustBack = 78
+  E Brushed = 79
+  E FoundationStyle = 80
+  E Mug = 81
+  E Talk = 82
+  E DustSumsUp = 83
+  E DustWantedUp = 84
+  E DustPageUp = 85
+== MoonCleaners.MoonCrewSession/KitchenAction : System.Enum
+  E Brew = 0
+  E Take = 1
+  E Throw = 2
+== MoonCleaners.MoonCrewSession/MugOp : System.Enum
+  E Drop = 0
+  E Rest = 1
+  E Pick = 2
+== MoonCleaners.MoonCrewSession/WorldStream : Il2CppSystem.Object
+  P System.Int32 transfer
+  P Il2CppSystem.Collections.Generic.Queue`1<System.String> wanted
+  M Void .ctor()
+  M Void .ctor()
+  M Void .ctor(IntPtr pointer)

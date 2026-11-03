@@ -1,0 +1,97 @@
+== MoonCleaners.MoonCanisterStreaming : UnityEngine.MonoBehaviour
+  P MoonCleaners.MoonWorld world
+  P Il2CppSystem.Collections.Generic.Dictionary`2<System.Int32,MoonCleaners.MoonDustCanisterView> views
+  P Il2CppSystem.Collections.Generic.Stack`1<MoonCleaners.MoonDustCanisterView> pool
+  P Il2CppSystem.Collections.Generic.List`1<MoonCleaners.MoonDroppedCanister> nearby
+  P Il2CppSystem.Collections.Generic.HashSet`1<System.Int32> wanted
+  P Il2CppSystem.Collections.Generic.List`1<System.Int32> remove
+  P Il2CppSystem.Collections.Generic.List`1<System.Int32> animating
+  P System.Single nextRefresh
+  P System.Int32 _FarDrawn_k__BackingField
+  P static System.Single FarShadowDistance
+  P static System.Int32 MaxFar
+  P Il2CppSystem.Collections.Generic.List`1<System.Int32> far
+  P Il2CppSystem.Collections.Generic.Dictionary`2<System.Int32,MoonCleaners.MoonCanisterStreaming/FarShown> farShown
+  P Il2CppSystem.Collections.Generic.HashSet`1<System.Int32> farSet
+  P Il2CppSystem.Collections.Generic.List`1<System.Int32> stale
+  P Il2CppInterop.Runtime.InteropTypes.Arrays.Il2CppStructArray`1<UnityEngine.Plane> planes
+  P static System.Single FarEveryFrame
+  P static System.Int32 FarGroups
+  P static System.Boolean FarLods
+  P Il2CppInterop.Runtime.InteropTypes.Arrays.Il2CppReferenceArray`1<MoonCleaners.MoonCanisterStreaming/FarPart> parts
+  P Il2CppSystem.Collections.Generic.List`1<UnityEngine.Material> farMaterials
+  P static System.Single FarPartMargin
+  P System.Int32 ActiveViews
+  P System.Int32 FarCapsules
+  P System.Int32 FarDrawn
+  P System.Int32 FarParts
+  P System.Single FarDistance
+  M Void Bind(MoonWorld source)
+  M Void RestoreExistingViews()
+  M Void Update()
+  M Void Refresh()
+  M static Boolean Parked(Transform observer)
+  M Void Place(MoonDustCanisterView view, MoonDroppedCanister c)
+  M Void Rest(MoonDroppedCanister c, Single t, Vector3& position, Quaternion& rotation)
+  M static Single FarLodTerm(Single distanceSq, Single scale)
+  M static Int32 FarLod(FarPart part, Single term, Int32 levels)
+  M Void RefreshFar()
+  M Matrix4x4 FarPose(MoonDroppedCanister c)
+  M Void WorkOut(FarShown shown, MoonDroppedCanister c, Single fill)
+  M Void LateUpdate()
+  M static Int32 Draw(FarPart part, Il2CppObjectBase groups, Il2CppReferenceArray`1 merged, ShadowCastingMode shadows, Int32 lod)
+  M Void BuildParts()
+  M static Single Radius(Bounds bounds, Matrix4x4 m)
+  M Void OnDestroy()
+  M Void .ctor()
+  M Void .ctor()
+  M Void .ctor(IntPtr pointer)
+== MoonCleaners.MoonCanisterStreaming/Batch : Il2CppSystem.Object
+  P Il2CppInterop.Runtime.InteropTypes.Arrays.Il2CppStructArray`1<UnityEngine.Matrix4x4> items
+  P System.Int32 count
+  P UnityEngine.Vector3 min
+  P UnityEngine.Vector3 max
+  P UnityEngine.Bounds Bounds
+  M Void Add(Matrix4x4& m)
+  M Void AddAll(Batch other)
+  M Void .ctor()
+  M Void .ctor()
+  M Void .ctor(IntPtr pointer)
+== MoonCleaners.MoonCanisterStreaming/FarPart : Il2CppSystem.Object
+  P UnityEngine.Mesh mesh
+  P System.Int32 submesh
+  P UnityEngine.Material material
+  P UnityEngine.Rendering.ShadowCastingMode shadows
+  P System.Int32 layer
+  P System.Boolean dust
+  P System.Boolean sand
+  P System.Boolean stone
+  P UnityEngine.Matrix4x4 local
+  P UnityEngine.Matrix4x4 fillParent
+  P UnityEngine.Matrix4x4 fillToPart
+  P UnityEngine.Vector3 fillPosition
+  P UnityEngine.Vector3 fillScale
+  P UnityEngine.Quaternion fillRotation
+  P System.Boolean fill
+  P System.Boolean identity
+  P Il2CppInterop.Runtime.InteropTypes.Il2CppObjectBase shadowed
+  P Il2CppInterop.Runtime.InteropTypes.Il2CppObjectBase plain
+  P Il2CppInterop.Runtime.InteropTypes.Arrays.Il2CppReferenceArray`1<MoonCleaners.MoonCanisterStreaming/Batch> mergedShadowed
+  P Il2CppInterop.Runtime.InteropTypes.Arrays.Il2CppReferenceArray`1<MoonCleaners.MoonCanisterStreaming/Batch> mergedPlain
+  P System.Single lodBias
+  P System.Single lodSlope
+  M Void .ctor()
+  M Void .ctor()
+  M Void .ctor(IntPtr pointer)
+== MoonCleaners.MoonCanisterStreaming/FarShown : Il2CppSystem.Object
+  P System.Boolean valid
+  P System.Boolean physical
+  P UnityEngine.Vector3 at
+  P UnityEngine.Quaternion rotation
+  P System.Single fill
+  P MoonCleaners.MoonCargo cargo
+  P UnityEngine.Vector3 middle
+  P Il2CppInterop.Runtime.InteropTypes.Arrays.Il2CppStructArray`1<UnityEngine.Matrix4x4> parts
+  M Void .ctor()
+  M Void .ctor()
+  M Void .ctor(IntPtr pointer)

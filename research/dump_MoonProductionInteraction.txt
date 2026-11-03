@@ -1,0 +1,34 @@
+== MoonCleaners.MoonProductionInteraction : UnityEngine.MonoBehaviour
+  P static System.Single Reach
+  P static UnityEngine.Color Cyan
+  P static UnityEngine.Color Amber
+  P static UnityEngine.Color Coral
+  P static UnityEngine.Color Mint
+  P static UnityEngine.Color Muted
+  P MoonCleaners.MoonWalker walker
+  P MoonCleaners.MoonDustInventory inventory
+  P MoonCleaners.MoonDustCanisterInteraction capsules
+  P MoonCleaners.MoonDepotBuilder builder
+  P MoonCleaners.MoonActionPromptCard prompt
+  P MoonCleaners.MoonPowerLinks links
+  P MoonCleaners.MoonLookPanel look
+  P MoonCleaners.MoonPlayerStats board
+  P System.String notice
+  P System.Single noticeUntil
+  P Il2CppSystem.Collections.Generic.List`1<System.Int32> candidates
+  M Void Awake()
+  M Void OnDisable()
+  M Void OnDestroy()
+  M Void Update()
+  M Void Hide()
+  M Void HidePanels()
+  M Int32 Aimed(MoonWorld world)
+  M static String Kg(Double kg)
+  M static String Kw(Single kw)
+  M Void ShowPanel(MoonWorld world, MoonDepotSnapshot record, Boolean power)
+  M Void StoreRow(Int32 row, String label, MoonProductionState s, Int32 slot, Int32 batch)
+  M Void SetRow(Int32 i, String label, Single fill, String value, Color color)
+  M Void Rows(Int32 shown)
+  M Void .ctor()
+  M Void .ctor()
+  M Void .ctor(IntPtr pointer)

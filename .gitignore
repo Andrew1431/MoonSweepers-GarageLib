@@ -9,3 +9,4 @@ dist/
 Directory.Build.local.props
 *.local.md
 __pycache__/
+shared/blender/_smoke/
