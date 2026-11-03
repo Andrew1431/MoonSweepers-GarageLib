@@ -81,12 +81,14 @@ namespace StructureLib.Patches
             }
         }
 
+        // A 39-byte native leaf: vanilla kinds answer from the table recorded before patching, never by the original (see LeafTables).
         [HarmonyPatch(typeof(MoonWorld), nameof(MoonWorld.InputSlot)), HarmonyPrefix]
         static bool InputSlot(int kind, MoonCargo cargo, ref int __result)
         {
             var d = Remap.Live(kind);
-            if (d == null) return true;
+            if (d == null) { __result = LeafTables.VanillaInputSlot(kind, cargo); return false; }
             __result = SpecBuilder.InputSlot(d, cargo);
+            LeafTables.Note(LeafTables.InputSlot, ((long)kind << 8) | (byte)cargo, kind, __result, $"'{d.Id}', cargo {(byte)cargo}");
             return false;
         }
 
@@ -100,12 +102,14 @@ namespace StructureLib.Patches
             return false;
         }
 
+        // A pure kind switch: vanilla kinds answer from the table recorded before patching, never by the original (see LeafTables).
         [HarmonyPatch(typeof(MoonWorld), nameof(MoonWorld.IsPowerNode)), HarmonyPrefix]
         static bool IsPowerNode(int kind, ref bool __result)
         {
             var d = Remap.Live(kind);
-            if (d == null) return true;
-            __result = d.Processor != null || d.Power != null;
+            __result = d != null
+                ? LeafTables.Modded(LeafTables.IsPowerNode, kind, d.Processor != null || d.Power != null, d.Id)
+                : LeafTables.Vanilla(LeafTables.IsPowerNode, kind);
             return false;
         }
 

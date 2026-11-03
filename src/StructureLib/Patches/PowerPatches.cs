@@ -19,12 +19,15 @@ namespace StructureLib.Patches
     [HarmonyPatch]
     internal static class PowerPatches
     {
+        // A 15-byte native leaf: never falls through to the original (falling through crashed every vanilla card click
+        // for kinds 93..97; see LeafTables). Vanilla kinds answer from the table recorded before patching.
         [HarmonyPatch(typeof(MoonWorld), nameof(MoonWorld.IsSolarPanel)), HarmonyPrefix]
         static bool IsSolarPanel(int kind, ref bool __result)
         {
             var d = Remap.Live(kind);
-            if (d == null) return true;
-            __result = d.Power != null && d.Power.SupplyMode == SupplyMode.Solar;
+            __result = d != null
+                ? LeafTables.Modded(LeafTables.IsSolarPanel, kind, d.Power != null && d.Power.SupplyMode == SupplyMode.Solar, d.Id)
+                : LeafTables.Vanilla(LeafTables.IsSolarPanel, kind);
             return false;
         }
 
