@@ -58,6 +58,7 @@ namespace BuildQoL
             if (!MoonSession.InGame) { gameT = 0; return; }
             gameT += dt;
             if (Probe.Value) Prober.Tick(gameT);
+            foreach (var t in Plugin.All) t.DevTick(gameT);
         }
 
         static string ActiveFolder() => (MoonSaveSlots.SlotFolder(MoonSaveSlots.Active) ?? "").Replace('\\', '/').TrimEnd('/');
@@ -144,7 +145,7 @@ namespace BuildQoL
                 b = cam != null ? MoonDepotBuilder.ForCamera(cam) : null;
                 if (b == null) b = UnityEngine.Object.FindFirstObjectByType<MoonDepotBuilder>();
                 if (b == null) { Info("no MoonDepotBuilder; probe stops"); step = Step.Done; return; }
-                Info($"start: kinds [{string.Join(",", kinds)}], ConveyorKind={MoonDepotBuilder.ConveyorKind}, KeepSelection={Plugin.KeepSelection.Value}, {DevTools.State(b)}");
+                Info($"start: kinds [{string.Join(",", kinds)}], ConveyorKind={MoonDepotBuilder.ConveyorKind}, KeepSelection={Plugin.All[0].Enabled.Value}, {DevTools.State(b)}");
                 index = 0; heading = 0;
                 Next(Step.Select);
                 return;

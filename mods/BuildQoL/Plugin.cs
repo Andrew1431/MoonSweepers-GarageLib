@@ -2,7 +2,6 @@ using System;
 using System.Collections.Generic;
 using System.Reflection;
 using BepInEx;
-using BepInEx.Configuration;
 using BepInEx.Logging;
 using BepInEx.Unity.IL2CPP;
 using HarmonyLib;
@@ -19,47 +18,53 @@ namespace BuildQoL
         public const string Version = "0.1.0";
 
         internal static ManualLogSource L;
-        internal static ConfigEntry<bool> KeepSelection;
 
-        // Every game member the tweak touches. A game update that renames one turns the tweak off instead of half-working.
-        static readonly string[] NeededMembers =
+        // Every tweak the mod ships. Order is the order they are bound, checked and patched.
+        internal static readonly Tweak[] All =
         {
-            "MoonCleaners.MoonDepotBuilder:NoteBuilt", "MoonCleaners.MoonDepotBuilder:MachineBuilt",
-            "MoonCleaners.MoonDepotBuilder:SelectStructure", "MoonCleaners.MoonDepotBuilder:BeginPlacement",
-            "MoonCleaners.MoonDepotBuilder:CanBuild", "MoonCleaners.MoonDepotBuilder:ConveyorKind",
-            "MoonCleaners.MoonDepotBuilder:selectedStructure", "MoonCleaners.MoonDepotBuilder:yaw",
-            "MoonCleaners.MoonDepotBuilder:IsPlacing", "MoonCleaners.MoonDepotBuilder:ConveyorMode", "MoonCleaners.MoonDepotBuilder:noticeUntil",
+            new KeepSelectionTweak(),
         };
 
         public override void Load()
         {
             L = Log;
-            KeepSelection = Config.Bind("Tweaks", "KeepSelection", true,
-                "After placing a structure with the build tool, keep that structure selected with a new ghost ready for the next copy " +
-                "(rotation kept). Belts, and anything you cannot afford another of, behave as in the base game. False: base-game behaviour, nothing is patched.");
+            foreach (var t in All) t.Bind(Config);
 #if DEVBUILD
             DevTools.Bind(Config);
+            foreach (var t in All) t.DevBind(Config);
 #endif
             ClassInjector.RegisterTypeInIl2Cpp<Driver>();
             var h = new Harmony(Guid);
-            bool patched = false;
-            if (KeepSelection.Value)
+            var status = new List<string>();
+            foreach (var t in All)
             {
+                if (!t.Enabled.Value) { status.Add($"{t.Name}=off"); continue; }
                 var missing = new List<string>();
-                foreach (var m in NeededMembers) { var p = m.Split(':'); if (!HasMember(p[0], p[1])) missing.Add(m); }
+                foreach (var m in t.Needed) { var p = m.Split(':'); if (!HasMember(p[0], p[1])) missing.Add(m); }
                 if (missing.Count > 0)
-                    L.LogError($"Game members KeepSelection relies on are missing (game update?): {string.Join(", ", missing)}. KeepSelection is off.");
-                else
                 {
-                    try { h.CreateClassProcessor(typeof(KeepSelectionPatches)).Patch(); patched = true; }
-                    catch (Exception e) { L.LogError("Patching KeepSelection failed, the tweak is off: " + e); }
+                    L.LogError($"Game members {t.Name} relies on are missing (game update?): {string.Join(", ", missing)}. {t.Name} is off.");
+                    status.Add($"{t.Name}=missing-members");
+                    continue;
+                }
+                try
+                {
+                    foreach (var patch in t.Patches) h.CreateClassProcessor(patch).Patch();
+                    t.Active = true;
+                    status.Add($"{t.Name}=on");
+                }
+                catch (Exception e)
+                {
+                    L.LogError($"Patching {t.Name} failed, the tweak is off: " + e);
+                    status.Add($"{t.Name}=patch-failed");
                 }
             }
 #if DEVBUILD
             DevTools.Patch(h);
+            foreach (var t in All) t.DevPatch(h);
 #endif
             AddComponent<Driver>();
-            L.LogInfo($"Build QoL {Version} loaded (KeepSelection={KeepSelection.Value}, patched={patched}).");
+            L.LogInfo($"Build QoL {Version} loaded ({string.Join(", ", status)}).");
         }
 
         static readonly HashSet<string> logged = new();
@@ -89,6 +94,20 @@ namespace BuildQoL
 #if DEVBUILD
             try { DevTools.Tick(); } catch (Exception e) { Plugin.Once("dev-tick", "[dev] Tick threw: " + e); }
 #endif
+            foreach (var t in Plugin.All)
+            {
+                if (!t.Active) continue;
+                try { t.Update(); } catch (Exception e) { Plugin.Once("update-" + t.Name, $"{t.Name}: Update threw: " + e); }
+            }
+        }
+
+        void LateUpdate()
+        {
+            foreach (var t in Plugin.All)
+            {
+                if (!t.Active) continue;
+                try { t.LateUpdate(); } catch (Exception e) { Plugin.Once("late-" + t.Name, $"{t.Name}: LateUpdate threw: " + e); }
+            }
         }
     }
 }

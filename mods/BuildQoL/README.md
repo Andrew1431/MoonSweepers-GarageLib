@@ -24,13 +24,20 @@ kept, so you can place the next copy straight away.
 
 | Setting | Default | Meaning |
 |---|---|---|
-| `Tweaks.KeepSelection` | `true` | `false`: base-game behaviour; nothing is patched and the mod only logs that it loaded. |
+| `Tweaks.KeepSelection` | `true` | `false`: base-game behaviour; nothing is patched. The load line lists every tweak as `on`, `off`, `missing-members` or `patch-failed`. |
 
 Dev builds also add `[Dev] AutoLoadSlot` (load `slot-<n>` from the main menu; slot 1 is always refused), `[Dev] Probe`
 and `[Dev] ProbeKinds` (see Hazards: the probe logs the builder's state and places each listed kind itself through the
 game's `TestInput` hook).
 
-If a game update renames any member the tweak uses, the mod logs which ones and turns the tweak off.
+If a game update renames any member a tweak uses, the mod logs which ones and turns that tweak off.
+
+## Code shape
+
+Each tweak is one file holding its Harmony patch class(es) and a `Tweak` subclass (`Tweak.cs`: name, toggle text, the
+game members it needs, its patch classes, optional `Update`/`LateUpdate` and dev hooks), plus one entry in
+`Plugin.All`. Game-independent logic lives in `Pure/` (BCL only) and is covered by `tests/BuildQoL.Tests`
+(`dotnet test tests/BuildQoL.Tests`).
 
 ## Hazards
 

@@ -18,6 +18,23 @@ namespace BuildQoL
     // Both targets get postfixes only (no prefix):
     //   NoteBuilt(int)                          288 B, normal prologue (first branch at +0x1B)
     //   MachineBuilt(MoonDepotBuildDefinition)  576 B, normal prologue (first branch at +0x17)
+    internal sealed class KeepSelectionTweak : Tweak
+    {
+        public override string Name => "KeepSelection";
+        protected override string Toggle =>
+            "After placing a structure with the build tool, keep that structure selected with a new ghost ready for the next copy " +
+            "(rotation kept). Belts, and anything you cannot afford another of, behave as in the base game. False: base-game behaviour, nothing is patched.";
+        public override string[] Needed => new[]
+        {
+            "MoonCleaners.MoonDepotBuilder:NoteBuilt", "MoonCleaners.MoonDepotBuilder:MachineBuilt",
+            "MoonCleaners.MoonDepotBuilder:SelectStructure", "MoonCleaners.MoonDepotBuilder:BeginPlacement",
+            "MoonCleaners.MoonDepotBuilder:CanBuild", "MoonCleaners.MoonDepotBuilder:ConveyorKind",
+            "MoonCleaners.MoonDepotBuilder:selectedStructure", "MoonCleaners.MoonDepotBuilder:yaw",
+            "MoonCleaners.MoonDepotBuilder:IsPlacing", "MoonCleaners.MoonDepotBuilder:ConveyorMode", "MoonCleaners.MoonDepotBuilder:noticeUntil",
+        };
+        public override Type[] Patches => new[] { typeof(KeepSelectionPatches) };
+    }
+
     [HarmonyPatch]
     internal static class KeepSelectionPatches
     {

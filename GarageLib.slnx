@@ -4,6 +4,7 @@
   </Folder>
   <Folder Name="/mods/">
     <Project Path="mods/BuildQoL/BuildQoL.csproj" />
+    <Project Path="tests/BuildQoL.Tests/BuildQoL.Tests.csproj" />
     <Project Path="mods/SharedUpgrades/SharedUpgrades.csproj" />
   </Folder>
   <Folder Name="/src/">
