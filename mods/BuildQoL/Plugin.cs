@@ -23,6 +23,7 @@ namespace BuildQoL
         internal static readonly Tweak[] All =
         {
             new KeepSelectionTweak(),
+            new FoundationRunTweak(),
         };
 
         public override void Load()
