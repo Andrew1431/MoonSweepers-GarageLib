@@ -1,0 +1,35 @@
+== MoonCleaners.MoonLookPanel : Il2CppSystem.Object
+  P static System.Int32 MaxRows
+  P static System.Single PanelW
+  P static System.Single RowsY
+  P static System.Single RowH
+  P static System.Single RowStep
+  P static System.Single PanelPad
+  P static System.Single TitleOnlyY
+  P static System.Single TitleOnlyRowsY
+  P Il2CppInterop.Runtime.InteropTypes.Arrays.Il2CppReferenceArray`1<MoonCleaners.MoonLookPanel/Row> rows
+  P UnityEngine.GameObject canvas
+  P UnityEngine.RectTransform panel
+  P TMPro.TMP_Text kicker
+  P TMPro.TMP_Text title
+  P TMPro.TMP_Text status
+  P MoonCleaners.MoonWorkshopKit kit
+  P UnityEngine.CanvasGroup group
+  P System.Single rowsY
+  M Void Show(String what, String name, String state, Color stateColor, Single opacity)
+  M Void Show(String name, Single opacity)
+  M Void SetRow(Int32 i, String label, Single fill, String value, Color color)
+  M Void Rows(Int32 shown)
+  M Void Hide()
+  M Void Dispose()
+  M Void .ctor()
+  M Void .ctor(Transform owner, String name, Boolean titleOnly)
+  M Void .ctor(IntPtr pointer)
+== MoonCleaners.MoonLookPanel/Row : Il2CppSystem.Object
+  P UnityEngine.GameObject root
+  P TMPro.TMP_Text label
+  P TMPro.TMP_Text value
+  P UnityEngine.UI.Image fill
+  M Void .ctor()
+  M Void .ctor()
+  M Void .ctor(IntPtr pointer)

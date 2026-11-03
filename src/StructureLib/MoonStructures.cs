@@ -23,6 +23,9 @@ namespace StructureLib
         /// <summary>True if two structure ids mapped to the same kind. The library registers nothing in that case.</summary>
         public static bool Disabled { get; internal set; }
 
+        /// <summary>True once frozen with at least one modded machine (a Processor that does not ProducesPower).</summary>
+        internal static bool HasMachines { get; private set; }
+
         public static IReadOnlyCollection<StructureDefinition> All => byId.Values;
         public static IReadOnlyCollection<CargoDefinition> AllCargo => cargoById.Values;
 
@@ -318,6 +321,7 @@ namespace StructureLib
                     byIndex[def.Kind] = def;
                     if (resolved.TryGetValue(def.Id, out var r)) { def.ResolvedPorts = r.Ports; def.PortRule = r.Rule; }
                 }
+                HasMachines = byIndex.Values.Any(d => d.Processor != null && !d.Processor.ProducesPower);
 
                 CoreLog.Info($"Registry frozen: structures={byIndex.Count}" + (dropped > 0 ? $" ({dropped} dropped)" : "") +
                              $", cargo={byCargoValue.Count}" +

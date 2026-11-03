@@ -44,6 +44,15 @@ namespace StructureLib
             // The leaf tables (Patches/LeafTables.cs) and the game domain they are bounded to.
             "MoonCleaners.MoonWorld:HexPieceKind", "MoonCleaners.MoonWorld:IsRobotDock", "MoonCleaners.MoonWorld:MapKindOf",
             "MoonCleaners.MoonDepotSave:MaxStructureKind", "MoonCleaners.MoonDepotBuilder:ConveyorKind",
+            // The look-at panel (Patches/PanelPatches.cs).
+            "MoonCleaners.MoonProductionInteraction:ShowPanel", "MoonCleaners.MoonProductionInteraction:Aimed", "MoonCleaners.MoonProductionInteraction:look",
+            "MoonCleaners.MoonLookPanel:Show", "MoonCleaners.MoonLookPanel:SetRow", "MoonCleaners.MoonLookPanel:Rows", "MoonCleaners.MoonLookPanel:Hide",
+            // The power arcs (PowerLinksView.cs).
+            "MoonCleaners.MoonPowerLinks:.ctor(MoonWorld,Transform)", "MoonCleaners.MoonPowerLinks:Begin", "MoonCleaners.MoonPowerLinks:Arc",
+            "MoonCleaners.MoonPowerLinks:Ring", "MoonCleaners.MoonPowerLinks:End", "MoonCleaners.MoonPowerLinks:Clear", "MoonCleaners.MoonPowerLinks:Dispose",
+            "MoonCleaners.MoonWorld:PowerAnchor", "MoonCleaners.MoonDepotBuilder:HoldingBuildTool", "MoonCleaners.MoonProductionInteraction:builder",
+            // The canister tint (Patches/CanisterPatches.cs).
+            "MoonCleaners.MoonDustCanisterView:ShowCargo", "MoonCleaners.MoonDustCanisterView:properties", "MoonCleaners.MoonDustCanisterView:dustRenderer",
         };
 
         public override void Load()
@@ -68,7 +77,7 @@ namespace StructureLib
             LeafTables.Snapshot();
             var h = new Harmony(Guid);
             int ok = 0, failed = 0;
-            foreach (var t in new[] { typeof(FreezePatches), typeof(DefinitionPatches), typeof(PowerPatches), typeof(CatalogPatches), typeof(ModelPatches), typeof(BuildPatches), typeof(SavePatches), typeof(CargoPatches), typeof(ProductionPatches), typeof(HandshakePatches), typeof(PortPatches), typeof(BeltPatches) })
+            foreach (var t in new[] { typeof(FreezePatches), typeof(DefinitionPatches), typeof(PowerPatches), typeof(CatalogPatches), typeof(ModelPatches), typeof(BuildPatches), typeof(SavePatches), typeof(CargoPatches), typeof(ProductionPatches), typeof(HandshakePatches), typeof(PortPatches), typeof(BeltPatches), typeof(PanelPatches), typeof(CanisterPatches) })
             {
                 try { h.CreateClassProcessor(t).Patch(); ok++; CoreLog.Debug($"Patched {t.Name}"); }
                 catch (Exception e) { failed++; CoreLog.Error($"Patching {t.Name} failed: {e}"); }
@@ -85,10 +94,26 @@ namespace StructureLib
         }
 
         // Fields, properties (interop exposes game statics as properties) and methods, public or not, static or instance.
+        // ".ctor(A,B)" is an instance constructor with exactly those parameter type names (every interop type has a
+        // .ctor(IntPtr), so a bare ".ctor" would prove nothing).
         static bool HasMember(string typeName, string member)
         {
             var t = typeof(MoonWorld).Assembly.GetType(typeName);
-            return t != null && t.GetMember(member, MemberTypes.Field | MemberTypes.Property | MemberTypes.Method, AllMembers).Length > 0;
+            if (t == null) return false;
+            if (member.StartsWith(".ctor(", StringComparison.Ordinal) && member.EndsWith(")", StringComparison.Ordinal))
+            {
+                var want = member.Substring(6, member.Length - 7).Split(',', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries);
+                foreach (var c in t.GetConstructors(BindingFlags.Public | BindingFlags.NonPublic | BindingFlags.Instance))
+                {
+                    var ps = c.GetParameters();
+                    if (ps.Length != want.Length) continue;
+                    bool match = true;
+                    for (int i = 0; i < ps.Length && match; i++) match = ps[i].ParameterType.Name == want[i];
+                    if (match) return true;
+                }
+                return false;
+            }
+            return t.GetMember(member, MemberTypes.Field | MemberTypes.Property | MemberTypes.Method, AllMembers).Length > 0;
         }
 
         const BindingFlags AllMembers = BindingFlags.Public | BindingFlags.NonPublic | BindingFlags.Static | BindingFlags.Instance;
@@ -130,12 +155,16 @@ namespace StructureLib
                         CoreState.World = null;
                         CoreState.SaveRoot = null;
                         Sidecar.EndSession();
+                        PowerLinksView.Reset();
                     }
                 }
                 // Its own guard: a throw here must not stop the card renders that follow.
                 try { StructureMaterials.Upgrade(); }
                 catch (Exception e) { CoreLog.Once("materials-upgrade", "Upgrading model materials threw: " + e, 3); }
                 IconRenderer.Tick();
+                // Its own guard too: a throw every frame here must not starve the handshake, the dev tools or Ensure.
+                try { PowerLinksView.Tick(); }
+                catch (Exception e) { CoreLog.Once("power-links-tick", "PowerLinksView.Tick threw: " + e, 3); }
                 Handshake.Tick();
 #if DEVBUILD
                 DevTools.Tick();
