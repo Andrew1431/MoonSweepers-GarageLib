@@ -24,20 +24,23 @@ In the base game, removing a belt drops every canister riding on it onto the gro
 `ScrapBeltContents` on, hold `ScrapModifier` (default Left Ctrl) while you confirm a belt removal to destroy those
 canisters instead. The belt is removed and refunded as usual. Removing a belt without the key works as before.
 
-- While you aim at a belt in removal mode, a red line under the removal keys shows what would go:
+- While you aim at a belt in removal mode, a red line placed one row under the removal keys says what would go:
   "Hold Ctrl to scrap contents (3)", and with the key held "Ctrl: scrap contents (3 canisters, 3.0 kg)". If other
-  players' canisters ride on it, the line names them ("2 are Andrew's"). An empty belt shows no line.
+  players' canisters ride on it, the line names them ("2 are Andrew's"). An empty belt shows no line. The line is in
+  place in game (logged), but it has not yet been checked on screen.
+- Either Ctrl key works (likewise for Shift and Alt when one of them is the modifier).
 - `ScrapOthersCargo = false` scraps only canisters you own. Other players' canisters drop as in the base game.
 - Only canisters riding the belt are destroyed. Loose canisters lying near it are not touched.
 - Destroyed cargo is gone for good. There is no undo, and the game's belt undo does not bring canisters back.
 - Only the keyboard has a modifier. There is no gamepad binding yet.
-- No base-game binding uses Ctrl. All `MoonInput` bindings were listed in game and none has a Ctrl key. Removal mode
-  also does not read the builder's own Ctrl input.
+- No `MoonInput` binding uses Ctrl: all of them were listed in game and none has a Ctrl key. Walker code that reads
+  the keyboard directly was not checked. Removal mode does not read the builder's own Ctrl input.
 - Multiplayer: in the base game, any player can delete a canister by telling every other player directly. So the
   scrapping player sends the same "canister removed" message a vanilla client sends when it feeds a canister to a
   machine, and only the player who scraps needs the mod. One gap: a canister that boarded the belt on the host in the
-  last fraction of a second before a client removes it may still drop on the host as a loose canister. **Multiplayer
-  is not tested yet.**
+  last fraction of a second before a client removes it may still drop on the host as a loose canister.
+  A modded client with `ScrapOthersCargo = true` can destroy other players' cargo, and the host cannot block it: the
+  base game accepts any player's "canister removed" message. **Multiplayer is not tested yet.**
 
 To verify with a second player (Ryan hosts slot 2, Andrew joins, dev builds unless stated). Set up a belt with 4 or
 more riders, 2 owned by each player, one near the end:
@@ -49,7 +52,10 @@ more riders, 2 owned by each player, one near the end:
 4. Client modded, host vanilla (`ScrapBeltContents = false` on Ryan's side): deleted on both.
 5. Host modded, client vanilla: Andrew removes a loaded belt without Ctrl: the base game's drop on both.
 6. Busy belt (a splitter feed at full rate): Andrew scraps mid-flow. Count the loose canisters on Ryan's side.
-7. Others' cargo: the line names Andrew's canisters on Ryan's side. `ScrapOthersCargo = false` leaves them.
+7. Others' cargo: the line names Andrew's canisters on Ryan's side. `ScrapOthersCargo = false` leaves them. Each
+   `scrapped ...` log line ends with both local ids (`MoonWorld.LocalPlayer`, `MoonCrew.LocalPlayerId`); check that on
+   each side they match the `owner` of that player's own canisters. A canister counts as yours when its owner equals
+   either id.
 8. Ryan saves and reloads: the count matches step 2. Restore slot 2 afterwards.
 
 ## Config
@@ -65,7 +71,7 @@ more riders, 2 owned by each player, one near the end:
 
 Dev builds also add `[Dev] AutoLoadSlot` (load `slot-<n>` from the main menu; slot 1 is always refused), `[Dev] Probe`
 and `[Dev] ProbeKinds` (see Hazards: the probe logs the builder's state and places each listed kind itself through the
-game's `TestInput` hook). `[Dev] ScrapProbe` and `[Dev] ScrapProbeHold` drive the scrap probe (see Hazards).
+game's `TestInput` hook).
 
 If a game update renames any member a tweak uses, the mod logs which ones and turns that tweak off.
 
@@ -153,7 +159,8 @@ GameObject is off) and shows the `removeKeys` row ("LMB REMOVE CONVEYOR BELT +$2
 instructions". The tweak's line is therefore its own label: a copy of `prompt`, parented beside `removeKeys` and
 placed under it. No game UI object is changed.
 
-In-game probe (`[Dev] ScrapProbe = 1`), on slot 2 (a copy), solo. Three free-standing 4 m belts were built from code
+In-game probe (dev builds: `[Dev] ScrapProbe = 1`, and `[Dev] ScrapProbeHold` to keep aiming before the click; `2` only logs
+the counts after load), on slot 2 (a copy), solo. Three free-standing 4 m belts were built from code
 (`ConveyorRouteValid`, then `TryBuildConveyor`). 1 kg dust canisters were put on them (`PackDustCanister`, then
 `MoveCanisterRecord` onto the belt) before the build tool was taken out, because `PackDustCanister` refuses while the
 tool is in hand. Each belt was then removed through the builder's own removal mode: the build tool from

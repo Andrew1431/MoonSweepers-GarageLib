@@ -34,10 +34,13 @@ namespace BuildQoL
         {
             "MoonCleaners.MoonWorld:TryRemoveConveyor", "MoonCleaners.MoonWorld:CanRemoveConveyor", "MoonCleaners.MoonWorld:RemoveCanister",
             "MoonCleaners.MoonWorld:RaiseMachineCanister", "MoonCleaners.MoonWorld:RaiseLocalCanister", "MoonCleaners.MoonWorld:riders",
-            "MoonCleaners.MoonWorld:canisters", "MoonCleaners.MoonWorld:progressDirty", "MoonCleaners.MoonCrew:Joined",
-            "MoonCleaners.MoonCrew:LocalPlayerId", "MoonCleaners.MoonDepotBuilder:IsRemoving", "MoonCleaners.MoonDepotBuilder:prompt",
-            "MoonCleaners.MoonDepotBuilder:walker", "MoonCleaners.MoonDepotBuilder:World", "MoonCleaners.MoonDepotBuilder:removeKeys",
+            "MoonCleaners.MoonWorld:canisters", "MoonCleaners.MoonWorld:progressDirty", "MoonCleaners.MoonWorld:LocalPlayer",
             "MoonCleaners.MoonWorld+CanisterOp:Removed",
+            "MoonCleaners.MoonCrew:Joined", "MoonCleaners.MoonCrew:LocalPlayerId", "MoonCleaners.MoonCrew:PlayerId",
+            "MoonCleaners.MoonDepotBuilder:IsRemoving", "MoonCleaners.MoonDepotBuilder:prompt", "MoonCleaners.MoonDepotBuilder:walker",
+            "MoonCleaners.MoonDepotBuilder:World", "MoonCleaners.MoonDepotBuilder:removeKeys", "MoonCleaners.MoonDepotBuilder:ForCamera",
+            "MoonCleaners.MoonDepotBuilder:RemoveRed",
+            "MoonCleaners.MoonSteamLobby:members", "MoonCleaners.MoonSteamLobby:PlayerName",
         };
         public override Type[] Patches => new[] { typeof(ScrapBeltPatches) };
 
@@ -47,7 +50,8 @@ namespace BuildQoL
         protected override void BindMore(ConfigFile cfg)
         {
             Modifier = cfg.Bind("Tweaks", "ScrapModifier", Key.LeftCtrl,
-                "Key (Unity Input System name, e.g. LeftCtrl, LeftAlt, X) held while confirming a belt removal to scrap the canisters on it. None: never scrap.");
+                "Key (Unity Input System name, e.g. LeftCtrl, LeftAlt, X) held while confirming a belt removal to scrap the canisters on it. " +
+                "For Ctrl, Shift and Alt either side counts. None: never scrap.");
             OthersCargo = cfg.Bind("Tweaks", "ScrapOthersCargo", true,
                 "True: the scrap destroys every canister on the belt. False: only canisters you own; other players' canisters drop as in the base game.");
         }
@@ -63,7 +67,9 @@ namespace BuildQoL
 
     internal static class Scrap
     {
-        /// <summary>True while the configured modifier is held (read from the keyboard, not the builder's input).</summary>
+        static Key otherSideFor = Key.None, otherSide = Key.None;
+
+        /// <summary>True while the configured modifier (or, for Ctrl/Shift/Alt, its other side) is held, read from the keyboard.</summary>
         internal static bool Held()
         {
 #if DEVBUILD
@@ -75,19 +81,37 @@ namespace BuildQoL
             {
                 var kb = Keyboard.current;
                 if (kb == null) return false;
-                var control = kb.get_Item(key);
-                return control != null && control.isPressed;
+                if (Pressed(kb, key)) return true;
+                if (otherSideFor != key)
+                {
+                    otherSideFor = key;
+                    string other = ScrapText.OtherSide(key.ToString());
+                    otherSide = other != null && Enum.TryParse(other, out Key k) ? k : Key.None;
+                }
+                return otherSide != Key.None && Pressed(kb, otherSide);
             }
             catch (Exception e) { Plugin.Once("scrap-key", $"ScrapBeltContents: reading key {key} threw (no scrapping): " + e); return false; }
         }
 
-        internal static string LocalId()
+        static bool Pressed(Keyboard kb, Key key)
         {
-            try { return MoonCrew.LocalPlayerId; } catch { return null; }
+            var control = kb.get_Item(key);
+            return control != null && control.isPressed;
         }
 
-        internal static bool IsMine(string owner, string local) =>
-            string.IsNullOrEmpty(owner) || (local != null && owner == local);
+        /// <summary>MoonCrew.LocalPlayerId: the id a joined client raises its canister ops under.</summary>
+        internal static string CrewId()
+        {
+            try { return MoonCrew.LocalPlayerId; }
+            catch (Exception e) { Plugin.Once("scrap-crew-id", "ScrapBeltContents: reading MoonCrew.LocalPlayerId threw: " + e); return null; }
+        }
+
+        /// <summary>MoonWorld.LocalPlayer: the owner id the game and the other mods give the local player's canisters.</summary>
+        internal static string WorldId()
+        {
+            try { return MoonWorld.LocalPlayer; }
+            catch (Exception e) { Plugin.Once("scrap-world-id", "ScrapBeltContents: reading MoonWorld.LocalPlayer threw: " + e); return null; }
+        }
 
         /// <summary>The canisters riding <paramref name="belt"/>: id, owner, kg. Read once into a list; never mutates the world.</summary>
         internal static List<(int id, string owner, double kg)> Riders(MoonWorld w, int belt)
@@ -171,15 +195,15 @@ namespace BuildQoL
             if (w == null) return;
             if (!w.CanRemoveConveyor(builder, id, out _)) return; // the original refuses too: nothing is scrapped
             bool others = ScrapBeltContentsTweak.OthersCargo.Value;
-            string local = Scrap.LocalId();
+            string worldId = Scrap.WorldId(), crewId = Scrap.CrewId();
             var ids = new List<int>();
             foreach (var (rid, owner, _) in Scrap.Riders(w, id))
-                if (others || Scrap.IsMine(owner, local)) ids.Add(rid);
+                if (others || ScrapText.IsMine(owner, worldId, crewId)) ids.Add(rid);
             if (ids.Count == 0) return;
 
             bool joined = MoonCrew.Joined;
             // A client raises Removed under its own player id; without one the delete would reach nobody else.
-            if (joined && string.IsNullOrEmpty(local)) { Plugin.Once("scrap-noid", "ScrapBeltContents: joined with no LocalPlayerId; not scrapping, the canisters drop as usual"); return; }
+            if (joined && string.IsNullOrEmpty(crewId)) { Plugin.Once("scrap-noid", "ScrapBeltContents: joined with no LocalPlayerId; not scrapping, the canisters drop as usual"); return; }
             int n = 0;
             double kg = 0;
             try
@@ -190,10 +214,15 @@ namespace BuildQoL
                     if (canisters == null || !canisters.ContainsKey(cid)) continue;
                     var c = canisters.get_Item(cid);
                     w.RemoveCanister(cid);
-                    if (joined) w.RaiseLocalCanister(MoonWorld.CanisterOp.Removed, local, c);
-                    else w.RaiseMachineCanister(MoonWorld.CanisterOp.Removed, c);
+                    // Gone locally from here on, whether or not the others hear of it.
                     n++;
                     kg += c.kilograms;
+                    try
+                    {
+                        if (joined) w.RaiseLocalCanister(MoonWorld.CanisterOp.Removed, crewId, c);
+                        else w.RaiseMachineCanister(MoonWorld.CanisterOp.Removed, c);
+                    }
+                    catch (Exception e) { Plugin.Once("scrap-raise", $"ScrapBeltContents: announcing the removal of canister {cid} threw (removed here only): " + e); }
                 }
             }
             finally
@@ -202,7 +231,7 @@ namespace BuildQoL
                 {
                     w.progressDirty = true;
                     lastCount = n; lastKg = kg; lastBelt = id;
-                    Plugin.L.LogInfo(ScrapText.Log(n, kg, id, joined));
+                    Plugin.L.LogInfo($"{ScrapText.Log(n, kg, id, joined)} (MoonWorld.LocalPlayer '{worldId}', MoonCrew.LocalPlayerId '{crewId}')");
                 }
             }
         }
@@ -219,6 +248,11 @@ namespace BuildQoL
         static TMPro.TMP_Text label;
         static string shown;
 
+        // The line is rebuilt when the aimed belt, the rider count or the key state changes, and every 10 frames otherwise.
+        static int cacheBelt = -1, cacheRiders = -1, cacheFrame = -100;
+        static bool cacheHeld;
+        static string cacheLine;
+
         /// <summary>The line on show now, or null.</summary>
         internal static string Shown => shown;
         internal static TMPro.TMP_Text Label => label;
@@ -226,25 +260,25 @@ namespace BuildQoL
         internal static void LateUpdate()
         {
             var b = Builder();
-            if (b == null) { shown = null; return; }
+            if (b == null) { Hide(); return; }
             string line = null;
             if (b.IsRemoving && ScrapBeltPatches.aimFrame == Time.frameCount && ScrapBeltPatches.aimOk)
             {
                 var walker = b.walker;
-                if (walker == null || walker.Pointer == ScrapBeltPatches.aimWalker) line = Line(b.World, ScrapBeltPatches.aimBelt);
+                if (walker == null || walker.Pointer == ScrapBeltPatches.aimWalker) line = CachedLine(b.World, ScrapBeltPatches.aimBelt);
             }
-            if (line == null)
-            {
-                if (label != null && label.gameObject.activeSelf) label.gameObject.SetActive(false);
-                shown = null;
-                return;
-            }
+            if (line == null) { Hide(); return; }
             var l = Ensure(b);
             if (l == null) { shown = null; return; }
-            Place(l, b.removeKeys);
             if (l.text != line) l.text = line;
             if (!l.gameObject.activeSelf) l.gameObject.SetActive(true);
             shown = line;
+        }
+
+        static void Hide()
+        {
+            if (label != null && label.gameObject.activeSelf) label.gameObject.SetActive(false);
+            shown = null;
         }
 
         static TMPro.TMP_Text Ensure(MoonDepotBuilder b)
@@ -259,6 +293,7 @@ namespace BuildQoL
             if (label == null) { UnityEngine.Object.Destroy(go); return null; }
             label.richText = false;
             label.color = Red();
+            Place(label, keys);
             go.SetActive(false);
             return label;
         }
@@ -266,39 +301,37 @@ namespace BuildQoL
         // Same anchors and pivot as the key row, one line below it, at least as wide.
         static void Place(TMPro.TMP_Text l, RectTransform keys)
         {
-            if (keys == null) return;
             var rt = l.rectTransform;
             rt.anchorMin = keys.anchorMin;
             rt.anchorMax = keys.anchorMax;
             rt.pivot = keys.pivot;
             float h = Mathf.Max(l.fontSize * 1.4f, 20f);
             rt.sizeDelta = new Vector2(Mathf.Max(keys.rect.width, 640f), h);
-            rt.anchoredPosition = keys.anchoredPosition + new Vector2(0f, -(keys.rect.height * (keys.pivot.y) + h * (1f - rt.pivot.y) + 6f));
+            rt.anchoredPosition = keys.anchoredPosition + new Vector2(0f, -(keys.rect.height * keys.pivot.y + h * (1f - rt.pivot.y) + 6f));
         }
 
-        static string Line(MoonWorld w, int belt)
+        static string CachedLine(MoonWorld w, int belt)
         {
             if (w == null) return null;
+            int riders = w.riders != null ? w.riders.Count : -1;
+            bool held = Scrap.Held();
+            int frame = Time.frameCount;
+            if (belt == cacheBelt && riders == cacheRiders && held == cacheHeld && frame - cacheFrame < 10) return cacheLine;
+            cacheBelt = belt; cacheRiders = riders; cacheHeld = held; cacheFrame = frame;
+            cacheLine = Line(w, belt, held);
+            return cacheLine;
+        }
+
+        static string Line(MoonWorld w, int belt, bool held)
+        {
             if (ScrapBeltContentsTweak.Modifier.Value == Key.None) return null;
             bool othersScrapped = ScrapBeltContentsTweak.OthersCargo.Value;
-            string local = Scrap.LocalId();
-            int count = 0;
-            double kg = 0;
-            var byOwner = new Dictionary<string, int>();
-            var order = new List<string>();
-            foreach (var (_, owner, k) in Scrap.Riders(w, belt))
-            {
-                bool mine = Scrap.IsMine(owner, local);
-                if (!mine)
-                {
-                    if (!byOwner.ContainsKey(owner)) { byOwner[owner] = 0; order.Add(owner); }
-                    byOwner[owner]++;
-                }
-                if (mine || othersScrapped) { count++; kg += k; }
-            }
+            var riders = new List<KeyValuePair<string, double>>();
+            foreach (var (_, owner, k) in Scrap.Riders(w, belt)) riders.Add(new KeyValuePair<string, double>(owner, k));
+            var t = ScrapText.Count(riders, Scrap.WorldId(), Scrap.CrewId(), othersScrapped);
             var others = new List<KeyValuePair<string, int>>();
-            foreach (var o in order) others.Add(new KeyValuePair<string, int>(Scrap.NameOf(o), byOwner[o]));
-            return ScrapText.Prompt(Scrap.Held(), ScrapText.KeyLabel(ScrapBeltContentsTweak.Modifier.Value.ToString()), count, kg, others, othersScrapped);
+            foreach (var o in t.Others) others.Add(new KeyValuePair<string, int>(Scrap.NameOf(o.Key), o.Value));
+            return ScrapText.Prompt(held, ScrapText.KeyLabel(ScrapBeltContentsTweak.Modifier.Value.ToString()), t.Count, t.Kg, others, othersScrapped);
         }
 
         static Color Red()
@@ -309,7 +342,11 @@ namespace BuildQoL
         static MoonDepotBuilder Builder()
         {
             if (builder != null) return builder;
-            label = null; // went with the old builder's UI
+            // The builder is gone (or never found): drop a label left from an old one.
+            if (label != null) { try { UnityEngine.Object.Destroy(label.gameObject); } catch (Exception e) { Plugin.Once("scrap-label", "ScrapBeltContents: destroying the old label threw: " + e); } }
+            label = null;
+            shown = null;
+            cacheBelt = -1;
             if (Time.frameCount < nextLookup) return null; // in menus there is no builder: look again every 30 frames
             nextLookup = Time.frameCount + 30;
             var cam = Camera.main;

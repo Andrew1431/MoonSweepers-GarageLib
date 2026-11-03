@@ -73,5 +73,55 @@ namespace BuildQoL.Pure
         /// <summary>The once-per-removal log line.</summary>
         public static string Log(int count, double kg, int belt, bool client) =>
             $"scrapped {Canisters(count)} ({Kg(kg)}) from belt {belt} as {(client ? "client" : "host")}";
+
+        /// <summary>
+        /// True when a canister owner is the local player: it equals either local id (the game has two,
+        /// MoonWorld.LocalPlayer and MoonCrew.LocalPlayerId, shown equal only in solo). An empty owner counts as mine.
+        /// </summary>
+        public static bool IsMine(string owner, string localA, string localB) =>
+            string.IsNullOrEmpty(owner)
+            || (!string.IsNullOrEmpty(localA) && owner == localA)
+            || (!string.IsNullOrEmpty(localB) && owner == localB);
+
+        /// <summary>What a scrap of these riders would destroy, and other players' canisters by owner id in first-seen order.</summary>
+        public sealed class Tally
+        {
+            public int Count;
+            public double Kg;
+            public readonly List<KeyValuePair<string, int>> Others = new List<KeyValuePair<string, int>>();
+        }
+
+        /// <summary>
+        /// Counts riders (owner, kg): mine always count; others count too when <paramref name="othersScrapped"/>, and are
+        /// listed by owner either way.
+        /// </summary>
+        public static Tally Count(IEnumerable<KeyValuePair<string, double>> riders, string localA, string localB, bool othersScrapped)
+        {
+            var t = new Tally();
+            var index = new Dictionary<string, int>();
+            foreach (var r in riders)
+            {
+                bool mine = IsMine(r.Key, localA, localB);
+                if (!mine)
+                {
+                    if (index.TryGetValue(r.Key, out int i)) t.Others[i] = new KeyValuePair<string, int>(r.Key, t.Others[i].Value + 1);
+                    else { index[r.Key] = t.Others.Count; t.Others.Add(new KeyValuePair<string, int>(r.Key, 1)); }
+                }
+                if (mine || othersScrapped) { t.Count++; t.Kg += r.Value; }
+            }
+            return t;
+        }
+
+        /// <summary>
+        /// For a paired modifier ("LeftCtrl", "RightShift", "LeftAlt", ...) the name of the other side, so either key
+        /// counts; null for any other key.
+        /// </summary>
+        public static string OtherSide(string key)
+        {
+            if (string.IsNullOrEmpty(key)) return null;
+            string rest = key.StartsWith("Left") ? key.Substring(4) : key.StartsWith("Right") ? key.Substring(5) : null;
+            if (rest is not ("Ctrl" or "Shift" or "Alt" or "Meta" or "Command" or "Windows" or "Apple")) return null;
+            return (key.StartsWith("Left") ? "Right" : "Left") + rest;
+        }
     }
 }

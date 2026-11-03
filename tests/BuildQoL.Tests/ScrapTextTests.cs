@@ -67,6 +67,49 @@ namespace BuildQoL.Tests
         [InlineData(1, 1.04, 7, true, "scrapped 1 canister (1.0 kg) from belt 7 as client")]
         public void Log_Line(int n, double kg, int belt, bool client, string expected) => Assert.Equal(expected, ScrapText.Log(n, kg, belt, client));
 
+        [Theory]
+        [InlineData("local", "local", "other", true)]
+        [InlineData("steam-1", "local", "steam-1", true)]
+        [InlineData("steam-2", "local", "steam-1", false)]
+        [InlineData("", "local", null, true)]
+        [InlineData(null, null, null, true)]
+        [InlineData("x", null, "", false)]
+        public void IsMine_EitherLocalId(string owner, string a, string b, bool expected) => Assert.Equal(expected, ScrapText.IsMine(owner, a, b));
+
+        static List<KeyValuePair<string, double>> R(params (string owner, double kg)[] xs)
+        {
+            var l = new List<KeyValuePair<string, double>>();
+            foreach (var (o, k) in xs) l.Add(new KeyValuePair<string, double>(o, k));
+            return l;
+        }
+
+        [Fact]
+        public void Count_OthersScrapped_CountsAllAndListsOthersInOrder()
+        {
+            var t = ScrapText.Count(R(("me", 1.0), ("andrew", 2.0), ("bob", 0.5), ("andrew", 1.0), ("", 0.25)), "me", "steam-me", true);
+            Assert.Equal(5, t.Count);
+            Assert.Equal(4.75, t.Kg, 6);
+            Assert.Equal(new[] { new KeyValuePair<string, int>("andrew", 2), new KeyValuePair<string, int>("bob", 1) }, t.Others);
+        }
+
+        [Fact]
+        public void Count_OthersKept_CountsMineOnly()
+        {
+            var t = ScrapText.Count(R(("me", 1.0), ("andrew", 2.0), ("steam-me", 1.5)), "me", "steam-me", false);
+            Assert.Equal(2, t.Count);
+            Assert.Equal(2.5, t.Kg, 6);
+            Assert.Single(t.Others);
+        }
+
+        [Theory]
+        [InlineData("LeftCtrl", "RightCtrl")]
+        [InlineData("RightShift", "LeftShift")]
+        [InlineData("LeftAlt", "RightAlt")]
+        [InlineData("LeftArrow", null)]
+        [InlineData("X", null)]
+        [InlineData(null, null)]
+        public void OtherSide_PairedModifiersOnly(string key, string expected) => Assert.Equal(expected, ScrapText.OtherSide(key));
+
         [Fact]
         public void Kg_IsInvariant()
         {
