@@ -20,12 +20,14 @@ namespace StructureLib
         internal static ConfigEntry<bool> PowerUxProbe;
         internal static ConfigEntry<string> PowerUxTest;
         internal static ConfigEntry<float> PowerUxTeleport;
+        internal static ConfigEntry<string> PowerUxHome;
 
         static void BindPowerUx(ConfigFile cfg)
         {
             PowerUxProbe = cfg.Bind("Dev", "PowerUxProbe", false, "Dev build: the power-UX recon probe ([powerux] log lines): traces the look-at panel, the power solve, the power arcs and canister views, tours the walker's view over the AutoBuild depots and takes screenshots to BepInEx/cache/structurelib/powerux-<n>.png.");
             PowerUxTest = cfg.Bind("Dev", "PowerUxTest", "", "Dev build: comma-separated PowerUxProbe experiments: fuel (raise the AutoBuilt pressure chamber's Power from the briquette generator after the solve), link (add the generator-chamber pair to powerLinks), anchor (add the generator to powerAnchors), arc (draw an arc from the generator to the chamber with our own MoonPowerLinks), tint (tint modded-cargo canister views), far (walk 70 m away from the canisters and look back).");
             PowerUxTeleport = cfg.Bind("Dev", "PowerUxTeleport", 0f, "Dev build: with PowerUxProbe, 6 s after load move the walker this many metres to the free side of the base (away from every depot), before AutoBuild. 0 = stay.");
+            PowerUxHome = cfg.Bind("Dev", "PowerUxHome", "", "Dev build: with PowerUxProbe, 6 s after load put the walker on the ground under this world point (x,y,z), before AutoBuild. The walker's position is saved, so a probe run that walked it away is undone here. Empty = stay.");
             CoreLog.Info($"[dev] PowerUxProbe={PowerUxProbe.Value} PowerUxTest='{PowerUxTest.Value}' PowerUxTeleport={PowerUxTeleport.Value}");
             if (!PowerUxProbe.Value) return;
             try
@@ -52,6 +54,7 @@ namespace StructureLib
 
         static bool teleported, layoutDone, tourStarted, canistersDone, routeLogged;
         internal static int Gen = -1, Chamber = -1, Compactor = -1, Splitter = -1;
+        internal static bool RoutesLive;   // set by the tour once the baseline look-around is done
         internal static float TraceUntil = -1f;          // unscaled time; power order trace is live while now < TraceUntil
         internal static int TraceLines;
         internal static float LinksUntil = -1f;          // MoonPowerLinks trace window
@@ -65,7 +68,7 @@ namespace StructureLib
                 var world = CoreState.World ?? CoreState.FindWorld();
                 if (world == null) return;
                 float now = Time.unscaledTime;
-                if (!teleported && gameT > 6f) { teleported = true; if (DevTools.PowerUxTeleport.Value > 0f) Teleport(world, DevTools.PowerUxTeleport.Value); }
+                if (!teleported && gameT > 6f) { teleported = true; GoHome(); if (DevTools.PowerUxTeleport.Value > 0f) Teleport(world, DevTools.PowerUxTeleport.Value); }
                 if (!layoutDone && gameT > 12f) { layoutDone = true; Resolve(world); Layout(world); LinksUntil = now + 40f; }
                 if (layoutDone && now >= nextState && gameT < 140f) { nextState = now + 2f; StateLine(world, gameT); }
                 if (!routeLogged && gameT > 18f) { routeLogged = true; Arm(now, "18 s (after AutoFeed)"); }
@@ -92,8 +95,11 @@ namespace StructureLib
             if (Gen < 0) Gen = Nearest(world, MoonStructures.Definition(GenId)?.Kind ?? -1);
             if (Compactor < 0) Compactor = Nearest(world, MoonStructures.Definition(CompactorId)?.Kind ?? -1);
             if (Splitter < 0) Splitter = Nearest(world, MoonStructures.Definition(SplitterId)?.Kind ?? -1);
-            if (Chamber < 0) Chamber = Nearest(world, MoonWorld.PressureChamberKind);
+            if (Chamber < 0) Chamber = NearestTo(world, MoonWorld.PressureChamberKind, At(world, Gen));
             L($"depots: generator {Gen}, chamber {Chamber} (PressureChamberKind {MoonWorld.PressureChamberKind}), compactor {Compactor}, splitter {Splitter}; StallPower {MoonWorld.StallPower}");
+            // Carrying a canister turns the look-at panel and the arcs off: drop anything held from a saved session.
+            var held = UnityEngine.Object.FindFirstObjectByType<MoonDustCanisterInteraction>();
+            if (held != null && held.IsCarrying) L($"walker was carrying a canister (cargo {(byte)held.CarriedCargo}): TryDrop {T(() => { bool ok = held.TryDrop(out string msg); return ok + " '" + msg + "'"; })}; IsCarrying now {held.IsCarrying}");
             byte briq = (byte)(MoonStructures.CargoDefinition(BriqId)?.Value ?? 3);
             foreach (var (id, cargo, kg) in new[] { (Gen, (MoonCargo)briq, 10.0), (Chamber, MoonCargo.Dust, 12.0), (Compactor, MoonCargo.Sand, 8.0) })
             {
@@ -101,6 +107,13 @@ namespace StructureLib
                 world.CrewProcessorLoad(MoonWorld.LocalPlayer, id, cargo, kg);
                 L($"fed depot {id} {kg} kg cargo {(byte)cargo}: {State(world.ProductionOf(id))}");
             }
+        }
+
+        internal static int NearestTo(MoonWorld world, int kind, Vector3 p)
+        {
+            int best = -1; float bd = float.MaxValue;
+            foreach (var kv in world.depots) { if (kv.Value.kind != kind) continue; float d = Vector3.Distance(p, At(world, kv.Key)); if (d < bd) { bd = d; best = kv.Key; } }
+            return best;
         }
 
         internal static int Nearest(MoonWorld world, int kind, float within = 80f)
@@ -145,6 +158,20 @@ namespace StructureLib
         }
 
         // Moves the walker 'metres' along the ground towards the heading (of 8) whose spot is furthest from every depot.
+        static void GoHome()
+        {
+            var parts = (DevTools.PowerUxHome?.Value ?? "").Split(',');
+            if (parts.Length != 3) return;
+            var ci = System.Globalization.CultureInfo.InvariantCulture;
+            var p = new Vector3(float.Parse(parts[0], ci), float.Parse(parts[1], ci), float.Parse(parts[2], ci));
+            var world = CoreState.World ?? CoreState.FindWorld();
+            var walker = Walker();
+            if (world == null || walker == null) return;
+            var ground = world.SurfaceAt(p.normalized, out Vector3 gUp, out bool _);
+            L($"home: walker at {V(walker.transform.position)}; Teleport to {V(ground + gUp * 0.2f)}");
+            walker.Teleport(ground + gUp * 0.2f, true);
+        }
+
         static void Teleport(MoonWorld world, float metres)
         {
             var walker = Walker();
@@ -224,6 +251,7 @@ namespace StructureLib
         // fuel / link / anchor routes, run from the SolvePower postfix after StructureLib's own.
         internal static void Routes(MoonWorld world, float dt)
         {
+            if (!RoutesLive) return;
             if (Gen < 0 || Chamber < 0) return;
             var g = world.ProductionOf(Gen);
             var c = world.ProductionOf(Chamber);
@@ -323,6 +351,10 @@ namespace StructureLib
             [HarmonyPatch(typeof(MoonLookPanel), nameof(MoonLookPanel.Rows)), HarmonyPrefix]
             static void LookRows(int shown) { if (inPanel) calls.Add($"Rows({shown})"); }
 
+            // get_HoldingBuildTool: 192 B, normal prologue; falls through unless the tour forces the build tool.
+            [HarmonyPatch(typeof(MoonDepotBuilder), nameof(MoonDepotBuilder.HoldingBuildTool), MethodType.Getter), HarmonyPrefix]
+            static bool Holding(ref bool __result) { if (!Tour.ForceHammer) return true; __result = true; return false; }
+
             // ---- B: solve order and the fuel route ----
             // StepProduction 912 B, SolvePower 9440 B, FinishCycle (table: 416..3168 B); normal prologues.
             static bool Tracing => Time.unscaledTime < TraceUntil && TraceLines < 60;
@@ -353,6 +385,18 @@ namespace StructureLib
             static void FinishPre(MoonProductionState s) { if (s != null && s.Id == Chamber) L($"f{Time.frameCount} FinishCycle(chamber): {State(s)}"); }
 
             // ---- C: arcs ----
+            // PowerAnchor(int, out Vector3): 752 B, normal prologue. anchorprefix: answer the generator from its depot (up 2 m).
+            [HarmonyPatch(typeof(MoonWorld), nameof(MoonWorld.PowerAnchor)), HarmonyPrefix]
+            static bool AnchorPre(MoonWorld __instance, int id, ref Vector3 point, ref bool __result)
+            {
+                if (!RoutesLive || !Test("anchorprefix") || id != Gen || Gen < 0) return true;
+                var p = At(__instance, Gen);
+                point = p + p.normalized * 2f;
+                __result = true;
+                Once("anchorprefix", $"anchorprefix: PowerAnchor({id}) answered {V(point)}");
+                return false;
+            }
+
             static bool inGrid;
             static int gridId;
             internal static float ArcWidth = -1f;
@@ -361,15 +405,15 @@ namespace StructureLib
 
             // 2464 B.
             [HarmonyPatch(typeof(MoonPowerLinks), nameof(MoonPowerLinks.ShowGrid)), HarmonyPrefix]
-            static void ShowGridPre(int id) { inGrid = true; gridId = id; if (Links) Once("grid:" + id, $"ShowGrid({id})"); }
+            static void ShowGridPre(int id) { inGrid = true; gridId = id; if (Links) Once("grid:" + id + ":" + RoutesLive, $"ShowGrid({id})"); }
             [HarmonyPatch(typeof(MoonPowerLinks), nameof(MoonPowerLinks.ShowGrid)), HarmonyPostfix]
-            static void ShowGridPost(MoonPowerLinks __instance, int id) { inGrid = false; if (Links) Once("gridpost:" + id, $"ShowGrid({id}) done: used {__instance.used} lines {__instance.lines?.Count} gridPanels [{T(() => string.Join(",", Il2Set(__instance.gridPanels)))}] linkedPanels [{T(() => string.Join(",", Il2Set(__instance.linkedPanels)))}] gridMachines [{T(() => string.Join(",", Enumerable.Range(0, __instance.gridMachines.Count).Select(i => __instance.gridMachines.get_Item(i))))}] ring {V(__instance.ringCentre)} r {__instance.ringRadius:F1}"); }
+            static void ShowGridPost(MoonPowerLinks __instance, int id) { inGrid = false; if (Links) Once("gridpost:" + id + ":" + RoutesLive, $"ShowGrid({id}) done: used {__instance.used} lines {__instance.lines?.Count} gridPanels [{T(() => string.Join(",", Il2Set(__instance.gridPanels)))}] linkedPanels [{T(() => string.Join(",", Il2Set(__instance.linkedPanels)))}] gridMachines [{T(() => string.Join(",", Enumerable.Range(0, __instance.gridMachines.Count).Select(i => __instance.gridMachines.get_Item(i))))}] ring {V(__instance.ringCentre)} r {__instance.ringRadius:F1}"); }
 
             static IEnumerable<int> Il2Set(Il2CppSystem.Collections.Generic.HashSet<int> s) { var l = new List<int>(); if (s == null) return l; foreach (var x in s) l.Add(x); return l; }
 
             // 464 B.
             [HarmonyPatch(typeof(MoonPowerLinks), nameof(MoonPowerLinks.Link)), HarmonyPrefix]
-            static void LinkPre(int a, int b, float strength) { if (Links) Once($"link:{a}:{b}:{(inGrid ? gridId : -1)}", $"Link({a}, {b}, strength {strength:F2}) {(inGrid ? $"in ShowGrid({gridId})" : "outside ShowGrid")}"); }
+            static void LinkPre(int a, int b, float strength) { if (Links) Once($"link:{a}:{b}:{(inGrid ? gridId : -1)}:{RoutesLive}", $"Link({a}, {b}, strength {strength:F2}) {(inGrid ? $"in ShowGrid({gridId})" : "outside ShowGrid")}"); }
 
             // 1792 B.
             [HarmonyPatch(typeof(MoonPowerLinks), nameof(MoonPowerLinks.Arc)), HarmonyPrefix]
@@ -426,6 +470,7 @@ namespace StructureLib
             static readonly Dictionary<int, string> what = new();
             static float next = -1f, until = -1f;
             internal static bool Watched(int id) => ids.Contains(id);
+            internal static Vector3 GroundSpot;
             static int hand = -1;
 
             // After the tour (carrying hides the look-at panel): pick up the hand briquette.
@@ -458,6 +503,7 @@ namespace StructureLib
                     var up = t.position.normalized;
                     var fwd = Vector3.ProjectOnPlane(t.forward, up).normalized;
                     var side = Vector3.Cross(up, fwd).normalized;
+                    GroundSpot = t.position + fwd * 2.5f;
                     Add(world, Ground(world, t.position + fwd * 2.5f + side * 0.5f, up, (MoonCargo)briq), "briquette on ground", null);
                     Add(world, Ground(world, t.position + fwd * 2.5f - side * 0.5f, up, MoonCargo.Dust), "dust on ground", null);
                     hand = Ground(world, t.position + fwd * 1.0f, up, (MoonCargo)briq);
@@ -504,6 +550,21 @@ namespace StructureLib
                 }
                 if (inter != null && inter.carriedView != null) Once("carried:" + inter.carriedView.GetInstanceID() + (byte)inter.carriedView.Cargo, $"carried view {inter.carriedView.GetInstanceID()} '{inter.carriedView.name}' carriedId {inter.carriedId}: {Describe(inter.carriedView)}");
                 if (streaming != null) Once("streaming:" + (int)(now / 10), $"streaming: ActiveViews {streaming.ActiveViews} FarDrawn {streaming.FarDrawn} FarParts {streaming.FarParts} FarDistance {streaming.FarDistance:F1}; parts: {T(() => streaming.parts == null ? "null" : string.Join("; ", streaming.parts.Select(p => $"{p.mesh?.name}/{p.submesh} mat '{p.material?.name}' dust {p.dust} sand {p.sand} stone {p.stone} fill {p.fill}")))}");
+            }
+
+            internal static void FarReport(MoonWorld world)
+            {
+                var s = UnityEngine.Object.FindFirstObjectByType<MoonCanisterStreaming>();
+                if (s == null) { L("far: no streaming"); return; }
+                var walker = Walker();
+                L($"far: ActiveViews {s.ActiveViews} FarDrawn {s.FarDrawn} FarParts {s.FarParts} FarCapsules {s.FarCapsules} FarDistance {s.FarDistance:F1}; parts: {T(() => s.parts == null ? "null" : string.Join("; ", s.parts.Select(p => $"{p.mesh?.name}/{p.submesh} mat '{p.material?.name}' dust {p.dust} sand {p.sand} stone {p.stone} fill {p.fill}")))}");
+                foreach (int id in ids)
+                {
+                    string far = T(() => s.farShown != null && s.farShown.ContainsKey(id) ? $"farShown cargo {(byte)s.farShown.get_Item(id).cargo} fill {s.farShown.get_Item(id).fill:F2} valid {s.farShown.get_Item(id).valid}" : "not in farShown");
+                    string view = s.views != null && s.views.ContainsKey(id) ? "has a near view" : "no near view";
+                    string at = T(() => world.canisters.ContainsKey(id) ? $"cargo {(byte)world.canisters.get_Item(id).cargo} {Vector3.Distance(world.canisters.get_Item(id).position, walker.transform.position):F1} m away" : "gone");
+                    L($"far: canister {id} ({what[id]}): {at}; {view}; {far}");
+                }
             }
 
             internal static string Describe(MoonDustCanisterView v)
@@ -554,6 +615,8 @@ namespace StructureLib
                 var tint = modded ? (MoonStructures.CargoDefinition(cargo)?.CanisterTint ?? TestTint) : Color.white;
                 b.SetColor("_BaseColor", tint);
                 r.SetPropertyBlock(b);
+                // The view re-applies its own block (properties) on every RefreshFill; put the colour in it too.
+                v.properties?.SetColor("_BaseColor", tint);
                 Once($"tint:{v.GetInstanceID()}:{(byte)cargo}", $"tint: view {v.GetInstanceID()} Id {v.Id} cargo {(byte)cargo} -> _BaseColor {C(tint)}; {Block(r, null)}");
             }
         }
@@ -564,71 +627,96 @@ namespace StructureLib
         {
             static readonly List<(int id, string label)> targets = new();
             static int index = -1, shots;
-            static float stepAt, checkAt, shotAt;
-            static bool checkedAim;
+            static float t0 = -1f;
+            static int stage;
             static Vector3 home;
-            const float StepSeconds = 6f;
+            const float StepSeconds = 7.5f;
+            internal static bool ForceHammer;
 
             internal static void Start(MoonWorld world)
             {
                 targets.Clear();
                 var walker = Walker();
                 home = walker != null ? walker.transform.position : Vector3.zero;
-                foreach (int k in new[] { MoonWorld.SolarPostKind, MoonWorld.SolarTwinKind, MoonWorld.SolarTrackerKind })
+                bool shortTour = Test("short");
+                foreach (int k in shortTour ? Array.Empty<int>() : new[] { MoonWorld.SolarPostKind, MoonWorld.SolarTwinKind, MoonWorld.SolarTrackerKind })
                 {
                     int best = Nearest(world, k);
                     if (best >= 0) targets.Add((best, $"vanilla kind {k}"));
                 }
                 int vanillaChamber = -1; float bd = 80f;
                 foreach (var kv in world.depots) { if (kv.Value.kind != MoonWorld.PressureChamberKind || kv.Key == Chamber) continue; float d = Vector3.Distance(home, At(world, kv.Key)); if (d < bd) { bd = d; vanillaChamber = kv.Key; } }
-                if (vanillaChamber >= 0) targets.Add((vanillaChamber, "vanilla chamber on a solar grid"));
-                if (Gen >= 0) targets.Add((Gen, "generator"));
-                if (Chamber >= 0) targets.Add((Chamber, "chamber"));
-                if (Compactor >= 0) targets.Add((Compactor, "compactor"));
-                if (Splitter >= 0) targets.Add((Splitter, "splitter"));
-                targets.Add((-3, "carried briquette"));
-                if (Test("far")) targets.Add((-2, "far canisters"));
+                if (vanillaChamber >= 0 && !shortTour) targets.Add((vanillaChamber, "vanilla chamber on a solar grid"));
+                if (!shortTour)
+                {
+                    if (Gen >= 0) targets.Add((Gen, "generator"));
+                    if (Chamber >= 0) targets.Add((Chamber, "chamber"));
+                    if (Compactor >= 0) targets.Add((Compactor, "compactor"));
+                    if (Splitter >= 0) targets.Add((Splitter, "splitter"));
+                }
+                if (!string.IsNullOrWhiteSpace(DevTools.PowerUxTest.Value))
+                {
+                    targets.Add((-4, "routes on"));
+                    if (Gen >= 0 && Chamber >= 0) targets.Add((-5, "generator-chamber pair from the side"));
+                    if (Test("tint")) { targets.Add((-6, "belt canisters close up")); targets.Add((-7, "ground canisters close up")); }
+                    if (Gen >= 0) targets.Add((Gen, "generator (routes on)"));
+                    if (Chamber >= 0) targets.Add((Chamber, "chamber (routes on)"));
+                    if (Test("far")) targets.Add((-2, "far canisters"));
+                }
                 L($"tour: {string.Join(", ", targets.Select(t => $"{t.label} {t.id}"))}");
-                index = -1; stepAt = Time.unscaledTime;
-                LinksUntil = Time.unscaledTime + targets.Count * StepSeconds + 5f;
+                index = -1; t0 = Time.unscaledTime - StepSeconds;
+                LinksUntil = Time.unscaledTime + targets.Count * StepSeconds + 30f;
             }
 
             internal static void Tick(MoonWorld world, float now)
             {
-                if (index >= targets.Count || targets.Count == 0) return;
+                if (t0 < 0f || index >= targets.Count || targets.Count == 0) return;
                 var walker = Walker();
                 if (walker == null) return;
-                if (now >= stepAt)
+                if (now >= t0 + StepSeconds)
                 {
                     index++;
+                    ForceHammer = false;
                     if (index >= targets.Count) { L("tour: done"); return; }
+                    t0 = now; stage = 0;
                     var (id, label) = targets[index];
-                    stepAt = now + StepSeconds; checkAt = now + 1.5f; shotAt = now + 3.5f; checkedAim = false;
-                    if (id >= 0) { Near(world, walker, id); Aim(walker, At(world, id) + At(world, id).normalized, 1f); }
-                    else if (id == -3) { Near(world, walker, Gen); Aim(walker, At(world, Gen), 1f); Canisters.Carry(world); }
+                    if (id >= 0) Near(world, walker, id);
+                    else if (id == -4) { RoutesLive = true; Arm(now, "routes on"); L($"tour: routes on ({DevTools.PowerUxTest.Value})"); }
                     else if (id == -2) FarWalk(world, walker);
+                    else if (id == -5) SideView(world, walker);
+                    else if (id == -6 || id == -7) CloseUp(world, walker, id == -6);
                     L($"tour: looking at {label} {id}");
                 }
                 var inter = UnityEngine.Object.FindFirstObjectByType<MoonProductionInteraction>();
                 int aimed = inter != null ? inter.Aimed(world) : -9;
                 int want = targets[index].id;
-                if (want >= 0 && !checkedAim && now >= checkAt)
+                var target = want >= 0 ? At(world, want) + At(world, want).normalized : farTarget;
+                float dt = now - t0;
+                if (stage == 0 && dt > 0.3f) { stage = 1; if (want >= 0 || want == -2 || want <= -5) Aim(walker, target, 1f); }
+                if (stage == 1 && dt > 1.5f)
                 {
-                    checkedAim = true;
-                    if (aimed != want) { Aim(walker, At(world, want) + At(world, want).normalized, -1f); L($"tour: Aimed {aimed} != {want}; aimed again with the pitch negated"); }
-                    else L($"tour: Aimed {aimed} == target; LookPitch {walker.LookPitch:F1}");
+                    stage = 2;
+                    if (want >= 0 && aimed != want) { Aim(walker, target, -1f); L($"tour: Aimed {aimed} != {want}; aimed again with the pitch negated"); }
+                    else L($"tour: Aimed {aimed}; LookPitch {walker.LookPitch:F1}");
                 }
-                if (shotAt > 0f && now >= shotAt)
-                {
-                    shotAt = -1f;
-                    L($"tour: at the shot Aimed {aimed}, want {want}; look panel: {Patches.PanelTexts(inter?.look)}");
-                    Shot(targets[index].label);
-                }
+                if (stage == 2 && dt > 3.0f) { stage = 3; Capture(inter, aimed, want, "hammer off"); }
+                if (stage == 3 && dt > 3.2f) { stage = 4; if (want >= 0 || want == -5) { ForceHammer = true; L("tour: HoldingBuildTool forced true"); } else if (want <= -6) Aim(walker, target, -1f); }
+                if (stage == 4 && dt > 6.0f) { stage = 5; if (want >= 0 || want <= -5) Capture(inter, aimed, want, want <= -6 ? "pitch negated" : "hammer on"); }
+            }
+
+            static void Capture(MoonProductionInteraction inter, int aimed, int want, string how)
+            {
+                var look = inter?.look;
+                string vis = T(() => look == null ? "no look panel" : $"canvas active {look.canvas?.activeInHierarchy} alpha {look.group?.alpha:F2}");
+                L($"tour: shot ({how}) Aimed {aimed}, want {want}; {vis}; look panel: {Patches.PanelTexts(look)}");
+                if (want == -2) Canisters.FarReport(CoreState.World ?? CoreState.FindWorld());
+                Shot($"{targets[index].label}, {how}");
             }
 
             // Stand 5 m off the depot, on the side facing where the walker started.
             static void Near(MoonWorld world, MoonWalker walker, int id)
             {
+                if (id < 0 || !world.depots.ContainsKey(id)) { L($"tour: no depot {id} to walk to"); return; }
                 var c = At(world, id);
                 var up = c.normalized;
                 var dir = Vector3.ProjectOnPlane(home - c, up);
@@ -640,18 +728,51 @@ namespace StructureLib
                 L($"tour: teleported to {V(ground)} (onStructure {on}), {Vector3.Distance(ground, c):F1} m from depot {id}");
             }
 
+            // tint: 2.5 m from the belt into the generator (3 m from its end) or from the ground canisters, looking at them.
+            static void CloseUp(MoonWorld world, MoonWalker walker, bool belt)
+            {
+                Vector3 at;
+                if (belt)
+                {
+                    int b = BeltIntoGen(world);
+                    if (b < 0) { L("tour: no belt for the close-up"); return; }
+                    var path = world.BeltPath(b);
+                    at = path.Point(Mathf.Max(0f, path.Length - 2.5f));
+                }
+                else at = Canisters.GroundSpot;
+                var up = at.normalized;
+                var dir = Vector3.ProjectOnPlane(home - at, up).normalized;
+                var ground = world.SurfaceAt((at + dir * 4f).normalized, out Vector3 gUp, out bool _);
+                walker.Teleport(ground + gUp * 0.2f, true);
+                farTarget = at + up * 0.3f;
+                L($"tour: close-up from {V(ground)} at {V(at)}");
+            }
+
+            // Stand 9 m off the generator-chamber midpoint, square to the line, and look at the midpoint.
+            static void SideView(MoonWorld world, MoonWalker walker)
+            {
+                var a = At(world, Gen); var b = At(world, Chamber);
+                var mid = (a + b) / 2f; var up = mid.normalized;
+                var side = Vector3.Cross(up, (b - a).normalized).normalized;
+                if (Vector3.Dot(side, home - mid) < 0f) side = -side;
+                var ground = world.SurfaceAt((mid + side * 14f).normalized, out Vector3 gUp, out bool _);
+                walker.Teleport(ground + gUp * 0.2f, true);
+                farTarget = mid + up * 1.5f;
+                L($"tour: side view from {V(ground)} at the pair midpoint {V(mid)}");
+            }
+
             static Vector3 farTarget;
             static void FarWalk(MoonWorld world, MoonWalker walker)
             {
+                if (Gen < 0) { L("tour: far walk skipped: no generator"); return; }
                 var c = At(world, Gen);
                 var up = c.normalized;
                 var away = Vector3.ProjectOnPlane(home - c, up).normalized;
                 var axis = Vector3.Cross(up, away).normalized;
-                var p = Quaternion.AngleAxis(70f / c.magnitude * Mathf.Rad2Deg, axis) * c;
+                var p = Quaternion.AngleAxis(105f / c.magnitude * Mathf.Rad2Deg, axis) * c;
                 var ground = world.SurfaceAt(p.normalized, out Vector3 gUp, out bool _);
                 walker.Teleport(ground + gUp * 0.2f, true);
                 farTarget = c;
-                Aim(walker, c, 1f);
                 L($"tour: far walk to {V(ground)} ({Vector3.Distance(ground, c):F1} m from the generator)");
             }
 
@@ -696,7 +817,7 @@ namespace StructureLib
             static bool logged;
             internal static void Tick(MoonWorld world)
             {
-                if (!Test("arc") || Gen < 0 || Chamber < 0) return;
+                if (!RoutesLive || !Test("arc") || Gen < 0 || Chamber < 0) return;
                 if (links == null)
                 {
                     var inter = UnityEngine.Object.FindFirstObjectByType<MoonProductionInteraction>();
