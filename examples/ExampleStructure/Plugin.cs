@@ -47,6 +47,8 @@ namespace ExampleStructure
                 ShortName = "grit",
                 UnitKilograms = 3,
                 Price = 2m,
+                // Grey-blue grit in a near canister view (belt, ground, hand); far canisters still look like dust.
+                CanisterTint = new Color(0.55f, 0.55f, 0.60f),
             }, Guid);
 
             // A processor on the pressure chamber's model: grinds moon dust into example grit, 2 kg per 4 s cycle.
@@ -79,7 +81,8 @@ namespace ExampleStructure
 
             // A fuel generator on the solar post's model (the battery bank prefab has no MoonProductionView; see the recon
             // note, "Power sources (Task 11)"): burns 1 kg of example grit per 5 s cycle into its 2 kWh
-            // battery (two cycles fill it) and supplies up to 5 kW to modded machines within 20 m.
+            // battery (two cycles fill it) and supplies up to 12 kW to machines within 20 m: enough for a vanilla pressure
+            // chamber's 10 kW plus the example grinder (the power-vanilla-fed self-test).
             MoonStructures.Register(new StructureDefinition
             {
                 Id = "ryanhartwig.example-burner",
@@ -91,7 +94,7 @@ namespace ExampleStructure
                 // Shown instead of the solar post (blender/example_burner.py); its Port_Grit in node sits exactly on the declared
                 // port below, and model ports win.
                 Model = "example_burner.bin",
-                Power = new PowerDefinition { PeakKw = 5, BatteryKwh = 2, Range = 20, SupplyMode = SupplyMode.Fuel },
+                Power = new PowerDefinition { PeakKw = 12, BatteryKwh = 2, Range = 20, SupplyMode = SupplyMode.Fuel },
                 Processor = new ProcessorDefinition
                 {
                     RunningKw = 0,

@@ -1,0 +1,68 @@
+== MoonCleaners.MoonDustCanisterInteraction : UnityEngine.MonoBehaviour
+  P MoonCleaners.MoonWalker walker
+  P MoonCleaners.MoonDustInventory inventory
+  P MoonCleaners.MoonDustCanisterView target
+  P MoonCleaners.MoonDustCanisterView carriedView
+  P MoonCleaners.MoonWorld carryWorld
+  P System.String carrierId
+  P System.Int32 carriedId
+  P MoonCleaners.MoonCoffee coffee
+  P System.Boolean charging
+  P System.Single chargeStarted
+  P Il2CppSystem.Collections.Generic.List`1<MoonCleaners.MoonDroppedCanister> nearby
+  P System.Int32 aimedBelt
+  P System.Boolean beltRoom
+  P UnityEngine.Vector3 beltAim
+  P UnityEngine.Vector3 beltPosition
+  P UnityEngine.Quaternion beltRotation
+  P UnityEngine.GameObject capsuleCanvas
+  P UnityEngine.GameObject capsulePrompt
+  P MoonCleaners.MoonActionPromptCard payloadCard
+  P MoonCleaners.MoonActionPromptCard collectCard
+  P MoonCleaners.MoonActionPromptCard carryCard
+  P MoonCleaners.MoonActionPromptCard throwCard
+  P UnityEngine.Material capsuleHighlight
+  P MoonCleaners.MoonDustCanisterView highlightedCapsule
+  P Il2CppInterop.Runtime.InteropTypes.Arrays.Il2CppReferenceArray`1<UnityEngine.MeshRenderer> highlightMeshes
+  P UnityEngine.Material beltGhost
+  P MoonCleaners.MoonDustCanisterView ghostOf
+  P Il2CppInterop.Runtime.InteropTypes.Arrays.Il2CppReferenceArray`1<UnityEngine.MeshRenderer> ghostParts
+  P System.Boolean HasTarget
+  P System.Boolean IsCarrying
+  P System.Double CarriedKilograms
+  P System.Single CarriedFill
+  P MoonCleaners.MoonCargo CarriedCargo
+  P System.Single ThrowCharge
+  M static String Mass(Double kg)
+  M Void Awake()
+  M Void Update()
+  M Void LateUpdate()
+  M Void CollectDust()
+  M Boolean TryCarry(Int32 id, String& message)
+  M Int32 AimedReceiver(MoonDustStation& station, String& action)
+  M Boolean UseCarriedAt(String& message)
+  M Boolean CanHandleCapsule()
+  M Boolean TryPackToHands(String& message)
+  M Boolean TryDrop(String& message)
+  M Boolean TryPlaceCarried(String& message)
+  M Void AimBelt()
+  M Boolean FindDropPoint(Vector3& point, Vector3& normal)
+  M Boolean TryGroundPoint(Vector3 position, Vector3 up, Vector3& point, Vector3& normal)
+  M Boolean TryThrowCarried(Single charge, String& message)
+  M Void ClearCarriedView()
+  M Void CancelCarry()
+  M Void RefreshViews()
+  M Void Notify(String message)
+  M Void OnDisable()
+  M Void OnDestroy()
+  M Void OnGUI()
+  M Void OnEnable()
+  M Void RefreshCapsulePresentation()
+  M Void DrawCapsuleHighlight(MoonDustCanisterView view)
+  M Void DrawBeltGhost()
+  M Void BuildCapsulePrompt()
+  M Void HideCapsulePresentation()
+  M Void ReleaseCapsulePresentation()
+  M Void .ctor()
+  M Void .ctor()
+  M Void .ctor(IntPtr pointer)

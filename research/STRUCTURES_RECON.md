@@ -274,6 +274,9 @@ decks and foundations are refused as donors.
     | `CrewProcessorLoad`, `CanStartCycle`, `TryStartCycle`, `FinishCycle`, `EmitProduct`, `HandOff` | instance | 416..3168 | none | unchanged |
     | `TryBuildDepot`, `RemoveStructureNow`, `RestoreDepots`, `RestoreCanisters`, `RestoreProduction`, `SnapshotCanisters`, `SolvePower`, `EmitCargo` | instance | 560..9440 | none | unchanged (postfix/prefix as before) |
     | `MoonProgressStore.Write` / `Serialize`, `MoonDepotSave.Write`, `MoonProductionSave.Write` | static | 864..5008 | none | unchanged |
+    | `MoonProductionInteraction.ShowPanel` (power UX, 2026-11-02) | instance | 6912 | none (normal prologue) | prefix + postfix: draws the modded panel; vanilla runs for every other kind (POWER_UX_RECON.md, "A") |
+    | `MoonProductionInteraction.Update` (power UX) | instance | 2688 | none (normal prologue) | postfix: the no-tool panel for a modded machine |
+    | `MoonDustCanisterView.ShowCargo(MoonCargo)` (power UX) | instance | 1152 | none (normal prologue) | postfix: `CanisterTint` on the near view (POWER_UX_RECON.md, "D") |
     | `TryPanel(int, out PanelSpec)` (not patched) | yes | 272 | none | not patched (`out` struct crash, see below) |
 
     Decoded vanilla answers (for checking the load-time log line "Leaf tables recorded"):
@@ -447,12 +450,15 @@ with `ProducesPower`, `RunningKw 0`, 5 s cycle, Input grit 10 kg → Batch "Burn
   prefix skips it for modded `ProducesPower` kinds.
 - **Charge persists.** The production snapshot's `charge` carries `ChargeKwh`: the sidecar recorded the burner with
   `Charge 2`, and on reload the restored burner read 2.0000 kWh and joined grid -26 again (reload1).
-- **Limits.**
-  - A vanilla machine is never fed by a fuel generator: `powerGrids` holds structs that managed code cannot write back
-    (Task 10), so a vanilla grid's totals never see modded supply, and vanilla machines get their satisfaction from
-    vanilla's own solve. A possible later route: a vanilla machine's `MoonProductionState` fields are writable, so a
-    postfix could raise its `Power` from fuel after the solve. Not built.
-  - No power link is drawn to or from a modded structure (`powerLinks` is not touched).
+- **Limits.** (The first two were lifted by the power UX work, 2026-11-02/03: see `research/POWER_UX_RECON.md`, "B.
+  Fuel power to vanilla machines" and "C. Arcs", and the README's "Power" section.)
+  - ~~A vanilla machine is never fed by a fuel generator.~~ Now: `powerGrids` still holds structs that managed code
+    cannot write back (Task 10), so a vanilla grid's totals never see modded supply; but the "later route" noted here
+    was built: after the solve, the `SolvePower` postfix raises a vanilla machine's `Power` / `UsedKw` from the
+    `ChargeKwh` of fuel generators whose `Range` reaches it (`Pure/FuelTopUp.cs`), and writes its `powerStatus`.
+  - ~~No power link is drawn to or from a modded structure.~~ Now: `powerLinks` is still not touched, but the library
+    draws its own arcs and one range ring with a second `MoonPowerLinks` (`PowerLinksView.cs`), with the build tool
+    held on a fuel-network member.
   - A machine reached by a vanilla grid only through the fuel generator's network still reports and draws from that
     vanilla grid (the network's id), since it is on the same grid.
   - Only `SupplyMode.Fuel` generators with a `ProducesPower` processor supply. A `SupplyMode.Solar` definition answers
