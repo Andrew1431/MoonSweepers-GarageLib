@@ -4,6 +4,14 @@ Fundamental decisions about the repo and its libraries, newest first, so every m
 Andrew asked (2026-11-01) for a change log the agents contribute to; the work-order board is the other copy, for
 whoever can write there. One line per decision: date, who, what, where the detail lives.
 
+- 2026-11-03, agent (Ryan not answering design questions during this work): **Power UX for modded structures:** the
+  library draws its own power arcs and range ring with a second `MoonPowerLinks` (vanilla's `ShowGrid` cannot include
+  modded members, and `powerLinks` / `powerGrids` are not written), shown with the build tool held on a fuel-network
+  member, with one ring (the type has a single ring renderer); fuel generators feed vanilla machines only within their
+  own `Range` (fuel never flows through a vanilla grid), the energy taken from `ChargeKwh`; `CanisterTint` is applied
+  to the near canister view only (far, instanced canisters stay dust); modded generators and machines get their own
+  look-at panel, routers none. Detail: `docs/superpowers/specs/2026-11-02-power-ux-design.md`,
+  `research/POWER_UX_RECON.md`, `src/StructureLib/README.md` "Power".
 - 2026-11-02, Ryan: **Belt ports are definition data, authored in the model:** a structure's ports come from its
   model's `Port_*` nodes (else `StructureDefinition.Ports`, else the donor's); modded machines take belt input
   (`HandOff`, `CargoEntered`) and give belt output (vanilla emits, `CargoEmitted`); `Model = "<file>.bin"` swaps a

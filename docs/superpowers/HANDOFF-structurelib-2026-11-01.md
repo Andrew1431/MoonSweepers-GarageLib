@@ -76,6 +76,36 @@ green and the chain run 34/0 again, the first card render 5 ticks after the stan
 Deferred minor findings of this plan: the `Minor deferred:` lines in the ledger
 (`grep "Minor deferred" .superpowers/sdd/2026-11-02-structurelib-belts-and-models/progress.md`), one per reviewed task.
 
+## Power UX (2026-11-02/03)
+
+Spec `docs/superpowers/specs/2026-11-02-power-ux-design.md`, plan `docs/superpowers/plans/2026-11-02-power-ux.md`,
+recon `research/POWER_UX_RECON.md`; branch `power-ux` (off `structurelib-lib`), not pushed. What landed: modded
+generators and machines show their own look-at panel instead of the tracker's (`Patches/PanelPatches.cs`: `ShowPanel`
+prefix + postfix, an `Update` postfix for machines without the build tool, gated on menus, vehicles and a carried
+canister; routers show none); fuel generators feed vanilla machines within their `Range` from `ChargeKwh` (the
+`SolvePower` postfix, `Pure/FuelTopUp.cs`, a fully fed machine reads "Powered by <generator>"); the library draws its
+own cyan arcs and one range ring with the build tool held on a fuel-network member (`PowerLinksView.cs`); and
+`CanisterTint` is applied to the near canister view (`Patches/CanisterPatches.cs`; far canisters stay dust; the example
+grit is tinted). Self-test checks: `panel-generator`, `panel-machine`, `panel-vanilla-untouched`, `power-vanilla-fed`,
+`arc-drawn` (`[Dev] ForceArcs`), `cargo-tint`; dev probe `PowerUxProbe` / `PowerUxTest` / `PowerUxTeleport` /
+`PowerUxHome`. Unit tests 180 green. Standard configs on a fresh slot-2 (Task 6): belt output + power 50/0, belt boxes
+chain 49/0, reload 37/0. `power-vanilla-fed` passed in Task 3's own run (a chamber AutoBuilt next to the burner); in
+the standard configs it is not applicable (no `96` in AutoBuild, or the line layout puts the chamber outside the
+burner's network). The by-hand test bed (slot-2 as this plan's runs left it: SandPower compactors 26 and 27, generator
+28, chambers 29, 41 and 46, example grinder 31 and burner 32; `[Dev] PowerUxProbe = true` with `PowerUxHome =
+22.39,1993.00,-29.77` puts the walker there) is kept at `C:\Users\ryguy\projects\moonsweep\.scratch\slot-2-power-ux-bed`;
+copy it over slot-2 to use it. slot-2 itself is now the belt boxes reload run's world.
+
+**By hand for this plan** (not covered by any self-test):
+- Arcs and the ring in real lighting and at the player's eye, with the real build tool (the self-test forces them; the
+  probe forced the tool); the ring was never clearly seen in a screenshot.
+- Canister tint in real lighting at the player's eye, on a belt as well as on the ground (only ground canisters were
+  screenshotted; the tint multiplies the dust fill, so grit reads darker blue-grey dust).
+- A fed vanilla machine's status text and panel (`Powered by <generator>`; the POWER row still reads "no panels in
+  reach").
+- Far canisters (beyond about 100 m) stay plain dust: walk away from a tinted belt and look back.
+- The no-tool panel in states not tested: the map open, driving (the pause menu and sitting in a vehicle were checked).
+
 ## Before merging (Ryan or Andrew)
 
 1. **Merge PR #2 (the library) first, with a merge commit or a rebase, not a squash.** A squash would make PR #1's

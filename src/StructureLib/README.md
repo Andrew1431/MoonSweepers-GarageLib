@@ -58,8 +58,10 @@ MoonStructures.Register(new StructureDefinition
   assemblies sees one type and gets no CS0433; reference GarageLib if you need `MeshModel` yourself.
 - **Cargo** (`MoonStructures.RegisterCargo(CargoDefinition, ownerGuid)`): `Id`, `Value` (a byte 3..255 claimed in
   [`docs/cargo-registry.md`](../../docs/cargo-registry.md)), `Name`, `ShortName`, `UnitKilograms`, `Price` (dollars
-  per unit). `CanisterTint` is not applied yet. It returns the `Cargo` handle for slots, or `Cargo.None` when
-  refused. Vanilla cargo handles are `Cargo.Dust`, `Cargo.Sand`, `Cargo.Stone`.
+  per unit), `CanisterTint` (optional: multiplies the near canister view's dust fill, so the cargo reads as tinted
+  dust on belts, on the ground and in the hand; the look-at panel colours its rows with it too). Far canisters (beyond
+  about 100 m, drawn instanced) are not tinted and look like dust. It returns the `Cargo` handle for slots, or
+  `Cargo.None` when refused. Vanilla cargo handles are `Cargo.Dust`, `Cargo.Sand`, `Cargo.Stone`.
 - **Processors** (`StructureDefinition.Processor`): `RunningKw`, `CycleSeconds`, up to 8 `Slots`: at least one
   `Slot.Input`, at least one `Slot.Batch`, and one `Slot.Output` unless `ProducesPower`. Capacities are kilograms. A
   cycle starts when every Batch slot can be filled to capacity from an Input slot of the same cargo and the Output
@@ -238,6 +240,8 @@ lines and `[selftest] done: N passed, M failed`. Leave the switches at their def
 | `RegisterBadPorts` | The example registers a structure whose port cargo no slot holds; the registry must drop it (`ports-rules-logged`). |
 | `RegisterBoxProbe` | The example registers `ryanhartwig.example-box-probe`, a box splitter router (floodlight donor, 1.4 m footprint, In / Forward / Left / Right); 15 s after load its definition, view and colliders are logged and three dust canisters are put on the AutoBelt belt into it and followed for 10 s (CargoRouted count, riders). |
 | `ForcePower`, `ScreenshotMenu` | Run modded processors at full power whatever the grid gives (isolating power problems only); screenshot the build menu after the self-test. |
+| `ForceArcs` | Draw every fuel network's power arcs every frame, without the build-tool and aim gate (`arc-drawn`; it also empties full outputs of the example grinder and of pressure chambers within 20 m of the burner so something draws power). |
+| `PowerUxProbe`, `PowerUxTest`, `PowerUxTeleport`, `PowerUxHome` | The power-UX recon probe (`DevPowerUx.cs`, `[powerux]` lines): traces the panel, solve, arcs and canister views and tours the AutoBuild depots with screenshots to `BepInEx/cache/structurelib/powerux-<n>.png`; `PowerUxTest` picks experiments (`fuel`, `link`, `anchor`, `arc`: the real arc gate, `tint`, `far`, `gates`: the panel with the pause menu open and in a vehicle); `PowerUxTeleport` / `PowerUxHome` (with the probe) move the walker before AutoBuild (to a free spot, or to a point). |
 
 Checks whose setup a run lacks log `[selftest] ... not applicable` (an Info line, not a failure), and only then:
 - `power-burner-supplies`, `power-grinder-runs-on-burner` and `power-no-burn-when-full` when the burner has no
@@ -248,12 +252,33 @@ Checks whose setup a run lacks log `[selftest] ... not applicable` (an Info line
   none);
 - every `beltboxes-*` check when BeltBoxes is not installed.
 
+Power UX checks (`DevPowerChecks.cs`), one line each:
+- `panel-generator`: the burner's panel has its own name, a `FUEL POWER` kicker and the rows OUTPUT, BATTERY, FUEL,
+  POWERING (not applicable without a burner).
+- `panel-machine`: the grinder's panel has a `PRODUCTION` kicker, a grit row and CYCLE, no POWER row without power
+  and a POWER row first with it (not applicable without a grinder).
+- `panel-vanilla-untouched`: a pressure chamber still gets vanilla's own panel (not applicable without a chamber).
+- `power-vanilla-fed`: a pressure chamber AutoBuild built out of solar reach is raised to full power by fuel, says
+  `Powered by ...`, runs, and the feeding generators' charge falls (not applicable unless AutoBuild names `96` and the
+  burner and both are built, or when vanilla already powers the chamber).
+- `arc-drawn`: with `ForceArcs`, `PowerLinksView` draws at least one arc within 60 s (not applicable without
+  `ForceArcs`, or when neither `power-vanilla-fed` nor `power-grinder-runs-on-burner` runs).
+- `cargo-tint`: after the other checks, a ground dust canister is made grit with the walker away, its near view reads
+  grit's tint, dust views read white, a pooled view that showed grit reads its next canister's own colour, and the
+  canister goes back to dust (it moves the walker 250 m away twice and puts it back).
+
 The belt checks need their own configs: belt input with `AutoBuild = 96,ryanhartwig.example-grinder,94`, `AutoFeed =
 96:Dust:10`, `AutoBelt = 96:output->ryanhartwig.example-grinder:Dust in` (`ring`, `SunOverhead`; `belt-canister-modded`
 needs the long ring belt, 15 m); belt output and power with `AutoBuild = ryanhartwig.example-grinder,ryanhartwig.example-burner,ryanhartwig.example-lamp`,
 `AutoFeed = ryanhartwig.example-grinder:Dust:6;ryanhartwig.example-burner:ryanhartwig.example-grit:4`, `AutoBelt =
-ryanhartwig.example-grinder:Grit out->ryanhartwig.example-burner:Grit in`. In one combined run the chamber's sand
-queues on the grinder's belt and the belt-input checks fail.
+ryanhartwig.example-grinder:Grit out->ryanhartwig.example-burner:Grit in`, `SunOverhead = true`, `ForceArcs = true`
+(`arc-drawn`), `DumpCards = true` (`model-card`). In one combined run the chamber's sand queues on the grinder's belt and the belt-input checks fail.
+
+Every standard config wants a fresh slot-2: with the game closed, replace
+`%USERPROFILE%\AppData\LocalLow\DragDropGames\MoonSweepers\MoonSessions\slot-2` with a clean copy (here
+`..\.scratch\slot-2-backup-task11` beside the repo) before the run; a reload run takes the slot its chain run saved
+instead. The game autosaves into the loaded slot, so a used slot keeps earlier runs' depots: AutoBuild reuses them,
+their full outputs stop the machines, and a ring site next to them refuses the belt ("Turn too tight").
 
 **Belt boxes** (`DevBoxes.cs`, with [BeltBoxes](../../mods/BeltBoxes) installed). Chain run: `AutoBuildLayout = line`,
 `AutoBuildGap = 1.3,1.3,5,1.3`, `AutoBuild = 96,ryanhartwig.example-grinder,ryanhartwig.box-splitter,ryanhartwig.box-merger,ryanhartwig.example-burner`,
@@ -281,12 +306,12 @@ belt). Removal runs last because the game saves a few seconds after it.
 | Build menu | Catalog entry, note, rendered card art; placement through the menu's own path (`PlanStructure`, site check, `TryBuildStructure`, which records a free pose) saves and reloads cleanly with its pose (dev `AutoBuildViaPlan`) | | Placing a structure by hand (the real ghost and the remove tool) |
 | Build and remove | Build, refund, removal, `Built` and `Removed` | | |
 | Save | Sidecar for depots (pose included), production states and modded-cargo canisters; orphans kept; reload restores (see [Save audit](#save-audit)) | A modded robot dock's robots-off setting (resets on load); a modded garage holding vehicles | |
-| Cargo | Names, unit mass, price, canister round trip, modded canisters riding belts (see [Cargo audit](#cargo-audit)) | Depositing modded cargo at the collector; co-op cargo events; `CanisterTint` (not applied) | |
+| Cargo | Names, unit mass, price, canister round trip, modded canisters riding belts (see [Cargo audit](#cargo-audit)); `CanisterTint` on the near canister view, a pooled view reused for another cargo getting its own colour back (`cargo-tint`) | Depositing modded cargo at the collector; co-op cargo events; `CanisterTint` on far (instanced) canisters, which stay dust | Tint at the player's eye in real lighting (checked on a screenshot only) |
 | Processors | Cycle, batch moved at the same mass, `CycleFinished`, loading through `CrewProcessorLoad`; belt input through a declared port (`HandOff` prefix, `CargoEntered`; a canister of another cargo, or one arriving while its slot is full, waits at the belt end); belt output (vanilla `EmitProduct`/`EmitCargo`, 1 kg canisters, `CargoEmitted`); machine-to-machine chains by belt (the example grinder to burner, self-test `belt-chain-feeds`), saved and reloaded with canisters on the belts | Walker loading (`LoadProcessor` refuses: "Not a production machine"); a structure without a processor taking belt input | Belt input in co-op (the host decides; clients untested) |
 | Ports | Declared ports (and a port on a port-less donor) written into the cloned definition as `sl:<cargo>:<Name>`; `PortCargo` answers the declared cargo; the game shows "input"/"output" and "<name> input/output"; refusal at freeze for a port cargo no slot holds | | Belts placed by hand onto modded ports (dev `AutoBelt` builds through the game's `TryBuildConveyor`); ports inherited from a donor (no example uses them) |
 | Models | `Model` file on the donor template (donor renderers hidden, colliders kept unless `Footprint` is set), ports from its `Port_*` nodes, card picture rendered from it (the example burner); a missing file falls back to the donor model and declared ports | The donor's animated effects on a custom model | Donors with a non-unit `scale` or a skinned mesh (none of the donors checked so far has either) |
 | Routers | Splitter and merger hops on the `HandOff` prefix with `CargoRouted` per hop: round-robin over three outputs (12 hops, 4 each), skipping a removed output belt with nothing lost, mergers serving three inputs in turn, a 3 kg canister hopping whole, grit balanced to 0.01 kg through both boxes (BeltBoxes self-test, `beltboxes-*`); both boxes, five belts and every canister saved and reloaded; `Footprint` written into the clone (`halfFootprint` 0.70 × 0.70) with the collider swap under a `Model`; side-port U-belts (5 m between boxes); routers, belts and waiting canisters saved and reloaded, a router removed mid-traffic with its belts kept | Cut-in onto an existing belt; canisters visibly crossing the box | Belts placed by hand onto router ports (0.7 m port spacing); vanilla paths gated by `Routes` (true for a router clone), cut-in offers among them; routers in co-op (the host decides; clients untested) |
-| Power | Machines on a vanilla grid's surplus and batteries; fuel generators charge, supply modded machines and vanilla machines in range (a pressure chamber run to full power and through a cycle from a generator's charge, `power-vanilla-fed`) and keep their charge across saves; a modded-only group gets a negative grid id | Vanilla grid totals and the vanilla panel's POWER row for a fuel-fed vanilla machine; power links drawn to modded structures; `SupplyMode.Solar`; `Power` without a `Processor`; a generator's `RunningKw` (ignored) | |
+| Power | Machines on a vanilla grid's surplus and batteries; fuel generators charge, supply modded machines and vanilla machines within `Range` (a pressure chamber run to full power and through a cycle from a generator's charge, `power-vanilla-fed`, status `Powered by <generator>`) and keep their charge across saves; a modded-only group gets a negative grid id; own look-at panel for generators (with the build tool) and machines (with or without it), vanilla panels untouched (`panel-*`); power arcs and one range ring with the build tool held on a fuel-network member (`arc-drawn` with `ForceArcs`; the real gate through the dev probe) | Vanilla grid totals and the vanilla panel's POWER row for a fuel-fed vanilla machine; a vanilla machine fed only through a vanilla grid (out of every generator's `Range`); `SupplyMode.Solar`; `Power` without a `Processor`; a generator's `RunningKw` (ignored); a panel for routers; a ring per generator (one ring only) | The no-tool panel with the map open or while driving (pause menu and a mounted vehicle were checked); arcs and ring by eye at the player's eye in real lighting |
 | Co-op | Manifest built and compared with itself | Graceful degradation for a client missing a mod | Both two-player cases (identical mods; client missing a mod) |
 
 ## Power
@@ -294,7 +319,7 @@ belt). Removal runs last because the game saves a few seconds after it.
 A modded machine (a `ProcessorDefinition`) and a modded fuel generator (a `ProcessorDefinition` with `ProducesPower`
 plus a `PowerDefinition` with `SupplyMode.Fuel`) are attached to the power grid after the game's own solve; the game's
 solve never sees modded kinds. Details and evidence: `research/STRUCTURES_RECON.md`, "Processors (Task 10)" and
-"Power sources (Task 11)".
+"Power sources (Task 11)"; the panel, vanilla machines, arcs and canister tint: `research/POWER_UX_RECON.md`.
 
 - **Grid id** (`MoonProductionState.Grid`): the vanilla grid of the nearest vanilla power node whose range reaches the
   structure. Otherwise the id of its fuel network (every modded structure within a fuel generator's `Range`, chained
@@ -307,13 +332,33 @@ solve never sees modded kinds. Details and evidence: `research/STRUCTURES_RECON.
   always 1, `SuppliedKw` is what it gave in the last solve, and it is listed in `world.powerNodes` as a panel node
   between solves. Its charge is saved with the production record.
 - **Vanilla machines** (nodes with demand that their own grid leaves below `Power` 1) within a fuel generator's
-  network take the unmet share of their demand from the network's generators, after the modded machines and in depot-id
-  order (`FuelTopUp`), out of the generators' `ChargeKwh`. Only `Power`, `UsedKw` and the status text ("Powered by
-  <generator>") change; `Grid` stays the machine's own, and a vanilla machine never changes a modded member's grid id.
-  The vanilla grid's totals still leave out the fuel supply (they cannot be written from managed code), so the
-  vanilla panel's POWER row reads "no panels in reach" for a fuel-fed machine.
-- **Not supported:** power links drawn to modded structures, supply from `SupplyMode.Solar` definitions, and supply
-  from a `Power` definition without a `Processor` (it has no production state to hold charge).
+  `Range` (centre to centre) take the unmet share of their demand from that generator's network, after the modded
+  machines and in depot-id order (`Pure/FuelTopUp.cs`). The energy rule: the drawn kW is the smaller of the unmet
+  share (`DemandKw × (1 − Power)`) and what the network's generators still have to give this solve, and it comes out of
+  their `ChargeKwh` exactly like a modded machine's draw; nothing is created. A machine its own grid already covers
+  (or partly covers) keeps that part. Only `Power`, `UsedKw` and the status text change; `Grid` stays the machine's
+  own, and a vanilla machine never changes a modded member's grid id. A fully fed machine's `powerStatus` reads
+  `Powered by <generator name>` (rewritten every solve, since vanilla's solve resets it); a partly fed one keeps
+  vanilla's "No power" text. The vanilla grid's totals still leave out the fuel supply (they cannot be written from
+  managed code), so the vanilla panel's POWER row reads "no panels in reach" for a fuel-fed machine.
+- **Look-at panel** (`Patches/PanelPatches.cs`, texts from `Pure/PanelText.cs`). Aiming a modded generator or machine
+  shows its own panel instead of the solar tracker's. A generator (with the build tool held, as vanilla power sources):
+  kicker `FUEL POWER  ·  <Range> M RANGE`, its name, a state (`Burning <fuel>`, `Battery full: burns when power is
+  drawn`, `No fuel: ...`, `Starting`), rows OUTPUT (supplied / peak kW), BATTERY (charge / capacity kWh), FUEL (kg in
+  its first Input slot) and POWERING (machines it fed in the last solve). A machine (with or without the build tool):
+  kicker `PRODUCTION  ·  <INPUT> INTO <OUTPUT>`, its name and status, a POWER row with the build tool, a row per Input
+  and Output slot (coloured with the cargo's `CanisterTint` for a modded cargo) and CYCLE. Without the tool the panel
+  stands down while a menu is open, the walker is in a vehicle or carries a canister. Routers show no panel (vanilla
+  never aims them); vanilla structures keep their own panels untouched.
+- **Power arcs** (`PowerLinksView.cs`). With the build tool held and a member of a fuel network aimed (a generator or
+  a machine it fed), the library draws a cyan arc from each generator of that network to every machine, modded or
+  vanilla, it fed in the last solve, plus one ring of `Range` around the aimed generator (else the network's first
+  generator): `MoonPowerLinks` has a single ring. It uses its own `MoonPowerLinks`, because vanilla's `ShowGrid` cannot
+  include modded members. Dropping the tool or aiming elsewhere clears them. A generator without a `PowerAnchor`
+  starts its arcs about 2 m above its position.
+- **Not supported:** supply from `SupplyMode.Solar` definitions; supply from a `Power` definition without a
+  `Processor` (it has no production state to hold charge); a vanilla machine out of every generator's `Range` but on a
+  vanilla grid that reaches one (fuel never flows through a vanilla grid); a look-at panel for routers.
 - **A generator's `RunningKw` is ignored:** a fuel generator always reads `Power` 1 and `DemandKw` 0 and never draws
   from the grid, so setting `RunningKw` on a `ProducesPower` processor has no effect. Leave it 0.
 - **Do not patch `MoonWorld.TryPanel`:** a Harmony prefix on it killed the game natively after world load. See
