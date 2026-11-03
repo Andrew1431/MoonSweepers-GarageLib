@@ -41,7 +41,8 @@ namespace StructureLib.Patches
             return false;
         }
 
-        // A modded machine or fuel generator during one solve.
+        // A modded machine, a modded fuel generator, or a vanilla machine a fuel generator may top up (Def null, Vanilla its
+        // own node), during one solve.
         sealed class Member
         {
             internal StructureDefinition Def;
@@ -52,6 +53,29 @@ namespace StructureLib.Patches
             internal float VanillaDistance, VanillaRange;
             internal bool Source;
             internal float AvailableKw, SuppliedKw;
+            internal bool IsVanilla => Def == null;
+        }
+
+        // What the last solve did, for the look-at panel's POWERING row and the arcs. Rewritten every solve.
+        internal static class LastSolve
+        {
+            // Generator depot -> the members (modded or vanilla) it gave > 0 kW to.
+            internal static readonly Dictionary<int, List<int>> Fed = new();
+            // Every member's depot (sources included; a vanilla machine only when a fuel generator's network reaches it)
+            // -> network id (the depot id of one member of the network).
+            internal static readonly Dictionary<int, int> NetworkOf = new();
+            // Vanilla member depot -> its Power as vanilla's solve left it, before the top-up.
+            internal static readonly Dictionary<int, float> VanillaPowerBefore = new();
+
+            internal static int FedCount(int generatorDepot) => Fed.TryGetValue(generatorDepot, out var fed) ? fed.Count : 0;
+
+            internal static void Clear() { Fed.Clear(); NetworkOf.Clear(); VanillaPowerBefore.Clear(); }
+
+            internal static void AddFed(int generatorDepot, int member)
+            {
+                if (!Fed.TryGetValue(generatorDepot, out var fed)) Fed[generatorDepot] = fed = new List<int>();
+                if (!fed.Contains(member)) fed.Add(member);
+            }
         }
 
         // After the vanilla solve:
@@ -68,8 +92,17 @@ namespace StructureLib.Patches
         //   node. A fuel generator gets Grid, Power 1 (it runs on its own fuel), SuppliedKw and BatteryKw (minus what it
         //   gave), and the drawn kWh out of its ChargeKwh; it is then appended to powerNodes as a panel node until the next
         //   solve rebuilds the list.
+        // - Then, when there is a fuel generator, vanilla machine nodes with demand and Power < 1 join as non-source
+        //   members (centre to centre within a generator's Range, chained like modded members). In depot-id order each
+        //   takes the unmet share of its demand (FuelTopUp) from what its network's generators have left after the modded
+        //   machines; that kW goes into the generators' SuppliedKw, so it comes out of their ChargeKwh like a modded draw.
+        //   Only Power and UsedKw are written (Grid and DemandKw stay as vanilla set them). Vanilla resets them every
+        //   solve and StepProduction reads them after this postfix, so the raise is reapplied every solve
+        //   (POWER_UX_RECON.md, B). Modded grid ids come from a FuelGrid.Assign of the modded members alone, so a vanilla
+        //   machine never changes a modded member's grid or network; a second Assign over all members (the vanilla ones
+        //   with no vanilla grid) gives the vanilla members' networks.
         // The vanilla grid's totals are a struct in a dictionary and cannot be written back from managed code, so they do
-        // not include modded demand or fuel supply, and vanilla machines are never fed by a fuel generator.
+        // not include modded demand or fuel supply.
         [HarmonyPatch(typeof(MoonWorld), nameof(MoonWorld.SolvePower)), HarmonyPostfix]
         static void SolvePower(MoonWorld __instance, float dt)
         {
@@ -79,6 +112,7 @@ namespace StructureLib.Patches
 
         static void AttachModded(MoonWorld world, float dt)
         {
+            LastSolve.Clear();
             var production = world.production;
             var depots = world.depots;
             if (production == null || depots == null || !MoonStructures.Frozen || MoonStructures.Disabled) return;
@@ -113,14 +147,41 @@ namespace StructureLib.Patches
                 members.Add(m);
             }
             if (members.Count == 0) return;
+            int modded = members.Count;
+            if (members.Any(m => m.Source))
+            {
+                var candidates = new List<MoonWorld.PowerNode>();
+                for (int i = 0; nodes != null && i < nodes.Count; i++)
+                {
+                    var n = nodes.get_Item(i);
+                    if (n?.record == null || n.panel || Remap.Live(n.record.kind) != null) continue;
+                    if (n.state != null && n.state.DemandKw > 0f && n.state.Power < 0.999f) candidates.Add(n);
+                }
+                foreach (var n in candidates.OrderBy(n => n.record.id))
+                    members.Add(new Member { State = n.state, Record = n.record, At = n.position, Vanilla = n });
+            }
 
-            var (gridOf, networkOf) = FuelGrid.Assign(members.Select(m =>
+            var (gridOf, networkOf) = FuelGrid.Assign(members.Take(modded).Select(m =>
                 new FuelGrid.Member(m.Record.id, m.At.x, m.At.y, m.At.z, m.Source ? m.Def.Power.Range : 0f, m.Vanilla?.state.Grid ?? 0)).ToList());
+            // The vanilla members' networks. A vanilla machine within reach of generators of two modded networks bridges
+            // them here, for its own (vanilla) draw only: modded members keep the networks of the modded Assign above,
+            // which served them.
+            var powerNet = members.Count == modded ? networkOf : FuelGrid.Assign(members.Select(m =>
+                new FuelGrid.Member(m.Record.id, m.At.x, m.At.y, m.At.z, m.Source ? m.Def.Power.Range : 0f, m.IsVanilla ? 0 : m.Vanilla?.state.Grid ?? 0)).ToList()).Network;
+            // Ledger network ids: a modded member's is the depot id of its modded network's root; a vanilla member's is
+            // that of the first generator (member order, the order it draws in) in its network, so a vanilla machine
+            // shares the id of the generator network it draws from first. A vanilla member with no generator is left out.
+            for (int i = 0; i < modded; i++) LastSolve.NetworkOf[members[i].Record.id] = members[networkOf[i]].Record.id;
+            for (int i = modded; i < members.Count; i++)
+            {
+                int first = Enumerable.Range(0, modded).FirstOrDefault(j => members[j].Source && powerNet[j] == powerNet[i], -1);
+                if (first >= 0) LastSolve.NetworkOf[members[i].Record.id] = members[networkOf[first]].Record.id;
+            }
             var grids = world.powerGrids;
             var surplus = new Dictionary<int, float>();
             var charging = new Dictionary<int, float>();
             var stored = new Dictionary<int, double>();
-            for (int i = 0; i < members.Count; i++)
+            for (int i = 0; i < modded; i++)
             {
                 var m = members[i];
                 if (m.Source) continue;
@@ -132,7 +193,7 @@ namespace StructureLib.Patches
                 if (!surplus.TryGetValue(g, out float left)) left = grid.supplyKw - grid.usedKw;
                 if (!charging.TryGetValue(g, out float charge)) charge = ChargingKw(vanilla, g);
                 if (!stored.TryGetValue(g, out double storedKwh)) storedKwh = grid.storedKwh;
-                var sources = Enumerable.Range(0, members.Count).Where(j => members[j].Source && networkOf[j] == networkOf[i]).ToList();
+                var sources = Enumerable.Range(0, modded).Where(j => members[j].Source && networkOf[j] == networkOf[i]).ToList();
                 float fuelKw = sources.Sum(j => members[j].AvailableKw);
 
                 var (satisfaction, fromSun, fromFuel, fromBattery) = GridShare.Draw(demand, left, fuelKw, storedKwh);
@@ -144,6 +205,7 @@ namespace StructureLib.Patches
                 {
                     members[sources[k]].AvailableKw -= taken[k];
                     members[sources[k]].SuppliedKw += taken[k];
+                    if (taken[k] > 0f) LastSolve.AddFed(members[sources[k]].Record.id, m.Record.id);
                 }
                 double kwh = (fromBattery + takenBack) * (double)dt / 3600.0;
                 double drained = kwh > 0 ? DrainBatteries(vanilla, g, kwh) : 0;
@@ -160,7 +222,9 @@ namespace StructureLib.Patches
                     CoreLog.Once("draw:" + m.Record.id, $"Power: {id} draws {demand} kW on grid {g}: {fromSun:F3} kW from the sun surplus ({left:F2} kW left; {takenBack:F3} kW of it taken back from {charge:F2} kW charging), {fromFuel:F3} kW from fuel generators ({fuelKw:F2} kW available), {fromBattery:F3} kW from batteries; {drained:F7} kWh out of the panels' charge over {dt:F3} s", 3);
             }
 
-            for (int i = 0; i < members.Count; i++)
+            for (int i = modded; i < members.Count; i++) TopUpVanilla(world, members, powerNet, i);
+
+            for (int i = 0; i < modded; i++)
             {
                 var m = members[i];
                 if (!m.Source) continue;
@@ -169,6 +233,66 @@ namespace StructureLib.Patches
                 CoreLog.Once("fuel:" + m.Record.id + ":" + gridOf[i], $"Power: fuel generator '{m.Def.Id}' depot {m.Record.id} on {(gridOf[i] > 0 ? "grid" : "StructureLib grid")} {gridOf[i]}; charge {m.State.ChargeKwh:F3} of {m.Def.Power.BatteryKwh} kWh", 1);
                 if (m.SuppliedKw > 0f) CoreLog.Once("supply:" + m.Record.id, $"Power: fuel generator '{m.Def.Id}' depot {m.Record.id} supplies {m.SuppliedKw:F3} kW; charge {m.State.ChargeKwh:F5} kWh", 1);
             }
+        }
+
+        // Machines a fuel generator fed in the last solve (the look-at panel's POWERING row).
+        internal static int FedCountOf(int depotId) => LastSolve.FedCount(depotId);
+
+        // A vanilla machine in a fuel generator's network: the unmet share of its demand from what the network's generators
+        // have left after the modded machines (FuelTopUp), split over them in order into their SuppliedKw, which SetSupply
+        // then drains from their ChargeKwh.
+        static void TopUpVanilla(MoonWorld world, List<Member> members, int[] network, int i)
+        {
+            var m = members[i];
+            var s = m.State;
+            var sources = Enumerable.Range(0, members.Count).Where(j => members[j].Source && network[j] == network[i]).ToList();
+            if (sources.Count == 0) return;
+            float before = s.Power, demand = s.DemandKw;
+            LastSolve.VanillaPowerBefore[m.Record.id] = before;
+            float fuelKw = sources.Sum(j => members[j].AvailableKw);
+            var (power, used, drawn) = FuelTopUp.Draw(before, demand, fuelKw);
+            string id = $"vanilla '{VanillaName(world, m.Record.kind)}' depot {m.Record.id}";
+            if (drawn <= 0f)
+            {
+                CoreLog.Once("vanilla-nofuel:" + m.Record.id, $"Power: {id} is in range of fuel generator(s) {string.Join(", ", sources.Select(j => members[j].Record.id))} but they have no fuel to spare (power {before:F2}, demand {demand} kW)", 1);
+                return;
+            }
+            var taken = FuelGrid.Split(drawn, sources.Select(j => members[j].AvailableKw).ToList());
+            Member top = null;
+            for (int k = 0; k < sources.Count; k++)
+            {
+                var g = members[sources[k]];
+                g.AvailableKw -= taken[k];
+                g.SuppliedKw += taken[k];
+                if (taken[k] > 0f) { LastSolve.AddFed(g.Record.id, m.Record.id); top ??= g; }
+            }
+            s._Power_k__BackingField = power;
+            s._UsedKw_k__BackingField = used;
+            CoreLog.Once("vanilla-draw:" + m.Record.id + ":" + s.Grid, $"Power: {id} draws {drawn:F3} kW from fuel generator(s) {string.Join(", ", sources.Select((j, k) => $"{members[j].Record.id} ({taken[k]:F3} kW)"))}; {fuelKw:F2} kW of fuel available; power {before:F2} -> {power:F2}, used {used:F2} of {demand} kW; own grid {s.Grid}", 1);
+            if (power >= 0.999f && top != null) PoweredBy(s, top.Def.Name);
+        }
+
+        static string VanillaName(MoonWorld world, int kind)
+        {
+            try
+            {
+                var def = world.BuildDefinition(kind);
+                var name = def != null ? def.displayName : null;
+                if (!string.IsNullOrEmpty(name)) return name;
+            }
+            catch (Exception) { }
+            return "kind " + kind;
+        }
+
+        // A fully fed vanilla machine's status text: Status reads powerStatus back ("Powered by Briquette generator" in the
+        // Task 3 run, where vanilla's own text was "No power: build solar panels within reach"). Vanilla's solve rewrites
+        // powerStatus every solve (that run read vanilla's text again before each of our writes), so the write is
+        // reapplied every solve like Power; the text per generator name is built once.
+        static readonly Dictionary<string, string> poweredBy = new(StringComparer.Ordinal);
+        static void PoweredBy(MoonProductionState s, string generator)
+        {
+            if (!poweredBy.TryGetValue(generator, out var text)) poweredBy[generator] = text = $"Powered by {generator}";
+            s.powerStatus = text;
         }
 
         static bool IsFuelSource(StructureDefinition d) => d.Power != null && d.Power.SupplyMode == SupplyMode.Fuel && d.Processor != null && d.Processor.ProducesPower;

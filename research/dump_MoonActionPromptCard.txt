@@ -1,0 +1,54 @@
+== MoonCleaners.MoonActionPromptCard : Il2CppSystem.Object
+  P static UnityEngine.Color Amber
+  P static UnityEngine.Color KeyIdle
+  P static UnityEngine.Color Pill
+  P static UnityEngine.Color Finished
+  P static System.Single PillAlpha
+  P static UnityEngine.Color Ink
+  P static UnityEngine.Color Cap
+  P static UnityEngine.Color CapLip
+  P static System.Single Height
+  P static System.Single Radius
+  P static System.Single Inset
+  P static System.Single IconSize
+  P static System.Single Gap
+  P static System.Single EndPad
+  P static System.Single FontSize
+  P static System.Single MaxTitle
+  P UnityEngine.GameObject _Canvas_k__BackingField
+  P UnityEngine.RectTransform _Root_k__BackingField
+  P TMPro.TMP_Text _Key_k__BackingField
+  P TMPro.TMP_Text _Title_k__BackingField
+  P static UnityEngine.Vector2 Place
+  P System.Single _NaturalWidth_k__BackingField
+  P UnityEngine.Color PillColour
+  P MoonCleaners.MoonHudPanel back
+  P MoonCleaners.MoonHudPanel fill
+  P UnityEngine.RectTransform clip
+  P UnityEngine.GameObject cap
+  P static Il2CppSystem.Collections.Generic.List`1<MoonCleaners.MoonActionPromptCard> cards
+  P System.String shownKey
+  P System.String shownTitle
+  P System.Single titleWidth
+  P System.Single minWidth
+  P System.Single shownProgress
+  P UnityEngine.GameObject Canvas
+  P UnityEngine.RectTransform Root
+  P TMPro.TMP_Text Key
+  P TMPro.TMP_Text Title
+  P System.Single MinWidth
+  P System.Single NaturalWidth
+  M static Boolean OthersShowing(MoonActionPromptCard except)
+  M static MoonActionPromptCard Create(Transform owner, String canvasName, Int32 sortingOrder)
+  M static MoonActionPromptCard Build(Transform parent, String name, Vector2 position)
+  M Void Show(String key, String title, Boolean ready, Single progress, Boolean done)
+  M Void Hide()
+  M Void Layout(Single progress)
+  M static RectTransform Rect(Transform parent, String name, Vector2 position, Vector2 size)
+  M static MoonHudPanel Panel(Transform parent, String name, Vector2 position, Vector2 size, Color color, Single radius)
+  M static Void Stretch(RectTransform rect)
+  M static Void Left(RectTransform rect, Single x, Single pivot)
+  M static TMP_Text Label(Transform parent, String name, Vector2 position, Vector2 size, Single fontSize, Color color)
+  M Void .ctor()
+  M Void .ctor()
+  M Void .ctor(IntPtr pointer)
