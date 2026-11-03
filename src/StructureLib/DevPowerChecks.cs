@@ -145,7 +145,10 @@ namespace StructureLib
             {
                 if (now - vfOpened < 20f) return;
                 vfUntil = -1f;
-                CoreLog.Info($"[selftest] {name} not applicable: chamber not in the burner's network (chamber {VanillaText(c)}; burner {PowerText(b)})");
+                // Not a candidate at all: its own grid already gives it full power.
+                bool sunFed = c != null && c.Power >= 0.99f && !Patches.PowerPatches.LastSolve.VanillaPowerBefore.ContainsKey(vfChamber);
+                string why = sunFed ? "vanilla already powers it fully" : "chamber not in the burner's network";
+                CoreLog.Info($"[selftest] {name} not applicable: {why} (chamber {VanillaText(c)}; burner {PowerText(b)})");
                 return;
             }
             if (c == null || b == null) { vfUntil = -1f; Assert(name, false, $"chamber {VanillaText(c)}; burner {PowerText(b)}"); return; }

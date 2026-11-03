@@ -118,7 +118,6 @@ namespace StructureLib.Patches
             if (production == null || depots == null || !MoonStructures.Frozen || MoonStructures.Disabled) return;
             var nodes = world.powerNodes;
             var vanilla = new List<MoonWorld.PowerNode>();
-            var candidates = new List<MoonWorld.PowerNode>();
             var nodeIds = new HashSet<int>();
             for (int i = 0; nodes != null && i < nodes.Count; i++)
             {
@@ -126,7 +125,6 @@ namespace StructureLib.Patches
                 if (n?.record == null || Remap.Live(n.record.kind) != null) continue;
                 nodeIds.Add(n.record.id);
                 if (n.state != null && n.state.Grid != 0) vanilla.Add(n);
-                if (!n.panel && n.state != null && n.state.DemandKw > 0f && n.state.Power < 0.999f) candidates.Add(n);
             }
 
             var members = new List<Member>();
@@ -151,16 +149,34 @@ namespace StructureLib.Patches
             if (members.Count == 0) return;
             int modded = members.Count;
             if (members.Any(m => m.Source))
+            {
+                var candidates = new List<MoonWorld.PowerNode>();
+                for (int i = 0; nodes != null && i < nodes.Count; i++)
+                {
+                    var n = nodes.get_Item(i);
+                    if (n?.record == null || n.panel || Remap.Live(n.record.kind) != null) continue;
+                    if (n.state != null && n.state.DemandKw > 0f && n.state.Power < 0.999f) candidates.Add(n);
+                }
                 foreach (var n in candidates.OrderBy(n => n.record.id))
                     members.Add(new Member { State = n.state, Record = n.record, At = n.position, Vanilla = n });
+            }
 
             var (gridOf, networkOf) = FuelGrid.Assign(members.Take(modded).Select(m =>
                 new FuelGrid.Member(m.Record.id, m.At.x, m.At.y, m.At.z, m.Source ? m.Def.Power.Range : 0f, m.Vanilla?.state.Grid ?? 0)).ToList());
+            // The vanilla members' networks. A vanilla machine within reach of generators of two modded networks bridges
+            // them here, for its own (vanilla) draw only: modded members keep the networks of the modded Assign above,
+            // which served them.
             var powerNet = members.Count == modded ? networkOf : FuelGrid.Assign(members.Select(m =>
                 new FuelGrid.Member(m.Record.id, m.At.x, m.At.y, m.At.z, m.Source ? m.Def.Power.Range : 0f, m.IsVanilla ? 0 : m.Vanilla?.state.Grid ?? 0)).ToList()).Network;
-            var sourced = new HashSet<int>(Enumerable.Range(0, members.Count).Where(j => members[j].Source).Select(j => powerNet[j]));
-            for (int i = 0; i < members.Count; i++)
-                if (!members[i].IsVanilla || sourced.Contains(powerNet[i])) LastSolve.NetworkOf[members[i].Record.id] = members[powerNet[i]].Record.id;
+            // Ledger network ids: a modded member's is the depot id of its modded network's root; a vanilla member's is
+            // that of the first generator (member order, the order it draws in) in its network, so a vanilla machine
+            // shares the id of the generator network it draws from first. A vanilla member with no generator is left out.
+            for (int i = 0; i < modded; i++) LastSolve.NetworkOf[members[i].Record.id] = members[networkOf[i]].Record.id;
+            for (int i = modded; i < members.Count; i++)
+            {
+                int first = Enumerable.Range(0, modded).FirstOrDefault(j => members[j].Source && powerNet[j] == powerNet[i], -1);
+                if (first >= 0) LastSolve.NetworkOf[members[i].Record.id] = members[networkOf[first]].Record.id;
+            }
             var grids = world.powerGrids;
             var surplus = new Dictionary<int, float>();
             var charging = new Dictionary<int, float>();
@@ -253,7 +269,7 @@ namespace StructureLib.Patches
             s._Power_k__BackingField = power;
             s._UsedKw_k__BackingField = used;
             CoreLog.Once("vanilla-draw:" + m.Record.id + ":" + s.Grid, $"Power: {id} draws {drawn:F3} kW from fuel generator(s) {string.Join(", ", sources.Select((j, k) => $"{members[j].Record.id} ({taken[k]:F3} kW)"))}; {fuelKw:F2} kW of fuel available; power {before:F2} -> {power:F2}, used {used:F2} of {demand} kW; own grid {s.Grid}", 1);
-            if (power >= 0.999f && top != null) PoweredBy(s, top.Def.Name, m.Record.id);
+            if (power >= 0.999f && top != null) PoweredBy(s, top.Def.Name);
         }
 
         static string VanillaName(MoonWorld world, int kind)
@@ -263,16 +279,15 @@ namespace StructureLib.Patches
             return "kind " + kind;
         }
 
-        // A fully fed vanilla machine's status text. Logs once, on the third solve that feeds the first such machine, what
-        // Status reads before this solve's write (as vanilla's solve left it) and after it.
-        static int statusDepot = -1, statusSolves;
-        static void PoweredBy(MoonProductionState s, string generator, int depot)
+        // A fully fed vanilla machine's status text: Status reads powerStatus back ("Powered by Briquette generator" in the
+        // Task 3 run, where vanilla's own text was "No power: build solar panels within reach"). Vanilla's solve rewrites
+        // powerStatus every solve (that run read vanilla's text again before each of our writes), so the write is
+        // reapplied every solve like Power; the text per generator name is built once.
+        static readonly Dictionary<string, string> poweredBy = new(StringComparer.Ordinal);
+        static void PoweredBy(MoonProductionState s, string generator)
         {
-            if (statusDepot < 0) statusDepot = depot;
-            string vanillaStatus = depot == statusDepot && statusSolves < 3 && ++statusSolves == 3 ? s.Status : null;
-            s.powerStatus = $"Powered by {generator}";
-            if (vanillaStatus != null)
-                CoreLog.Once("powerstatus", $"Power: vanilla depot {depot} Status before the write '{vanillaStatus}'; after writing powerStatus '{s.powerStatus}': Status '{s.Status}'", 1);
+            if (!poweredBy.TryGetValue(generator, out var text)) poweredBy[generator] = text = $"Powered by {generator}";
+            s.powerStatus = text;
         }
 
         static bool IsFuelSource(StructureDefinition d) => d.Power != null && d.Power.SupplyMode == SupplyMode.Fuel && d.Processor != null && d.Processor.ProducesPower;
