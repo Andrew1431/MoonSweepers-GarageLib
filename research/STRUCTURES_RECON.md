@@ -36,7 +36,9 @@ Everywhere (catalog, placement, built records, production, power, save), a struc
   `HexPieceKind`, `PowerRange`, `Processor`, `TryPanel`, `InputSlot`, `IsRobotDock`, `IsEdgeRail`, `IsWorldHex`,
   `IsWorldSquare`, `IsWorldGrid` (the dump shows `IsEdgeRail`, `IsWorldHex`, `IsWorldSquare`, `IsWorldGrid` as
   instance methods). None reads a table a mod could grow. All are Harmony-prefixable **except `IsProcessor`**: a prefix
-  on it crashes the game natively at world load (Task 5; see Interop hazards).
+  on it crashes the game natively at world load (Task 5; see Interop hazards). A prefix on a short leaf among them
+  (`IsSolarPanel`, `IsRobotDock`, `MapKindOf`, `HexPieceKind`, `InputSlot`) must never run the original (see the size
+  table in Interop hazards).
 - `MoonWorld.BuildDefinition(int kind)` (instance) returns the `MoonDepotBuildDefinition` for a kind. No
   `MoonDepotBuildDefinition` or `MoonConveyorKit` asset is loaded at menu time (`Resources.FindObjectsOfTypeAll`
   finds 0), so the definition table arrives with the world. `MoonWorld.depotDefinition` is the root asset and it has an
@@ -217,13 +219,71 @@ decks and foundations are refused as donors.
   8592 `NativeMethodInfoPtr_*` scanned), so it is not identical-code folding. Cause unconfirmed (a caller on a
   non-main thread is one guess). StructureLib deliberately leaves it unpatched (comment on `ProductionPatches`,
   `Patches/ProductionPatches.cs`); a modded kind gets vanilla's answer for kinds above 192, false.
-  - The crash is specific to `IsProcessor`. In the same build, prefixes on the static switches `IsSolarPanel`,
-    `IsPowerNode`, `PowerRange`, `HexPieceKind`, `IsRobotDock` and `MapKindOf` (and on the instance methods
-    `IsEdgeRail`, `IsWorldHex`, `IsWorldSquare`, `IsWorldGrid`, `FarSpec`, `BuildDefinition`, `AcceptsText`,
-    `MoonDepotBuilder.CanBuild`, `MoonDepotBuilder.ProductionNote`) patched and the world loaded cleanly with the
-    self-test 9/9. `IsSolarPanel` has the same 15-byte native shape (`83 F9 5D 7D 03 32 C0 C3 83 F9 5F 0F 9E C0 C3
-    CC`) and is fine. Only patching and load were proven: no modded kind reached those remaps in game, since nothing
-    was built.
+  - **Correction (2026-11-02): `IsSolarPanel` is NOT fine.** It patches and loads cleanly, but calling its original
+    from the prefix crashes. Clicking a vanilla build card for any kind 93..97 died with an access violation at
+    GameAssembly+0x6EF7B5 (two dumps, kinds 95 and 96; `.scratch/crash-solar-2026-11-02/diagnosis.md`). The prefix
+    returned true for the vanilla kind, and the original, called through the detour's relocated copy, ran past the
+    15-byte leaf at +0x6EF730 into the next function. The `IsProcessor` crash address (+0x6EF5D4, 0x14 past the leaf at
+    +0x6EF5C0) is the same mechanism: patching a short leaf is fine, running its original is not. The earlier note
+    "in the same build, prefixes on IsSolarPanel, IsPowerNode, PowerRange, HexPieceKind, IsRobotDock, MapKindOf (and the
+    instance IsEdgeRail, IsWorld*, FarSpec, BuildDefinition, AcceptsText, CanBuild, ProductionNote) loaded cleanly" only
+    proved patching and load.
+  - **Rule: a prefix on a short native leaf must never fall through to the original.** A short leaf is one whose
+    body, or a branch, a branch target or a `ret`, lies in the first ~16 bytes the detour overwrites (Dobby, the
+    BepInEx default; 14-byte absolute jump). StructureLib records every pure kind/cargo leaf it prefixes at plugin load,
+    before Harmony patches anything (`Patches/LeafTables.cs`, `Pure/LeafTable.cs`). It records only the game's own
+    domain, read from the game:
+    - kinds 0..`MoonDepotSave.MaxStructureKind` (192, the length of `additionalStructures`) plus
+      `MoonDepotBuilder.ConveyorKind` (1000);
+    - cargo = the `MoonCargo` enum values (0 dust, 1 sand, 2 stone).
+
+    A leaf that indexed a table might fault on a key outside that domain. `BuildDefinition` cannot bound the domain at
+    Load, because the definition table arrives with the world. The prefix answers a modded kind from
+    its definition (or from its donor's recorded answer) and every other key from the table, and always returns false. A
+    key outside the table answers the conservative default and is logged. Each prefix logs one line per new (leaf, key).
+  - Native sizes of every StructureLib prefix target (2026-11-02 build). Addresses come from the Cpp2IL dummy
+    `BepInEx/dummy/Assembly-CSharp.dll` (`[Address(RVA, Offset)]` on each method; `IsSolarPanel` = 0x6EF730 matches
+    the dump). Bytes come from `GameAssembly.dll` at that file offset. Size is the gap to the next method's address,
+    including `CC` padding.
+    "Normal prologue" means the function's first 15+ bytes are `push`/`sub rsp` plus the IL2CPP metadata-init
+    `cmp byte [rip+x],0`, with no branch or `ret` in them. Processor, CargoName and BuildDefinition have that shape and
+    fall through for vanilla kinds/values on every run.
+
+    | Method | Static | Size (B) | First branch / ret in the first 16 B | Prefix now |
+    |---|---|---|---|---|
+    | `IsSolarPanel(int)` | yes | 16 (15 + CC) | `jge` at +3 into +8, `ret` at +7 | **table**, never original |
+    | `IsProcessor(int)` (not patched) | yes | 16 (15 + CC) | `jne` at +3 into +8, `ret` at +7 | not patched |
+    | `IsRobotDock(int)` | yes | 32 (18 + pad) | `ja` at +6 into +11, `ret` at +10 | **table** (was: always ran the original) |
+    | `MapKindOf(int)` | yes | 32 (20 + pad) | `jne` at +3 into +11, `ret` at +10 | **table** (was: always ran the original) |
+    | `UnitKilograms(MoonCargo)` | yes | 32 (23 + pad) | `jne` at +3 into +14, `ret` at +13 | **table** (game cargo 0..2) |
+    | `HexPieceKind(int)` | yes | 32 (31 + CC) | `jbe` at +6 / +14 into +28; leaf | **table** (was: always ran the original) |
+    | `InputSlot(int, MoonCargo)` | yes | 48 (39 + pad) | `je` at +3 into +34, `je` at +8 into +16; leaf | **table** (game kinds x game cargo) |
+    | `IsPowerNode(int)` | yes | 96 | none (normal prologue); body is a pure kind switch | **table** |
+    | `PowerRange(int)` | yes | 112 | none (normal prologue) | unchanged: falls through (donor kind) |
+    | `PortCargo(ConveyorPort)` | yes | 96 | none (normal prologue, first branch at +16) | unchanged: falls through for non-`sl:` names |
+    | `Processor(int)` | yes | 160 | none (normal prologue) | unchanged |
+    | `AcceptsText(int)` | yes | 176 | none (normal prologue) | unchanged |
+    | `CargoName` / `CargoShortName` | yes | 192 / 192 | none (normal prologue) | unchanged |
+    | `CargoValue` | instance | 304 | none | unchanged |
+    | `IsEdgeRail` / `IsWorldHex` / `IsWorldSquare` | instance | 80 | none (`sub rsp; xor r8d; call`, first `je` at +15) | unchanged: donor kind, falls through |
+    | `IsWorldGrid` | instance | 96 | none (first `je` at +15) | unchanged |
+    | `FarSpec` | instance | 944 | none | unchanged |
+    | `BuildDefinition` | instance | 336 | none | unchanged |
+    | `IsProcessorId` | instance | 192 | none | unchanged |
+    | `MoonDepotBuilder.CanBuild` / `ProductionNote` / `CardArt` | instance | 352 / 2976 / 224 | none | unchanged |
+    | `CrewProcessorLoad`, `CanStartCycle`, `TryStartCycle`, `FinishCycle`, `EmitProduct`, `HandOff` | instance | 416..3168 | none | unchanged |
+    | `TryBuildDepot`, `RemoveStructureNow`, `RestoreDepots`, `RestoreCanisters`, `RestoreProduction`, `SnapshotCanisters`, `SolvePower`, `EmitCargo` | instance | 560..9440 | none | unchanged (postfix/prefix as before) |
+    | `MoonProgressStore.Write` / `Serialize`, `MoonDepotSave.Write`, `MoonProductionSave.Write` | static | 864..5008 | none | unchanged |
+    | `TryPanel(int, out PanelSpec)` (not patched) | yes | 272 | none | not patched (`out` struct crash, see below) |
+
+    Decoded vanilla answers (for checking the load-time log line "Leaf tables recorded"):
+    - `IsSolarPanel`: 93..95.
+    - `IsPowerNode`: 93..97.
+    - `IsRobotDock`: 91, 92, 99.
+    - `MapKindOf`: 99 is 2, 92 is 1, everything else 0.
+    - `HexPieceKind`: 19..72, 83, 84, 87, 88.
+    - `UnitKilograms`: Stone (2) is 2 kg, every other value 1 kg.
+    - `InputSlot`: only 96 and 97 have slots.
   - What Task 10 did instead: prefixes on the instance method `MoonWorld.IsProcessorId(int id)` and on
     `MoonWorld.Processor(int kind)` (both patch and run fine), plus prefixes on the specific callers that refuse a modded
     machine. See "Processors (Task 10)" below for which callers those are.
@@ -234,6 +294,8 @@ decks and foundations are refused as donors.
   panel kinds, so vanilla presumably answers false for it (not traced).
 - The static cargo switches `CargoName`, `CargoShortName`, `UnitKilograms` and the instance `CargoValue` (returning
   an `Il2CppSystem.Decimal` through `ref __result`) all take Harmony prefixes without trouble (Task 9, 4 runs).
+  `UnitKilograms` is a 23-byte leaf, so since 2026-11-02 it answers from a leaf table and never runs its original
+  (see the size table above).
 - `world.canisters` (`Dictionary<int, MoonDroppedCanister>`, value-type values): `set_Item` from managed code does not
   change the stored canister. Write through `MoveCanisterRecord` instead (see "Built records and save").
 - **A Harmony prefix on the static `MoonWorld.PortCargo(port)` is safe** (M1 spike, 2026-11-02): a log-only prefix that
