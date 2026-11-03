@@ -1,7 +1,6 @@
 #if DEVBUILD
 using System;
 using System.Collections.Generic;
-using System.Linq;
 using BepInEx.Configuration;
 using HarmonyLib;
 using MoonCleaners;
@@ -174,7 +173,6 @@ namespace BuildQoL
         static Ray AimRay(float deg, float metres)
         {
             var cam = Camera.main;
-            var w = World();
             Vector3 pos = cam.transform.position;
             Transform wt = null;
             var walkers = UnityEngine.Object.FindObjectsByType<MoonWalker>(FindObjectsSortMode.None);

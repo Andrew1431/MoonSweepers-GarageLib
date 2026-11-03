@@ -45,7 +45,7 @@ namespace BuildQoL
             if (busy || __instance == null) return;
             busy = true;
             try { Reselect(__instance); }
-            catch (Exception e) { Plugin.Once("machine-built", "KeepSelection: re-selecting after a placement threw, base-game behaviour kept: " + e); }
+            catch (Exception e) { Plugin.Once("machine-built", "KeepSelection: re-selecting after a placement threw (the tool may be left with no ghost; pick the structure again): " + e); }
             finally { busy = false; }
         }
 
