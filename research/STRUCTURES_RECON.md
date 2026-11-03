@@ -231,7 +231,14 @@ decks and foundations are refused as donors.
   - **Rule: a prefix on a short native leaf must never fall through to the original.** A short leaf is one whose
     body, or a branch, a branch target or a `ret`, lies in the first ~16 bytes the detour overwrites (Dobby, the
     BepInEx default; 14-byte absolute jump). StructureLib records every pure kind/cargo leaf it prefixes at plugin load,
-    before Harmony patches anything (`Patches/LeafTables.cs`, `Pure/LeafTable.cs`). The prefix answers a modded kind from
+    before Harmony patches anything (`Patches/LeafTables.cs`, `Pure/LeafTable.cs`). It records only the game's own
+    domain, read from the game:
+    - kinds 0..`MoonDepotSave.MaxStructureKind` (192, the length of `additionalStructures`) plus
+      `MoonDepotBuilder.ConveyorKind` (1000);
+    - cargo = the `MoonCargo` enum values (0 dust, 1 sand, 2 stone).
+
+    A leaf that indexed a table might fault on a key outside that domain. `BuildDefinition` cannot bound the domain at
+    Load, because the definition table arrives with the world. The prefix answers a modded kind from
     its definition (or from its donor's recorded answer) and every other key from the table, and always returns false. A
     key outside the table answers the conservative default and is logged. Each prefix logs one line per new (leaf, key).
   - Native sizes of every StructureLib prefix target (2026-11-02 build). Addresses come from the Cpp2IL dummy
@@ -248,9 +255,9 @@ decks and foundations are refused as donors.
     | `IsProcessor(int)` (not patched) | yes | 16 (15 + CC) | `jne` at +3 into +8, `ret` at +7 | not patched |
     | `IsRobotDock(int)` | yes | 32 (18 + pad) | `ja` at +6 into +11, `ret` at +10 | **table** (was: always ran the original) |
     | `MapKindOf(int)` | yes | 32 (20 + pad) | `jne` at +3 into +11, `ret` at +10 | **table** (was: always ran the original) |
-    | `UnitKilograms(MoonCargo)` | yes | 32 (23 + pad) | `jne` at +3 into +14, `ret` at +13 | **table** (0..255) |
+    | `UnitKilograms(MoonCargo)` | yes | 32 (23 + pad) | `jne` at +3 into +14, `ret` at +13 | **table** (game cargo 0..2) |
     | `HexPieceKind(int)` | yes | 32 (31 + CC) | `jbe` at +6 / +14 into +28; leaf | **table** (was: always ran the original) |
-    | `InputSlot(int, MoonCargo)` | yes | 48 (39 + pad) | `je` at +3 into +34, `je` at +8 into +16; leaf | **table** (kinds 0..255 x 256 cargo) |
+    | `InputSlot(int, MoonCargo)` | yes | 48 (39 + pad) | `je` at +3 into +34, `je` at +8 into +16; leaf | **table** (game kinds x game cargo) |
     | `IsPowerNode(int)` | yes | 96 | none (normal prologue); body is a pure kind switch | **table** |
     | `PowerRange(int)` | yes | 112 | none (normal prologue) | unchanged: falls through (donor kind) |
     | `PortCargo(ConveyorPort)` | yes | 96 | none (normal prologue, first branch at +16) | unchanged: falls through for non-`sl:` names |

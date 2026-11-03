@@ -41,6 +41,9 @@ namespace StructureLib
             "MoonCleaners.MoonConveyorSnapshot:start", "MoonCleaners.MoonConveyorSnapshot:id",
             "MoonCleaners.MoonWorld:EntranceClear", "MoonCleaners.MoonWorld:WaitingAtEnd", "MoonCleaners.MoonWorld:BeltStartingAt", "MoonCleaners.MoonWorld:BeltEndingAt",
             "MoonCleaners.MoonDepotBuildDefinition:halfFootprint", "MoonCleaners.MoonWorld:nextCanisterId", "MoonCleaners.MoonWorld:riders",
+            // The leaf tables (Patches/LeafTables.cs) and the game domain they are bounded to.
+            "MoonCleaners.MoonWorld:HexPieceKind", "MoonCleaners.MoonWorld:IsRobotDock", "MoonCleaners.MoonWorld:MapKindOf",
+            "MoonCleaners.MoonDepotSave:MaxStructureKind", "MoonCleaners.MoonDepotBuilder:ConveyorKind",
         };
 
         public override void Load()
