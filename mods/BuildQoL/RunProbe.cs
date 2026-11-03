@@ -46,7 +46,7 @@ namespace BuildQoL
 
         static decimal Money()
         {
-            try { return RunPlan.TryParseMoney(w.WalletDollars(MoonWorld.LocalPlayer).ToString(), out decimal d) ? d : -1; }
+            try { return (decimal)Il2CppSystem.Decimal.ToDouble(w.WalletDollars(MoonWorld.LocalPlayer)); }
             catch { return -1; }
         }
 
@@ -196,7 +196,7 @@ namespace BuildQoL
                 string d = "";
                 for (int k = 1; k < c.Count; k++) d += $" {Vector3.Distance(c[k - 1], c[k]):F3}";
                 string far = c.Count > 0 ? $"{Vector3.Distance(walker.transform.position, c[c.Count - 1]):F1}" : "-";
-                Info($"{name} preview: N={FoundationRun.Length} cells={FoundationRun.CellCount} blocked={FoundationRun.Blocked} cells1..='{FoundationRun.DevCells}' refuse={FoundationRun.Refusing} valid={b.PlacementValid} reason='{b.PlacementReason}' steps[{d} ] last cell {far} m; prompt would be '{RunPlan.Prompt(FoundationRun.CellCount, def.priceDollars, FoundationRun.Blocked, 0, true, out _)}'");
+                Info($"{name} preview: N={FoundationRun.Length} cells={FoundationRun.CellCount} blocked={FoundationRun.Blocked} cells1..='{FoundationRun.DevCells}' refuse={FoundationRun.Refusing} valid={b.PlacementValid} reason='{b.PlacementReason}' steps[{d} ] last cell {far} m; prompt '{FoundationRun.DevPrompt}'");
                 if (name == "run1" && c.Count > 0) run1Far = c[c.Count - 1];
             }
             if (frames == 75 && shot != null) { Shot(shot); Overhead("over-" + shot); }

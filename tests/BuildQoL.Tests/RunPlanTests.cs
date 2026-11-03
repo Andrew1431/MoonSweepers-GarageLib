@@ -123,6 +123,7 @@ namespace BuildQoL.Tests
         [Theory]
         [InlineData("Move closer to the build site", RunPlan.OutOfReach)]
         [InlineData("Blocked by a player or object", RunPlan.Blocked)]
+        [InlineData("This foundation overlaps another tile", RunPlan.Blocked)]
         [InlineData("Not enough money", RunPlan.NoMoney)]
         [InlineData("", RunPlan.Refused)]
         [InlineData(null, RunPlan.Refused)]
@@ -133,6 +134,12 @@ namespace BuildQoL.Tests
         [InlineData("99980", 99980)]
         [InlineData("99,980.00", 99980)]
         [InlineData("$12", 12)]
+        [InlineData("99980,00", 99980)]   // comma-decimal locale
+        [InlineData("99.980,00", 99980)]
+        [InlineData("99.980", 99980)]
+        [InlineData("1,5", 1.5)]
+        [InlineData("99980.5", 99980.5)]
+        [InlineData("1,234,567", 1234567)]
         public void TryParseMoney_Parses(string s, double expected)
         {
             Assert.True(RunPlan.TryParseMoney(s, out decimal v));
@@ -178,6 +185,15 @@ namespace BuildQoL.Tests
             t.Stop(RunPlan.OutOfReach);
             t.Stop(RunPlan.Blocked); // first stop wins
             Assert.Equal("Built 1 of 6 (stopped: out of reach)", t.Notice());
+        }
+
+        [Fact]
+        public void Tally_StoppedByError()
+        {
+            var t = new RunTally(4);
+            t.AddBuilt();
+            t.Stop(RunPlan.Error);
+            Assert.Equal("Built 1 of 4 (stopped: error)", t.Notice());
         }
 
         [Fact]

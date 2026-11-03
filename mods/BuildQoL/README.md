@@ -36,7 +36,7 @@ squares after the ghost get outlines: green is buildable, red is blocked. The pr
   restored right after it, so your normal placements keep the base game's reach.
 - Plain wheel still rotates the ghost. The length stays set until you change it back to 1, pick another structure, or
   stop placing. A length of 1 is the base game.
-- Not covered yet: gamepad, hex foundation pieces, and free-placed pieces.
+- Not covered yet: gamepad, multiplayer, hex foundation pieces, and free-placed pieces.
 
 ## Config
 
@@ -152,7 +152,11 @@ driven through `TestInput` with Shift stood in by a dev flag and the facing by a
 - A dust-canister copy in run cell 3: preview `GGRGG`, prompt `Run 6 · 1 blocked`, the click refused (`place` cleared),
   depots +0, wallet unchanged.
 - `RunIgnoresReach = false`: preview `GGOOO`; `out of reach at 34.3 m ... run stops`, `Built 3 of 6 (stopped: out of reach)`.
-- After a reach-raised run, an unraised `TryBuildStructure` 40.7 m out: `Move closer to the build site`, reach 30.
+- Reach restored: every run in the final pass (pass 6) logged `reach now 30 (was 30)`; that is its only evidence of
+  the restore. The refusal itself comes from pass 2: after a reach-raised run, an unraised `TryBuildStructure` 40.7 m
+  out gave `Move closer to the build site` with reach 30. In passes 4 to 6 that control aimed at an already-built tile.
+- The probe runs above predate fix round 1 (built-cell check in `NoteBuilt`, no run preview while the ghost is invalid,
+  a 20-slice site check, numeric wallet read); those changes are not yet re-run in game.
 - No errors from Build QoL. Not tested in game: Shift + wheel by hand (the spike's pointer checks show `wheel` is
   `Mouse.scroll.y`), a run across a cube-face seam, other square kinds than 101, the money check with a short wallet,
   gamepad, multiplayer.

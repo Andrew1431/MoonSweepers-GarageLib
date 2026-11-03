@@ -51,7 +51,7 @@ namespace BuildQoL
             "MoonCleaners.MoonDepotBuilder:yaw", "MoonCleaners.MoonDepotBuilder:IsPlacing", "MoonCleaners.MoonDepotBuilder:ConveyorMode",
             "MoonCleaners.MoonDepotBuilder:freeMode", "MoonCleaners.MoonDepotBuilder:selectedBuildId", "MoonCleaners.MoonDepotBuilder:SetPrompt",
             "MoonCleaners.MoonDepotBuilder:Notice", "MoonCleaners.MoonDepotBuilder:CanBuild", "MoonCleaners.MoonDepotBuilder:World",
-            "MoonCleaners.MoonDepotBuilder:walker",
+            "MoonCleaners.MoonDepotBuilder:walker", "MoonCleaners.MoonDepotBuilder:PlacementValid",
             "MoonCleaners.MoonDepotBuilder+BuildInput:wheel", "MoonCleaners.MoonDepotBuilder+BuildInput:place",
             "MoonCleaners.MoonWorld:PlanStructure", "MoonCleaners.MoonWorld:BeginStructureCheck", "MoonCleaners.MoonWorld:TryBuildStructure",
             "MoonCleaners.MoonWorld:StructureObstaclesClear", "MoonCleaners.MoonWorld:BuildDefinition", "MoonCleaners.MoonWorld:IsWorldSquare",
@@ -98,7 +98,7 @@ namespace BuildQoL
     {
         const float StepMetres = 8f;     // MoonSquareGrid cell size; neighbour centres measured 7.96 m apart
         const float OutlineLift = 0.25f;
-        const int MaxSlices = 2000;      // site check slices of 5 ms; a 101 check takes 1
+        const int MaxSlices = 20;        // site check slices of 5 ms (100 ms at most); a 101 check takes 1
 
         static Key modifierKey = Key.LeftShift;
         static bool modifierIsShift = true;
@@ -116,6 +116,10 @@ namespace BuildQoL
         static readonly List<int> cells = new();
         static readonly List<Vector3> centres = new();
         static readonly List<GameObject> outlines = new();
+        static readonly List<LineRenderer> lines = new();
+        static readonly float[] dots = new float[4];
+        static float stepFailUntil = -1f;
+        static readonly HashSet<string> infoLogged = new();
         static Vector3 lastAxis;
         static bool haveAxis;
         static int previewKind = -1, previewFrame = -100, blocked, outOfReach;
@@ -136,6 +140,7 @@ namespace BuildQoL
         internal static Vector3 DevFacing;      // the probe's stand-in for the camera direction (zero: use the camera)
         internal static string DevCells = "";   // preview colours of cells 1..N-1: G green, R red, O out of reach
         internal static string LastNotice;
+        internal static string DevPrompt = "";  // the prompt the tweak last wrote
         internal static int Length => length;
         internal static bool Refusing => refuse;
         internal static int Blocked => blocked;
@@ -144,6 +149,12 @@ namespace BuildQoL
         internal static IReadOnlyList<Vector3> Centres => centres;
         internal static int WheelCancelled, ClicksRefused;
 #endif
+
+        // Expected conditions (the player aimed somewhere odd): info, once per key.
+        static void InfoOnce(string key, string message)
+        {
+            if (infoLogged.Add(key)) Plugin.L.LogInfo(message + " (logged once)");
+        }
 
         internal static void ParseModifier(string name)
         {
@@ -218,11 +229,16 @@ namespace BuildQoL
             if (w == null || walker == null) return;
             var def = w.BuildDefinition(kind);
             if (def == null) return;
+            // The preview is from the previous frame. If the aim crossed into another cell in the click frame, vanilla built
+            // that cell and the queue would be offset by one: queue nothing.
+            var plan = b.structurePlan;
+            int built = plan != null ? RunPlan.Decode(plan.cell) : -1;
+            if (built != cells[0]) { InfoOnce("run-moved", $"FoundationRun: vanilla built cell {built}, the run preview started at {cells[0]}; run not built (aim moved in the click frame)"); return; }
             // The run starts at the cell vanilla accepted within reach; re-check that and every step before queuing.
-            float start = Vector3.Distance(walker.transform.position, centres[0]);
-            if (start > def.reach + 3f) { Plugin.Once("run-start-far", $"FoundationRun: run start {start:F1} m from the walker, past reach {def.reach}; run not built"); return; }
+            float start = Vector3.Distance(walker.transform.position, plan.position);
+            if (start > def.reach + 3f) { InfoOnce("run-start-far", $"FoundationRun: run start {start:F1} m from the walker, past reach {def.reach}; run not built"); return; }
             for (int k = 1; k < centres.Count; k++)
-                if (!RunPlan.StepOk(Vector3.Distance(centres[k - 1], centres[k]))) { Plugin.Once("run-step-queue", "FoundationRun: run cells are not one cell apart; run not built"); return; }
+                if (!RunPlan.StepOk(Vector3.Distance(centres[k - 1], centres[k]))) { InfoOnce("run-step-queue", "FoundationRun: run cells are not one cell apart; run not built"); return; }
             qCells.Clear(); qCentres.Clear();
             for (int k = 1; k < cells.Count; k++) { qCells.Add(cells[k]); qCentres.Add(centres[k]); }
             qIndex = 0; qKind = kind; qYaw = b.yaw; qBuilder = b;
@@ -245,7 +261,7 @@ namespace BuildQoL
             catch (Exception e)
             {
                 Plugin.Once("run-build", "FoundationRun: building a run piece threw; the run stops: " + e);
-                if (tally != null) tally.Stop(RunPlan.Refused);
+                if (tally != null) tally.Stop(RunPlan.Error);
                 FinishRun();
             }
         }
@@ -270,6 +286,7 @@ namespace BuildQoL
             if (check == null || !check.Done || !check.Valid)
             {
                 string why = check != null ? check.Reason : null;
+                if (check != null && !check.Done) why = "site check not finished";
                 tally.AddRefused(RunPlan.Category(why ?? RunPlan.Blocked));
                 DevPiece(cell, $"site check refused '{why}'");
                 return;
@@ -326,6 +343,17 @@ namespace BuildQoL
         // Preview and prompt. In LateUpdate: ShowPlan (the builder's Update) writes its own prompt every frame.
         internal static void LateUpdate()
         {
+            try { Preview(); }
+            catch (Exception e)
+            {
+                // Never leave stale outlines or a stale refusal on screen after a throw.
+                try { ClearPreview(); } catch { }
+                Plugin.Once("run-preview", "FoundationRun: preview threw; the preview is cleared until it recovers: " + e);
+            }
+        }
+
+        static void Preview()
+        {
             var b = builder;
             bool live = b != null && inputFrame >= Time.frameCount - 1 && Capable(b);
             if (!live) { Disarm(); return; }
@@ -333,7 +361,15 @@ namespace BuildQoL
             if (kind != lengthKind) { length = 1; lengthKind = kind; haveAxis = false; }
             if (pendingWheel != 0f) { length = RunPlan.NextLength(length, pendingWheel, FoundationRunTweak.RunMax.Value); pendingWheel = 0f; }
             if (qBuilder != null) { HideOutlines(); return; }
-            if (length < 2) { ClearPreview(); return; }
+            if (length < 2)
+            {
+                ClearPreview();
+                // A run that was cancelled because the grid does not step straight here: say so briefly instead of a silent reset.
+                if (Time.unscaledTime < stepFailUntil && b.PlacementValid) b.SetPrompt("Run cancelled · the grid does not continue straight here", false, false);
+                return;
+            }
+            // Cell 0 itself refused (vanilla ghost red): keep vanilla's reason on screen, show no run.
+            if (!b.PlacementValid) { ClearPreview(); return; }
             var plan = b.structurePlan;
             var w = b.World;
             if (plan == null || w == null || plan.free || !plan.snapped || RunPlan.Decode(plan.cell) < 0) { ClearPreview(); return; }
@@ -351,6 +387,9 @@ namespace BuildQoL
             string text = RunPlan.Prompt(cells.Count, def.priceDollars, blocked, outOfReach, affordable, out bool ok);
             refuse = RunPlan.Refuse(blocked, affordable);
             b.SetPrompt(text, ok, false);
+#if DEVBUILD
+            DevPrompt = text;
+#endif
         }
 
         // Cells of the run from the start cell along the facing axis, stepping in world space so each cell's own frame is
@@ -372,7 +411,6 @@ namespace BuildQoL
             if (facing.sqrMagnitude < 1e-6f) facing = haveAxis ? lastAxis : Vector3.ProjectOnPlane(cam.transform.up, up);
             facing.Normalize();
             var ax = Axes(w, mod, start);
-            var dots = new float[4];
             for (int k = 0; k < 4; k++) dots[k] = Vector3.Dot(ax[k], facing);
             int prev = -1;
             if (haveAxis) { float bd = -2f; for (int k = 0; k < 4; k++) { float d = Vector3.Dot(ax[k], lastAxis); if (d > bd) { bd = d; prev = k; } } }
@@ -388,7 +426,8 @@ namespace BuildQoL
                 float step = Vector3.Distance(c, nc);
                 if (!RunPlan.StepOk(step) || cells.Contains(next))
                 {
-                    Plugin.Once("run-step", $"FoundationRun: step {k} from cell {cur} to {next} is {step:F2} m (expected {RunPlan.StepMin} to {RunPlan.StepMax}); run cancelled");
+                    stepFailUntil = Time.unscaledTime + 2f;
+                    InfoOnce("run-step", $"FoundationRun: step {k} from cell {cur} to {next} is {step:F2} m (expected {RunPlan.StepMin} to {RunPlan.StepMax}); run cancelled");
                     cells.Clear(); centres.Clear();
                     return false;
                 }
@@ -425,13 +464,13 @@ namespace BuildQoL
             Vector3 feet = walker != null ? walker.transform.position : centres[0];
             bool ignoreReach = FoundationRunTweak.RunIgnoresReach.Value;
             float radius = centres[0].magnitude;
-            while (outlines.Count < cells.Count - 1) outlines.Add(NewOutline());
+            while (outlines.Count < cells.Count - 1) { var o = NewOutline(); outlines.Add(o); lines.Add(o.GetComponent<LineRenderer>()); }
             for (int k = 0; k < outlines.Count; k++) if (outlines[k] != null) outlines[k].SetActive(k < cells.Count - 1);
             for (int k = 1; k < cells.Count; k++)
             {
                 var go = outlines[k - 1];
-                if (go == null) { go = NewOutline(); outlines[k - 1] = go; }
-                var lr = go.GetComponent<LineRenderer>();
+                var lr = lines[k - 1];
+                if (go == null || lr == null) { go = NewOutline(); outlines[k - 1] = go; lr = go.GetComponent<LineRenderer>(); lines[k - 1] = lr; }
                 var corners = w.GridCorners(mod, RunPlan.Encode(cells[k]));
                 if (corners != null)
                 {
@@ -461,8 +500,9 @@ namespace BuildQoL
             if (price <= 0) return true;
             try
             {
-                var wallet = w.WalletDollars(MoonWorld.LocalPlayer);
-                if (RunPlan.TryParseMoney(wallet.ToString(), out decimal dollars)) return dollars >= (decimal)price * n;
+                // The Il2Cpp decimal converted numerically, never through its locale-dependent ToString.
+                double dollars = Il2CppSystem.Decimal.ToDouble(w.WalletDollars(MoonWorld.LocalPlayer));
+                return dollars >= (double)price * n;
             }
             catch (Exception e) { Plugin.Once("run-wallet", "FoundationRun: reading the wallet threw; the run checks money per piece only: " + e.Message); }
             return true; // wallet unreadable: CanBuild per piece still stops the run when money runs out
@@ -508,6 +548,7 @@ namespace BuildQoL
             if (outlines.Count == 0) return;
             foreach (var go in outlines) if (go != null) UnityEngine.Object.Destroy(go);
             outlines.Clear();
+            lines.Clear();
         }
     }
 }

@@ -73,26 +73,43 @@ namespace BuildQoL.Pure
         public static string Money(long dollars) => "$" + dollars.ToString(CultureInfo.InvariantCulture);
 
         /// <summary>Reason categories for refused pieces, as the notice reports them.</summary>
-        public const string Blocked = "blocked", OutOfReach = "out of reach", NoMoney = "not enough money", Refused = "refused";
+        public const string Blocked = "blocked", OutOfReach = "out of reach", NoMoney = "not enough money", Refused = "refused", Error = "error";
 
         /// <summary>Maps a refusal reason from the game (TryBuildStructure / the site check) to a notice category.</summary>
         public static string Category(string reason)
         {
             if (string.IsNullOrEmpty(reason)) return Refused;
             if (reason.IndexOf("closer", StringComparison.OrdinalIgnoreCase) >= 0 || reason.IndexOf("reach", StringComparison.OrdinalIgnoreCase) >= 0) return OutOfReach;
-            if (reason.IndexOf("block", StringComparison.OrdinalIgnoreCase) >= 0 || reason.IndexOf("occupied", StringComparison.OrdinalIgnoreCase) >= 0) return Blocked;
+            if (reason.IndexOf("block", StringComparison.OrdinalIgnoreCase) >= 0 || reason.IndexOf("occupied", StringComparison.OrdinalIgnoreCase) >= 0
+                || reason.IndexOf("overlap", StringComparison.OrdinalIgnoreCase) >= 0) return Blocked;
             if (reason.IndexOf("money", StringComparison.OrdinalIgnoreCase) >= 0 || reason.IndexOf("afford", StringComparison.OrdinalIgnoreCase) >= 0) return NoMoney;
             return Refused;
         }
 
-        /// <summary>Parses a wallet amount as the game prints it ("99980", "99,980.00"); false when it is not a number.</summary>
+        /// <summary>
+        /// Parses an amount printed in any common locale ("99980", "99,980.00", "99980,00", "99.980,00", "1,5"); false when it
+        /// is not a number. With both separators the last one is the decimal point; a lone separator that repeats, or is
+        /// followed by exactly three digits, groups thousands; otherwise it is the decimal point.
+        /// </summary>
         public static bool TryParseMoney(string text, out decimal value)
         {
             value = 0m;
             if (string.IsNullOrWhiteSpace(text)) return false;
-            string s = text.Trim().TrimStart('$');
-            return decimal.TryParse(s, NumberStyles.Number, CultureInfo.InvariantCulture, out value)
-                || decimal.TryParse(s, NumberStyles.Number, CultureInfo.CurrentCulture, out value);
+            string s = text.Trim().TrimStart('$').Replace(" ", "").Replace(" ", "");
+            int dot = s.LastIndexOf('.'), comma = s.LastIndexOf(',');
+            char dec;
+            if (dot >= 0 && comma >= 0) dec = dot > comma ? '.' : ',';
+            else if (dot < 0 && comma < 0) dec = '.';
+            else
+            {
+                char sep = dot >= 0 ? '.' : ',';
+                int last = Math.Max(dot, comma);
+                bool thousands = s.Length - last - 1 == 3 || s.IndexOf(sep) != last;
+                dec = thousands ? (sep == '.' ? ',' : '.') : sep;
+            }
+            char group = dec == '.' ? ',' : '.';
+            string norm = s.Replace(group.ToString(), "").Replace(dec, '.');
+            return decimal.TryParse(norm, NumberStyles.AllowLeadingSign | NumberStyles.AllowDecimalPoint, CultureInfo.InvariantCulture, out value);
         }
 
         /// <summary>
