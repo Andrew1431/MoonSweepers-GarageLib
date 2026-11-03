@@ -11,7 +11,7 @@ Sand briquettes are regolith sand pressed into dense bricks that burn hot in the
 |---|---|
 | **Sand briquette** (cargo) | 2 kg per unit, sells for $7 per unit. Cargo value 3 (see [the cargo registry](../../docs/cargo-registry.md)). |
 | **Sand compactor** (Production, $800) | Built on the stone press's footprint, with its own model. Holds 16 kg of sand, presses 4 kg per 8 s cycle at 12 kW. Mass is kept: 4 kg of sand becomes 4 kg of briquettes (2 units). The output slot holds 10 kg. |
-| **Briquette generator** (Power, $1,500) | Built on the solar post's footprint, with its own model. Holds 10 kg of briquettes (5 units) and burns one 2 kg briquette per 20 s cycle. Each burn adds 3 kWh to its 6 kWh battery (half of it), so two briquettes fill it; no burn starts while the battery is full. Supplies up to 10 kW to StructureLib machines within 24 m, wirelessly. |
+| **Briquette generator** (Power, $1,500) | Built on the solar post's footprint, with its own model. Holds 10 kg of briquettes (5 units) and burns one 2 kg briquette per 20 s cycle. Each burn adds 3 kWh to its 6 kWh battery (half of it), so two briquettes fill it; no burn starts while the battery is full. Supplies up to 10 kW to machines within 24 m, wirelessly: StructureLib machines and vanilla ones (a vanilla machine draws what its own solar grid leaves unmet), with a power arc drawn to each while the build tool is held. Its look-at panel shows its own output, battery, fuel and what it powers. |
 
 The generator alone runs a compactor at 10 of its 12 kW (power 0.83, seen in game): a cycle takes 8 s at full power,
 so at 0.83 about 9.6 s (derived, not timed). On a
@@ -85,10 +85,10 @@ Limits (StructureLib today):
   tinted stand-ins, which then become the game's materials in place.
 - **No animated effects.** The stone press's moving parts and the solar post's lights are hidden with their meshes; the
   models are static.
-- **The generator powers StructureLib machines only.** Vanilla machines on the same ground are not fed: the game's
-  power grid totals cannot be written from a mod. Its "10 kW" goes to modded machines such as the compactor.
+- **The generator feeds machines within its 24 m range only.** A vanilla machine farther away on the same solar grid is not fed: the game's
+  power grid totals cannot be written from a mod, so the supply is per machine, not per grid. A fed vanilla machine's status reads "Powered by Briquette generator".
 - **A generator's running power draw is ignored;** it never takes power from the grid.
-- **No power line is drawn** to or from either structure.
+- **Briquette canisters are tinted up close only.** Beyond about 100 m the game draws canisters instanced, and those stay dust-coloured.
 - **A modded-only group gets its own grid.** Generators and machines that no vanilla power node reaches share a
   StructureLib-owned grid, reported as a negative grid id.
 - **Selling briquettes at the collector is unchecked.** The price is answered, but the deposit path is not verified.
@@ -118,4 +118,4 @@ stays clean.
 
 ## Changelog
 
-- 0.1.0: first version: the compactor and the generator with their own models and belt ports.
+- 0.1.0: first version: the compactor and the generator with their own models and belt ports; the generator feeds vanilla machines in range, draws power arcs and shows its own look-at panel; briquette canisters are tinted (StructureLib power UX).

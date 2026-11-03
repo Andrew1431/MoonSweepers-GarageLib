@@ -2,6 +2,7 @@ using BepInEx;
 using BepInEx.Unity.IL2CPP;
 using MoonCleaners;
 using StructureLib;
+using UnityEngine;
 
 namespace SandPower
 {
@@ -25,6 +26,8 @@ namespace SandPower
                 ShortName = "briquette",
                 UnitKilograms = 2,
                 Price = 7m,
+                // Pressed-sand brown on the canisters (near view; far canisters stay dust).
+                CanisterTint = new Color(0.42f, 0.33f, 0.24f),
             }, Guid);
 
             MoonStructures.Register(new StructureDefinition
@@ -57,7 +60,7 @@ namespace SandPower
                 Id = "ryanhartwig.briquette-generator",
                 Name = "Briquette generator",
                 Category = "Power",
-                Note = "Burns one sand briquette every 20 s for 10 kW. A 6 kWh battery for the gaps. Powers StructureLib machines within 24 m, wirelessly.",
+                Note = "Burns one sand briquette every 20 s for 10 kW. A 6 kWh battery for the gaps. Powers machines within 24 m, wirelessly.",
                 Price = 1500m,
                 BaseStructure = MoonWorld.SolarPostKind,
                 // blender/briquette_generator.py. Its Port_Briquettes in node, at the -X footprint edge flowing +X, is the
