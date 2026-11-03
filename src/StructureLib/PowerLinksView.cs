@@ -23,6 +23,7 @@ namespace StructureLib
 
         static MoonPowerLinks links;
         static MoonProductionInteraction inter;
+        static MoonDepotBuilder builder;
         static IntPtr world0;
         static bool drew;
         static readonly HashSet<int> networks = new();
@@ -35,10 +36,11 @@ namespace StructureLib
                 var world = CoreState.World;
                 if (world == null) return;
                 if (world.Pointer != world0) { Reset(); world0 = world.Pointer; }
-                // A Unity object destroyed under us compares == null; its LineRenderers went with its transform.
+                // A Unity object destroyed under us compares == null; its LineRenderers went with its transform. Only the
+                // objects go: the world is the same one.
                 if (inter == null)
                 {
-                    if (links != null) Reset();
+                    if (links != null) DropObjects();
                     inter = UnityEngine.Object.FindFirstObjectByType<MoonProductionInteraction>();
                     if (inter == null) return;
                 }
@@ -57,8 +59,7 @@ namespace StructureLib
                 bool show = force;
                 if (!show)
                 {
-                    var builder = inter.builder;
-                    if (builder == null) builder = UnityEngine.Object.FindFirstObjectByType<MoonDepotBuilder>();
+                    if (builder == null) { builder = inter.builder; if (builder == null) builder = UnityEngine.Object.FindFirstObjectByType<MoonDepotBuilder>(); }
                     if (builder != null && builder.HoldingBuildTool)
                     {
                         aimed = inter.Aimed(world);
@@ -78,23 +79,26 @@ namespace StructureLib
                 int arcs = 0;
                 // MoonPowerLinks keeps one ring: the aimed generator's, else the first generator of the network drawn.
                 int ringAt = aimed > 0 && Generator(world, aimed) != null ? aimed : -1;
+                // Set first: a throw between Begin and End still gets its Clear when the gate turns off.
+                drew = true;
                 links.Begin();
                 foreach (var kv in PowerPatches.LastSolve.Fed)
                 {
                     int gen = kv.Key;
                     if (!netOf.TryGetValue(gen, out int net) || (!force && !networks.Contains(net))) continue;
+                    // A depot removed since the last solve has no position: no arc from or to it.
+                    if (!End(world, gen, out var from)) continue;
                     if (ringAt < 0 && Generator(world, gen) != null) ringAt = gen;
-                    var from = End(world, gen);
                     foreach (int member in kv.Value)
                     {
-                        links.Arc(from, End(world, member), Width, cyan);
+                        if (!End(world, member, out var to)) continue;
+                        links.Arc(from, to, Width, cyan);
                         arcs++;
                     }
                 }
                 var def = ringAt > 0 ? Generator(world, ringAt) : null;
-                if (def != null) links.Ring(Position(world, ringAt), def.Power.Range, new Color(cyan.r, cyan.g, cyan.b, RingAlpha));
+                if (def != null && Position(world, ringAt, out var centre)) links.Ring(centre, def.Power.Range, new Color(cyan.r, cyan.g, cyan.b, RingAlpha));
                 links.End();
-                drew = true;
                 ArcsDrawn = arcs;
             }
             catch (Exception e)
@@ -104,14 +108,20 @@ namespace StructureLib
             }
         }
 
-        /// <summary>Disposes the library's MoonPowerLinks and forgets the interaction (leaving the game, a world change).</summary>
+        /// <summary>Disposes the library's MoonPowerLinks and forgets the cached objects and world (leaving the game, a world change).</summary>
         internal static void Reset()
+        {
+            DropObjects();
+            world0 = IntPtr.Zero;
+        }
+
+        static void DropObjects()
         {
             try { if (links != null) links.Dispose(); }
             catch (Exception e) { CoreLog.Once("power-links-dispose", "Disposing the power arcs threw: " + e, 3); }
             links = null;
             inter = null;
-            world0 = IntPtr.Zero;
+            builder = null;
             drew = false;
             ArcsDrawn = 0;
         }
@@ -125,20 +135,24 @@ namespace StructureLib
             return d?.Power != null ? d : null;
         }
 
-        static Vector3 Position(MoonWorld world, int id)
+        static bool Position(MoonWorld world, int id, out Vector3 p)
         {
+            p = Vector3.zero;
             var depots = world.depots;
-            if (depots == null || !depots.ContainsKey(id)) return Vector3.zero;
+            if (depots == null || !depots.ContainsKey(id)) return false;
             var r = depots.get_Item(id);
-            return new Vector3(r.x, r.y, r.z);
+            p = new Vector3(r.x, r.y, r.z);
+            return true;
         }
 
-        // Vanilla's anchor when it has one; else 2 m above the depot (the moon is a sphere centred on the origin).
-        static Vector3 End(MoonWorld world, int id)
+        // Vanilla's anchor when it has one; else 2 m above the depot (the moon is a sphere centred on the origin). False
+        // when the depot no longer exists.
+        static bool End(MoonWorld world, int id, out Vector3 p)
         {
-            if (world.PowerAnchor(id, out Vector3 p)) return p;
-            var pos = Position(world, id);
-            return pos + pos.normalized * 2f;
+            if (!Position(world, id, out var pos)) { p = Vector3.zero; return false; }
+            if (world.PowerAnchor(id, out p)) return true;
+            p = pos + pos.normalized * 2f;
+            return true;
         }
     }
 }

@@ -238,7 +238,7 @@ namespace StructureLib
             foreach (var (depot, first) in targets) EmptyOutputs(world, depot, first);
         }
 
-        static void EmptyOutputs(MoonWorld world, int depot, int first)
+        internal static void EmptyOutputs(MoonWorld world, int depot, int first, string who = "[selftest] arc-drawn")
         {
             try
             {
@@ -249,10 +249,10 @@ namespace StructureLib
                     if (s.Fill(slot) < 0.999f) continue;
                     double kg = s.Stored(slot);
                     s.stores[slot].Clear();
-                    CoreLog.Info($"[selftest] arc-drawn: emptied the full output slot {slot} ({kg:F1} kg) of depot {depot} (kind {s.Kind}) so it can run");
+                    CoreLog.Info($"{who}: emptied the full output slot {slot} ({kg:F1} kg) of depot {depot} (kind {s.Kind}) so it can run");
                 }
             }
-            catch (Exception e) { CoreLog.Warn($"[selftest] arc-drawn: emptying depot {depot}'s output threw {e.Message}"); }
+            catch (Exception e) { CoreLog.Warn($"{who}: emptying depot {depot}'s output threw {e.Message}"); }
         }
 
         static void TickArc()
@@ -265,30 +265,32 @@ namespace StructureLib
             Assert(name, arcs >= 1, $"ArcsDrawn {arcs} after {now - arcOpened:F1} s; fed {FedText()}");
             if (arcs < 1) return;
             CoreLog.Info($"[selftest] {name}: {arcs} arc(s) after {now - arcOpened:F1} s; fed {FedText()}");
-            // A side-on screenshot of the burner and the nearest pressure chamber within 20 m of it, once the probe's tour is
-            // over (it moves the walker for about 90 s from 24 s after load). Every chamber in that reach is loaded then: the
-            // briquette generator 28 (slot-2) draws first and covers one chamber alone, so the burner feeds the next ones.
+            // A side-on screenshot of a fuel generator and a machine it fed, once the probe's tour is over (it moves the walker
+            // for about 90 s from 24 s after load). The pressure chambers within 20 m of the burner get their full outputs
+            // emptied first; the pair framed is the burner and its nearest fed machine when it feeds one, else the generator
+            // that does (in slot-2 the briquette generator 28 draws first and covers one chamber alone).
             var burner = MoonStructures.Definition(BurnerId);
             var world = CoreState.World ?? CoreState.FindWorld();
-            shotGen = burner != null && world?.depots != null ? DepotOfKind(world, burner.Kind) : -1;
+            int burnerAt = burner != null && world?.depots != null ? DepotOfKind(world, burner.Kind) : -1;
             shotLoad.Clear();
-            if (shotGen >= 0)
+            if (burnerAt >= 0)
                 foreach (var kv in world.depots)
-                    if (kv.Value != null && kv.Value.kind == MoonWorld.PressureChamberKind && Vector3.Distance(PowerUx.At(world, shotGen), PowerUx.At(world, kv.Key)) <= 20f) shotLoad.Add(kv.Key);
-            shotMember = shotLoad.Count > 0 ? shotLoad.OrderBy(d => Vector3.Distance(PowerUx.At(world, shotGen), PowerUx.At(world, d))).First() : -1;
-            if (shotMember >= 0 && DevTools.PowerUxProbe != null && DevTools.PowerUxProbe.Value) { shotAt = now + 100f; shotStage = 0; }
+                    if (kv.Value != null && kv.Value.kind == MoonWorld.PressureChamberKind && Vector3.Distance(PowerUx.At(world, burnerAt), PowerUx.At(world, kv.Key)) <= 20f) shotLoad.Add(kv.Key);
+            shotBurner = burnerAt;
+            if (burnerAt >= 0 && DevTools.PowerUxProbe != null && DevTools.PowerUxProbe.Value) { shotAt = now + 100f; shotStage = 0; }
         }
 
         static readonly List<int> shotLoad = new();
 
-        static int shotGen = -1, shotMember = -1, shotStage;
+        static int shotBurner = -1, shotGen = -1, shotMember = -1, shotStage;
         static float shotAt = -1f, shotDeadline = -1f;
         static Vector3 shotLook;
 
         internal static bool ArcShotPending => shotAt >= 0f;
 
-        // arc-drawn's screenshot (BepInEx/cache/structurelib/powerux-<n>.png, after the tour's): load the chambers in reach,
-        // stand 14 m off the burner-chamber midpoint square to the pair (the freer side), wait for the burner to feed it, shoot.
+        // arc-drawn's screenshot (BepInEx/cache/structurelib/powerux-<n>.png, after the tour's): empty the chambers' full
+        // outputs, wait (up to 15 s) for a solve that feeds something, stand 14 m off the generator-machine midpoint square to
+        // the pair (the open side), face it, shoot.
         static void TickArcShot()
         {
             float now = Time.unscaledTime;
@@ -300,16 +302,23 @@ namespace StructureLib
             {
                 if (shotStage == 0)
                 {
-                    // Outputs emptied and dust loaded, so the chambers demand power again; the shot waits for the solve to
-                    // record the burner feeding the framed one (up to 20 s).
-                    foreach (int d in shotLoad)
+                    foreach (int d in shotLoad) EmptyOutputs(world, d, 1);
+                    shotStage = 1; shotAt = now + 3f; shotDeadline = now + 15f;
+                    return;
+                }
+                if (shotStage == 1)
+                {
+                    var fed = Patches.PowerPatches.LastSolve.Fed;
+                    int gen = fed.ContainsKey(shotBurner) ? shotBurner : fed.Keys.DefaultIfEmpty(-1).First();
+                    if (gen < 0 || !fed.TryGetValue(gen, out var members) || members.Count == 0)
                     {
-                        EmptyOutputs(world, d, 1);
-                        var ms = world.ProductionOf(d);
-                        double room = ms != null ? ms.Capacity(0) - ms.Stored(0) : 0;
-                        if (room > 0.5) world.CrewProcessorLoad(MoonWorld.LocalPlayer, d, MoonCargo.Dust, room);
-                        CoreLog.Info($"[selftest] arc-drawn shot: loaded {room:F1} kg dust into chamber {d}");
+                        if (now < shotDeadline) return;
+                        shotAt = -1f;
+                        CoreLog.Warn("[selftest] arc-drawn shot: no generator fed anything within 15 s; no screenshot");
+                        return;
                     }
+                    shotGen = gen;
+                    shotMember = members.OrderBy(d => Vector3.Distance(PowerUx.At(world, gen), PowerUx.At(world, d))).First();
                     var a = PowerUx.At(world, shotGen); var b = PowerUx.At(world, shotMember);
                     var mid = (a + b) / 2f; var up = mid.normalized;
                     var side = Vector3.Cross(up, (b - a).normalized).normalized;
@@ -328,8 +337,8 @@ namespace StructureLib
                     }
                     walker.Teleport(best + bestUp * 0.2f, true);
                     shotLook = mid + up * 1.5f;
-                    CoreLog.Info($"[selftest] arc-drawn shot: burner {shotGen}, chamber {shotMember}; walker to {PowerUx.V(best)} ({bestFree:F1} m from the nearest depot), looking at {PowerUx.V(shotLook)}");
-                    shotStage = 1; shotAt = now + 4f; shotDeadline = now + 20f;
+                    CoreLog.Info($"[selftest] arc-drawn shot: generator {shotGen}, machine {shotMember}; walker to {PowerUx.V(best)} ({bestFree:F1} m from the nearest depot), looking at {PowerUx.V(shotLook)}");
+                    shotStage = 2; shotAt = now + 4f;
                     return;
                 }
                 var t = walker.transform;
@@ -337,11 +346,10 @@ namespace StructureLib
                 var to = shotLook - (t.position + wup * 1.6f);
                 var flat = Vector3.ProjectOnPlane(to, wup);
                 walker.Face(flat.normalized, Mathf.Atan2(Vector3.Dot(to, wup), flat.magnitude) * Mathf.Rad2Deg);
-                bool fedNow = Patches.PowerPatches.LastSolve.Fed.TryGetValue(shotGen, out var fed) && fed.Contains(shotMember);
-                if (shotStage == 1) { if (fedNow || now >= shotDeadline) { shotStage = 2; shotAt = now + 1.5f; } return; }
+                if (shotStage == 2) { shotStage = 3; shotAt = now + 1.5f; return; }
                 shotAt = -1f;
                 CoreLog.Info($"[selftest] arc-drawn shot: ArcsDrawn {PowerLinksView.ArcsDrawn}; fed {FedText()}");
-                PowerUx.Tour.Shot("arc-drawn: burner and the machine it fed, side on");
+                PowerUx.Tour.Shot($"arc-drawn: generator {shotGen} and machine {shotMember}, side on");
             }
             catch (Exception e) { shotAt = -1f; CoreLog.Warn("[selftest] arc-drawn shot threw: " + e.Message); }
         }

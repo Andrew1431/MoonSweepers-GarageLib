@@ -25,7 +25,7 @@ namespace StructureLib
         static void BindPowerUx(ConfigFile cfg)
         {
             PowerUxProbe = cfg.Bind("Dev", "PowerUxProbe", false, "Dev build: the power-UX recon probe ([powerux] log lines): traces the look-at panel, the power solve, the power arcs and canister views, tours the walker's view over the AutoBuild depots and takes screenshots to BepInEx/cache/structurelib/powerux-<n>.png.");
-            PowerUxTest = cfg.Bind("Dev", "PowerUxTest", "", "Dev build: comma-separated PowerUxProbe experiments: fuel (raise the AutoBuilt pressure chamber's Power from the briquette generator after the solve), link (add the generator-chamber pair to powerLinks), anchor (add the generator to powerAnchors), arc (draw an arc from the generator to the chamber with our own MoonPowerLinks), tint (tint modded-cargo canister views), far (walk 70 m away from the canisters and look back), gates (instead of the tour: aim the compactor, open the pause menu, then mount a vehicle (spawning one if none is out), logging the look-at panel each time).");
+            PowerUxTest = cfg.Bind("Dev", "PowerUxTest", "", "Dev build: comma-separated PowerUxProbe experiments: fuel (raise the AutoBuilt pressure chamber's Power from the briquette generator after the solve), link (add the generator-chamber pair to powerLinks), anchor (add the generator to powerAnchors), arc (log PowerLinksView.ArcsDrawn on every tour shot and judge the build-tool and aim gate at the end of the tour), tint (tint modded-cargo canister views), far (walk 70 m away from the canisters and look back), gates (instead of the tour: aim the compactor, open the pause menu, then mount a vehicle (spawning one if none is out), logging the look-at panel each time).");
             PowerUxTeleport = cfg.Bind("Dev", "PowerUxTeleport", 0f, "Dev build: with PowerUxProbe, 6 s after load move the walker this many metres to the free side of the base (away from every depot), before AutoBuild. 0 = stay.");
             PowerUxHome = cfg.Bind("Dev", "PowerUxHome", "", "Dev build: with PowerUxProbe, 6 s after load put the walker on the ground under this world point (x,y,z), before AutoBuild. The walker's position is saved, so a probe run that walked it away is undone here. Empty = stay.");
             CoreLog.Info($"[dev] PowerUxProbe={PowerUxProbe.Value} PowerUxTest='{PowerUxTest.Value}' PowerUxTeleport={PowerUxTeleport.Value}");
@@ -76,7 +76,6 @@ namespace StructureLib
                 Canisters.Tick(world, now);
                 if (!tourStarted && gameT > 24f) { tourStarted = true; Tour.Start(world); }
                 Tour.Tick(world, now);
-                OwnArc.Tick(world);
             }
             catch (Exception e) { CoreLog.Once("powerux-tick", "[powerux] tick threw: " + e, 3); }
         }
@@ -647,6 +646,8 @@ namespace StructureLib
                     index = -1; t0 = Time.unscaledTime - StepSeconds;
                     return;
                 }
+                // arc: the generator first, while the machines just unblocked (ArcGate.Unblock at this step) still draw.
+                if (Test("arc") && Gen >= 0) targets.Add((Gen, "generator (arc gate)"));
                 bool shortTour = Test("short");
                 foreach (int k in shortTour ? Array.Empty<int>() : new[] { MoonWorld.SolarPostKind, MoonWorld.SolarTwinKind, MoonWorld.SolarTrackerKind })
                 {
@@ -686,9 +687,10 @@ namespace StructureLib
                 {
                     index++;
                     ForceHammer = false;
-                    if (index >= targets.Count) { L("tour: done"); return; }
+                    if (index >= targets.Count) { L("tour: done"); ArcGate.Done(); return; }
                     t0 = now; stage = 0;
                     var (id, label) = targets[index];
+                    if (label == "generator (arc gate)") ArcGate.Unblock(world);
                     if (id >= 0) Near(world, walker, id);
                     else if (id == -4) { RoutesLive = true; Arm(now, "routes on"); L($"tour: routes on ({DevTools.PowerUxTest.Value})"); }
                     else if (id == -2) FarWalk(world, walker);
@@ -767,6 +769,7 @@ namespace StructureLib
                 var look = inter?.look;
                 string vis = T(() => look == null ? "no look panel" : $"canvas active {look.canvas?.activeInHierarchy} alpha {look.group?.alpha:F2}");
                 L($"tour: shot ({how}) Aimed {aimed}, want {want}; {vis}; look panel: {Patches.PanelTexts(look)}");
+                ArcGate.Note(aimed, want, how);
                 if (want == -2) Canisters.FarReport(CoreState.World ?? CoreState.FindWorld());
                 Shot($"{targets[index].label}, {how}");
             }
@@ -868,31 +871,41 @@ namespace StructureLib
             }
         }
 
-        // arc: our own MoonPowerLinks drawing generator -> chamber each frame.
-        internal static class OwnArc
+        // arc: the library's PowerLinksView gate, observed on the tour's shots (no ForceArcs). With 'arc' each shot logs ArcsDrawn; the
+        // verdict at the end of the tour wants ArcsDrawn > 0 on a 'hammer on' shot aimed at a fuel-network member, and 0 on the
+        // first 'hammer off' shot after it.
+        internal static class ArcGate
         {
-            static MoonPowerLinks links;
-            static bool logged;
-            internal static void Tick(MoonWorld world)
+            static int aimedMax = -1, offAfter = -1;
+
+            // With 'arc', as the tour turns to the generator (Resolve fed the chamber at 12 s): empty the full outputs of the probe's chamber
+            // and of the example grinder, so the fuel network feeds something while the tour aims it (slot-2's machines sit
+            // with full outputs and no belt). Logged by EmptyOutputs.
+            internal static void Unblock(MoonWorld world)
             {
-                if (!RoutesLive || !Test("arc") || Gen < 0 || Chamber < 0) return;
-                if (links == null)
-                {
-                    var inter = UnityEngine.Object.FindFirstObjectByType<MoonProductionInteraction>();
-                    if (inter == null) return;
-                    links = new MoonPowerLinks(world, inter.transform);
-                    L($"arc: created MoonPowerLinks(world, '{inter.name}'); material {T(() => links.Material?.name)}");
-                }
-                bool a = world.PowerAnchor(Gen, out Vector3 from);
-                bool b = world.PowerAnchor(Chamber, out Vector3 to);
-                if (!a) from = At(world, Gen) + At(world, Gen).normalized * 2f;
-                if (!b) to = At(world, Chamber) + At(world, Chamber).normalized * 2f;
-                float width = Patches.ArcWidth > 0f ? Patches.ArcWidth : 0.06f;
-                var color = Patches.ArcWidth > 0f ? Patches.ArcColor : MoonProductionInteraction.Cyan;
-                links.Begin();
-                links.Arc(from, to, width, color);
-                links.End();
-                if (!logged) { logged = true; L($"arc: drawing {V(from)} (anchor {a}) -> {V(to)} (anchor {b}) width {width:F3} {C(color)}; used {links.used} lines {links.lines?.Count}"); }
+                if (!Test("arc")) return;
+                if (Chamber >= 0) SelfTest.EmptyOutputs(world, Chamber, 1, "[powerux] arc");
+                var grinder = MoonStructures.Definition("ryanhartwig.example-grinder");
+                int g = grinder != null ? NearestTo(world, grinder.Kind, At(world, Gen)) : -1;
+                if (g >= 0) SelfTest.EmptyOutputs(world, g, 2, "[powerux] arc");
+            }
+
+            internal static void Note(int aimed, int want, string how)
+            {
+                if (!Test("arc")) return;
+                int n = PowerLinksView.ArcsDrawn;
+                var last = StructureLib.Patches.PowerPatches.LastSolve.Fed;
+                bool inNet = aimed > 0 && StructureLib.Patches.PowerPatches.LastSolve.NetworkOf.ContainsKey(aimed);
+                L($"arc: shot ({how}) Aimed {aimed}, want {want}: PowerLinksView.ArcsDrawn {n}; aimed in a fuel network {inNet}; HoldingBuildTool forced {Tour.ForceHammer}; fed {string.Join("; ", last.Select(kv => $"{kv.Key} -> [{string.Join(", ", kv.Value)}]"))}");
+                if (how == "hammer on" && aimed == want && inNet) aimedMax = Math.Max(aimedMax, n);
+                else if (how == "hammer off" && aimedMax > 0 && offAfter < 0) offAfter = n;
+            }
+
+            internal static void Done()
+            {
+                if (!Test("arc")) return;
+                bool ok = aimedMax > 0 && offAfter == 0;
+                L($"arc: gate {(ok ? "ok" : "FAILED")}: most arcs on an aimed fuel-network member with the build tool forced {aimedMax}, arcs on the next shot with it off {offAfter}");
             }
         }
     }
