@@ -55,6 +55,12 @@ namespace BuildQoL.Pure
         /// <summary>The plan encoding of square id <paramref name="id"/>, as MoonWorld.GridCenter/GridFrame/GridCorners take it.</summary>
         public static int Encode(int id) => -(id + 1);
 
+        /// <summary>How far (metres from the planet centre) a planned piece may sit from the run's level and still count as the same level.</summary>
+        public const float LevelTol = 0.5f;
+
+        /// <summary>True when a planned piece at radius <paramref name="planned"/> is on the run's level <paramref name="level"/>.</summary>
+        public static bool SameLevel(float planned, float level) => Math.Abs(planned - level) <= LevelTol;
+
         /// <summary>True when the build must be refused at click time: a blocked cell, or not enough money for every piece.</summary>
         public static bool Refuse(int blocked, bool affordable) => blocked > 0 || !affordable;
 

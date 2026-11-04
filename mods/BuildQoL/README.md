@@ -36,6 +36,9 @@ squares after the ghost get outlines: green is buildable, red is blocked. The pr
   restored right after it, so your normal placements keep the base game's reach.
 - Plain wheel still rotates the ghost. The length stays set until you change it back to 1, pick another structure, or
   stop placing. A length of 1 is the base game.
+- Runs stack. With the ghost on top of existing foundations, each square of the run is planned on the foundation at
+  the ghost's level, the way the base game stacks a single piece on the one under the cursor. A run stays on one level:
+  where it would leave the foundations under it, those squares are blocked (red) and the run is refused.
 - Not covered yet: gamepad, multiplayer, hex foundation pieces, and free-placed pieces.
 
 ## Config
@@ -131,7 +134,8 @@ the ghost's square, each step 7.5 to 8.5 m from the last or the run is cancelled
 | `MoonDepotBuilder.UpdatePlacing(BuildInput)` | 0x44EDE0 | 6992 | normal | The only `wheel` consumer. Not patched. |
 | `MoonDepotBuilder.SetPrompt(string, bool, bool)` | 0x446320 | 272 | no metadata-init | Called only. |
 | `MoonDepotBuilder.Notice(string)` | 0x43FE00 | 64 | short leaf | Called only. **Never patch.** |
-| `MoonWorld.PlanStructure(...)` | 0x70F300 | 1088 | normal | Called per run cell (preview and build). Not patched. |
+| `MoonWorld.PlanStructure(...)` | 0x70F300 | 1088 | normal | Called per run cell (preview and build), with `target` = the id of the foundation the piece sits on: the base game passes `StructureAt(hit.collider)`, and `PlanWorldHex` (0x70F740) stacks only with a target (`StackedOnFree` / `PlanStacked`); with none it plans on the ground grid. Not patched. |
+| `MoonWorld.WorldGridCell(MoonDepotSnapshot)` | 0x76D6A0 | 160 | short | Plan-encoded square id of a built foundation. The run indexes the world-square depots (`MoonWorld.depots`) within range by square once per frame to find each cell's stacking target. Called only. **Never patch.** |
 | `MoonWorld.BeginStructureCheck(plan)` | 0x6A8B60 | 464 | normal | Called; `DepotPlacementCheck.Advance(5 ms)` until `Done`. Not patched. |
 | `MoonWorld.StructurePlacementSteps` | 0x754A90 | 144 | normal, short | **Never patch.** |
 | `MoonWorld.TryBuildStructure(...)` | 0x75BEB0 | 2976 | normal | Checks plan/check match and age (≤ 1.1 s), the reach (+0x4BD), obstacles; spawns, `ChargeBuild`, `SaveProgress`. Called once per piece with `def.reach` raised in `try`/`finally`. Not patched. |
@@ -165,3 +169,4 @@ driven through `TestInput` with Shift stood in by a dev flag and the facing by a
 
 - 0.1.0: First release. `KeepSelection`: keep the placed structure selected with a new ghost, with rotation kept.
 - Unreleased: `FoundationRun`: Shift + mouse wheel sets a run length for platform foundations; one click builds the run.
+  Runs started on top of existing foundations stack on them (first play-test found them refused as blocked).

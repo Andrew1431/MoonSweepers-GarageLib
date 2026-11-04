@@ -86,6 +86,16 @@ namespace BuildQoL.Tests
         [Fact]
         public void Decode_NonSquareCell() => Assert.Equal(-1, RunPlan.Decode(5));
 
+        [Theory]
+        [InlineData(1993.0f, 1993.0f, true)]
+        [InlineData(1993.4f, 1993.0f, true)]   // within LevelTol (0.5 m)
+        [InlineData(1993.5f, 1993.0f, true)]   // the boundary itself
+        [InlineData(1993.51f, 1993.0f, false)]
+        [InlineData(1992.6f, 1993.0f, true)]
+        [InlineData(1994.0f, 1993.0f, false)]  // one foundation (1 m) higher: another level
+        [InlineData(1992.0f, 1993.0f, false)]  // the ground under a stacked run
+        public void SameLevel_WithinHalfAMetre(float planned, float level, bool same) => Assert.Equal(same, RunPlan.SameLevel(planned, level));
+
         [Fact]
         public void Prompt_Clear()
         {

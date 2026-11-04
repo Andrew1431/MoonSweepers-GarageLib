@@ -58,6 +58,9 @@ namespace BuildQoL
             "MoonCleaners.MoonWorld:GridCenter", "MoonCleaners.MoonWorld:GridFrame", "MoonCleaners.MoonWorld:GridCorners",
             "MoonCleaners.MoonWorld:Squares", "MoonCleaners.MoonWorld:WalletDollars", "MoonCleaners.MoonWorld:LocalPlayer",
             "MoonCleaners.MoonSquareGrid:Find",
+            "MoonCleaners.MoonWorld:depots", "MoonCleaners.MoonWorld:WorldGridCell",
+            "MoonCleaners.MoonDepotSnapshot:id", "MoonCleaners.MoonDepotSnapshot:kind",
+            "MoonCleaners.MoonDepotSnapshot:x", "MoonCleaners.MoonDepotSnapshot:y", "MoonCleaners.MoonDepotSnapshot:z",
             "MoonCleaners.MoonDepotBuildDefinition:reach", "MoonCleaners.MoonDepotBuildDefinition:priceDollars", "MoonCleaners.MoonDepotBuildDefinition:module",
             "MoonCleaners.MoonWorld+DepotPlacementCheck:Advance", "MoonCleaners.MoonWorld+DepotPlacementCheck:Done",
             "MoonCleaners.MoonWorld+DepotPlacementCheck:Valid", "MoonCleaners.MoonWorld+DepotPlacementCheck:Reason",
@@ -130,7 +133,11 @@ namespace BuildQoL
         static readonly List<int> qCells = new();
         static readonly List<Vector3> qCentres = new();
         static int qIndex, qKind;
-        static float qYaw;
+        static float qYaw, qRadius;
+        static bool qStacked, previewStacked;   // the run starts on a foundation: every piece must stack
+        // Foundations by square id, rebuilt once per frame around the run (IndexDepots): the candidates a piece may stack on.
+        static readonly Dictionary<int, List<int>> depotsByCell = new();
+        static int depotsFrame = -1;
         static RunTally tally;
         static MoonDepotBuilder qBuilder;
 
@@ -148,6 +155,8 @@ namespace BuildQoL
         internal static bool Building => qBuilder != null;
         internal static IReadOnlyList<Vector3> Centres => centres;
         internal static int WheelCancelled, ClicksRefused;
+        internal static int StackedPieces;      // pieces of the last run planned on a foundation (target >= 0)
+        internal static bool Stacked => previewStacked;
 #endif
 
         // Expected conditions (the player aimed somewhere odd): info, once per key.
@@ -241,7 +250,11 @@ namespace BuildQoL
                 if (!RunPlan.StepOk(Vector3.Distance(centres[k - 1], centres[k]))) { InfoOnce("run-step-queue", "FoundationRun: run cells are not one cell apart; run not built"); return; }
             qCells.Clear(); qCentres.Clear();
             for (int k = 1; k < cells.Count; k++) { qCells.Add(cells[k]); qCentres.Add(centres[k]); }
-            qIndex = 0; qKind = kind; qYaw = b.yaw; qBuilder = b;
+            qIndex = 0; qKind = kind; qYaw = b.yaw; qRadius = plan.position.magnitude; qStacked = previewStacked; qBuilder = b;
+            depotsStale = true; // vanilla just built cell 0
+#if DEVBUILD
+            StackedPieces = 0;
+#endif
             tally = new RunTally(cells.Count);
             tally.AddBuilt(); // cell 0, by vanilla
             HideOutlines();
@@ -278,8 +291,15 @@ namespace BuildQoL
             Vector3 aim = qCentres[qIndex];
             qIndex++;
             if (!b.CanBuild(qKind)) { tally.Stop(RunPlan.NoMoney); FinishRun(); return; }
-            var plan = w.PlanStructure(qKind, aim, qYaw, -1, false, 0f, 0, aim.normalized);
-            if (plan == null || RunPlan.Decode(plan.cell) != cell) { tally.AddRefused(RunPlan.Blocked); DevPiece(cell, "plan off-cell"); return; }
+            var plan = PlanCell(w, qKind, cell, aim, qYaw, qRadius, qStacked, out int target);
+            if (plan == null || RunPlan.Decode(plan.cell) != cell) { tally.AddRefused(RunPlan.Blocked); DevPiece(cell, plan == null && qStacked ? "no foundation under this square at the run's level" : "plan off-cell"); return; }
+            if (target >= 0)
+            {
+                DevPiece(cell, $"stacked on depot {target} at |{plan.position.magnitude:F2}| (run level |{qRadius:F2}|)");
+#if DEVBUILD
+                StackedPieces++;
+#endif
+            }
             var check = w.BeginStructureCheck(plan);
             int slices = 0;
             while (check != null && !check.Done && slices < MaxSlices) { check.Advance(5.0); slices++; }
@@ -315,7 +335,7 @@ namespace BuildQoL
                 ok = w.TryBuildStructure(walker, plan, check, out reason);
             }
             finally { def.reach = orig; }
-            if (ok) tally.AddBuilt(); else tally.AddRefused(RunPlan.Category(reason));
+            if (ok) { tally.AddBuilt(); depotsStale = true; } else tally.AddRefused(RunPlan.Category(reason));
             DevPiece(cell, $"dist {dist:F2} m reach {orig} -> {during} -> {def.reach}: TryBuildStructure ok={ok} reason='{reason}'");
         }
 
@@ -464,6 +484,9 @@ namespace BuildQoL
             Vector3 feet = walker != null ? walker.transform.position : centres[0];
             bool ignoreReach = FoundationRunTweak.RunIgnoresReach.Value;
             float radius = centres[0].magnitude;
+            // Is the ghost itself stacked on a foundation? Then every square of the run must stack too (PlanCell).
+            PlanCell(w, kind, cells[0], centres[0], b.yaw, radius, false, out int target0);
+            previewStacked = target0 >= 0;
             while (outlines.Count < cells.Count - 1) { var o = NewOutline(); outlines.Add(o); lines.Add(o.GetComponent<LineRenderer>()); }
             for (int k = 0; k < outlines.Count; k++) if (outlines[k] != null) outlines[k].SetActive(k < cells.Count - 1);
             for (int k = 1; k < cells.Count; k++)
@@ -480,7 +503,7 @@ namespace BuildQoL
                     for (int j = 0; j < corners.Length; j++) lr.SetPosition(j, corners[j].normalized * (radius + OutlineLift));
                 }
                 Vector3 aim = centres[k];
-                var p = w.PlanStructure(kind, aim, b.yaw, -1, false, 0f, 0, aim.normalized);
+                var p = PlanCell(w, kind, cells[k], aim, b.yaw, radius, previewStacked, out _);
                 bool good = p != null && RunPlan.Decode(p.cell) == cells[k] && w.StructureObstaclesClear(p, out _);
                 Color col;
                 if (!good) { blocked++; col = Red; }
@@ -492,6 +515,64 @@ namespace BuildQoL
                 lr.startColor = col; lr.endColor = col;
             }
             affordable = Affordable(b, w, kind, def.priceDollars, cells.Count);
+        }
+
+        // The game's planner stacks a piece only when told which foundation it sits on: vanilla passes the depot id under the
+        // cursor (StructureAt(hit.collider)) as PlanStructure's target, and PlanWorldHex then plans on that deck
+        // (StackedOnFree / PlanStacked); with no target it plans on the ground grid, which collides with the foundation
+        // below. So for each run cell: try the foundations in that square as the target and take the first plan on the
+        // run's level (the ghost's |position|). With none: a run on the ground plans on the ground as the game would for
+        // an aim at terrain; a run on a stack (mustStack) gets no plan, so the square is blocked and the run stays on one
+        // level instead of silently stepping down to the ground.
+        static MoonWorld.StructurePlan PlanCell(MoonWorld w, int kind, int cell, Vector3 aim, float yaw, float radius, bool mustStack, out int target)
+        {
+            target = -1;
+            IndexDepots(w, aim);
+            if (depotsByCell.TryGetValue(cell, out var ids))
+                for (int i = 0; i < ids.Count; i++)
+                {
+                    var p = w.PlanStructure(kind, aim, yaw, ids[i], false, 0f, 0, aim.normalized);
+                    if (p != null && RunPlan.Decode(p.cell) == cell && RunPlan.SameLevel(p.position.magnitude, radius)) { target = ids[i]; return p; }
+                }
+            return mustStack ? null : w.PlanStructure(kind, aim, yaw, -1, false, 0f, 0, aim.normalized);
+        }
+
+        // World-square foundations within IndexRange of the run, by square id. Rebuilt when a piece was built (vanilla's or
+        // the run's), when the depot count changed, when the run moved far from the indexed centre, or after IndexFrames
+        // frames; a scan reads x, y, z first and the kind only for the depots in range. Snapshot cells come plan-encoded
+        // (-(id+1)) like StructurePlan.cell (the dev build logs the first raw value once).
+        const float IndexRange = RunPlan.MaxCap * 8f + 16f, IndexMove = 32f;
+        const int IndexFrames = 10;
+        static bool depotsStale = true;
+        static int depotsCount = -1;
+        static Vector3 indexCentre;
+        static readonly Dictionary<int, bool> squareKinds = new();
+        static void IndexDepots(MoonWorld w, Vector3 near)
+        {
+            var depots = w.depots;
+            if (depots == null) { depotsByCell.Clear(); depotsStale = true; return; }
+            int count = depots.Count;
+            bool fresh = !depotsStale && count == depotsCount && Time.frameCount - depotsFrame < IndexFrames && Vector3.Distance(near, indexCentre) < IndexMove;
+            if (fresh) return;
+            depotsStale = false; depotsCount = count; depotsFrame = Time.frameCount; indexCentre = near;
+            depotsByCell.Clear();
+            float range2 = IndexRange * IndexRange;
+            foreach (var kv in depots)
+            {
+                var d = kv.Value;
+                if (d == null) continue;
+                float dx = d.x - near.x, dy = d.y - near.y, dz = d.z - near.z;
+                if (dx * dx + dy * dy + dz * dz > range2) continue;
+                int kind = d.kind;
+                if (!squareKinds.TryGetValue(kind, out bool square)) squareKinds[kind] = square = w.IsWorldSquare(kind);
+                if (!square) continue;
+                int raw = w.WorldGridCell(d);
+                if (DevLogOn) InfoOnce("cell-encoding", $"[run] WorldGridCell(depot {d.id}) = {raw} (plan-encoded when negative)");
+                int cell = RunPlan.Decode(raw);
+                if (cell < 0) continue;
+                if (!depotsByCell.TryGetValue(cell, out var ids)) depotsByCell[cell] = ids = new List<int>(2);
+                ids.Add(d.id);
+            }
         }
 
         static bool Affordable(MoonDepotBuilder b, MoonWorld w, int kind, int price, int n)

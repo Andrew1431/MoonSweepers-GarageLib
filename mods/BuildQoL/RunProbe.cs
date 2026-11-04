@@ -12,14 +12,17 @@ namespace BuildQoL
     //  2. a run of 6 from a ghost 3 cells ahead: click, then the queued pieces (reach raised past 32 m, restored), wallet, notice.
     //  3. a run 2 cells to the right with a canister copy in cell 3: preview red, prompt "1 blocked", click refused.
     //  4. RunIgnoresReach=false, a run 2 cells to the left: stops at the first piece out of reach.
-    //  5. control: an unraised TryBuildStructure about 38 m out is refused ("Move closer"), reach back at its value.
+    //  5. a run on top of run1's pieces (aim on a built foundation): every cell stacked, built 6 of 6, one level up.
+    //  6. a run of 7 from run1's second square (now two levels high): 4 stacked, then 2 squares past the end of the stack
+    //     are red ("2 blocked"), the click is refused.
+    //  7. control: an unraised TryBuildStructure about 38 m out is refused ("Move closer"), reach back at its value.
     //  Screenshots of the preview and the built runs go to BepInEx/config.
     internal static class RunProbe
     {
         static ConfigEntry<bool> Enabled;
         static string shotDir;
 
-        enum Step { Wait, Select, Wheel, Run1, Watch1, Run2, Watch2, Run3, Watch3, Control, Shot, Done }
+        enum Step { Wait, Select, Wheel, Run1, Watch1, Run2, Watch2, Run3, Watch3, Run4, Watch4, Run5, Watch5, Control, Shot, Done }
         static Step step = Step.Wait;
         static int frames;
         static MoonDepotBuilder b;
@@ -74,7 +77,11 @@ namespace BuildQoL
                     case Step.Run2: DoArm(Step.Watch2, "run2-blocked", "buildqol-run-preview.png"); break;
                     case Step.Watch2: DoWatch(Step.Run3, "run2-blocked", 0); break;
                     case Step.Run3: DoArm(Step.Watch3, "run3-noreach", null); break;
-                    case Step.Watch3: DoWatch(Step.Control, "run3-noreach", -1); break;
+                    case Step.Watch3: DoWatch(Step.Run4, "run3-noreach", -1); break;
+                    case Step.Run4: DoArm(Step.Watch4, "run4-stacked", "buildqol-run-stacked-preview.png"); break;
+                    case Step.Watch4: DoWatch(Step.Run5, "run4-stacked", 6); break;
+                    case Step.Run5: DoArm(Step.Watch5, "run5-stackedge", "buildqol-run-stackedge-preview.png"); break;
+                    case Step.Watch5: DoWatch(Step.Control, "run5-stackedge", 0); break;
                     case Step.Control: DoControl(); break;
                     case Step.Shot: if (frames == 20) { Shot("buildqol-run-built.png"); Overhead("over-buildqol-run-built.png"); } if (frames > 30) Finish(); break;
                 }
@@ -185,9 +192,25 @@ namespace BuildQoL
             {
                 if (name == "run1") Arm(name, feet + fwd * 20f);
                 else if (name == "run2-blocked") Arm(name, feet + fwd * 16f - right * 16f);
+                else if (name == "run4-stacked")
+                {
+                    // A run on top of run1's pieces: the aim ray (8 m above, straight down) hits the built foundation's top,
+                    // so vanilla plans the ghost stacked on it; the mod must plan cells 1..5 stacked too (before the fix: 'RRRRR').
+                    Arm(name, feet + fwd * 20f); // N is still 6 from step 1: the run covers all six run1 pieces
+                }
+                else if (name == "run5-stackedge") Arm(name, feet + fwd * 28f); // run1's second square, two levels high after run4
                 else { Arm(name, feet + fwd * 12f - right * 24f); FoundationRunTweak.RunIgnoresReach.Value = false; }
             }
+            // run5: one Shift + wheel tick, N 6 -> 7, so the run reaches two squares past the stack's end.
+            if (name == "run5-stackedge" && frames == 5) { FoundationRun.DevShift = true; SetInput(false, 1f); return; }
+            if (name == "run5-stackedge" && frames == 6) FoundationRun.DevShift = false;
             SetInput(false, 0);
+            if (frames == 60 && (name == "run4-stacked" || name == "run5-stackedge"))
+            {
+                var sp = b.structurePlan;
+                float ground = aimPoint.magnitude, ghost = sp != null ? sp.position.magnitude : -1f;
+                Info($"{name} ghost: |plan| {ghost:F2} vs aim point |{ground:F2}| snapped={sp?.snapped} cell={(sp != null ? RunPlan.Decode(sp.cell) : -1)} stacked={FoundationRun.Stacked} hint='{b.PlacementReason}'");
+            }
             if (frames == 35 && name == "run2-blocked") Info($"{name} before obstacle: blocked={FoundationRun.Blocked} cells1..='{FoundationRun.DevCells}' valid={b.PlacementValid}");
             if (frames == 40 && name == "run2-blocked") PlaceObstacle(3);
             if (frames == 70)
@@ -216,6 +239,7 @@ namespace BuildQoL
             if (frames < 30) return;
             decimal m = Money();
             Info($"{name} result: depots {depots0} -> {Depots()} (+{Depots() - depots0}{(expectBuilt >= 0 ? ", expect +" + expectBuilt : "")}) wallet {money0} -> {m} (-{money0 - m}, {def.priceDollars} each) clicks refused {FoundationRun.ClicksRefused - refused0} notice='{FoundationRun.LastNotice}' reach now {def.reach} (was {reach0})");
+            if (name == "run4-stacked") Info($"{name}: pieces planned on a foundation {FoundationRun.StackedPieces} (expect 5)");
             if (obstacle != null) { UnityEngine.Object.Destroy(obstacle); obstacle = null; }
             if (name == "run3-noreach") FoundationRunTweak.RunIgnoresReach.Value = true;
             Next(next);
