@@ -46,8 +46,10 @@ namespace StructureLib
                 "MS_Glass" => m.glass,
                 "MS_Steel" => m.metal,
                 "MS_Cyan" => m.cyan,
-                // Pressed sand (cargo models): no game material has the colour, so one is made from it on the game's shader.
-                "MS_Sand" => m.Mat("StructureLib_MS_Sand", colour),
+                // Pressed sand (cargo models): no game material has the colour. MoonPrototypeModels.Mat clones a textured
+                // material (a sand brick came out speckled like moon stone), so this is the shell material in the model's own
+                // colour with its textures cleared: the same plain matte the stand-ins use.
+                "MS_Sand" => Plain(m.shell, "StructureLib_MS_Sand", colour),
                 _ => null,
             };
             if (mat == null)
@@ -63,14 +65,21 @@ namespace StructureLib
             if (tinted.TryGetValue(name, out var t) && Alive(t.Mat)) return t.Mat;
             if (!Alive(FallbackBase)) throw new InvalidOperationException($"no game material for '{name}': no MoonPrototypeModels yet and no fallback material");
             CoreLog.Once("mat-tinted", "No player equipment yet (MoonPrototypeModels); model materials are plain tinted stand-ins until it exists", 1);
-            var mat = new Material(FallbackBase) { name = "StructureLib_" + name, color = colour };
+            var mat = Plain(FallbackBase, "StructureLib_" + name, colour);
+            tinted[name] = (mat, colour);
+            return mat;
+        }
+
+        // A copy of `from` in one flat colour: textures and emission cleared.
+        static Material Plain(Material from, string name, Color colour)
+        {
+            var mat = new Material(from) { name = name, color = colour };
             if (mat.HasProperty("_BaseColor")) mat.SetColor("_BaseColor", colour);
             if (mat.HasProperty("_BaseMap")) mat.SetTexture("_BaseMap", null);
             if (mat.HasProperty("_MainTex")) mat.SetTexture("_MainTex", null);
             if (mat.HasProperty("_EmissionColor")) mat.SetColor("_EmissionColor", Color.black);
             mat.DisableKeyword("_EMISSION");
             mat.hideFlags |= HideFlags.DontUnloadUnusedAsset;
-            tinted[name] = (mat, colour);
             return mat;
         }
 
