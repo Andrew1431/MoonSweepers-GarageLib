@@ -40,6 +40,10 @@ namespace StructureLib.Patches
                 }
             }
             catch (Exception e) { CoreLog.Once("tint", $"ShowCargo({(byte)cargo}) tint postfix threw; the canister keeps vanilla's look: {e.Message}", 2); }
+            // A cargo with a CanisterModel then gets its own mesh in place of the capsule (CanisterModels.cs), after the tint,
+            // so a pooled view that loses the model still gets the right colour on the capsule it gets back.
+            try { CanisterModels.Apply(__instance, cargo, CargoPatches.Live(cargo)); }
+            catch (Exception e) { CoreLog.Once("canister-model", $"ShowCargo({(byte)cargo}) model postfix threw; the canister keeps the capsule: {e}", 2); }
         }
     }
 }

@@ -59,8 +59,13 @@ MoonStructures.Register(new StructureDefinition
 - **Cargo** (`MoonStructures.RegisterCargo(CargoDefinition, ownerGuid)`): `Id`, `Value` (a byte 3..255 claimed in
   [`docs/cargo-registry.md`](../../docs/cargo-registry.md)), `Name`, `ShortName`, `UnitKilograms`, `Price` (dollars
   per unit), `CanisterTint` (optional: multiplies the near canister view's dust fill, so the cargo reads as tinted
-  dust on belts, on the ground and in the hand; the look-at panel colours its rows with it too). Far canisters (beyond
-  about 100 m, drawn instanced) are not tinted and look like dust. It returns the `Cargo` handle for slots, or
+  dust on belts, on the ground and in the hand; the look-at panel colours its rows with it too), `CanisterModel`
+  (optional: `"<file>.bin"` beside the DLL, exported with `shared/blender`, shown in place of the vanilla capsule on
+  the near canister view, built at the view's origin and scale with the capsule's renderers hidden and its colliders
+  kept, so the canister rides belts, is picked up and feeds machines exactly as before; size it like the capsule, see
+  [STRUCTURES.md, "Canister models"](../../shared/blender/STRUCTURES.md#canister-models); a missing or unreadable
+  file logs one error and keeps the tinted capsule). Far canisters (beyond about 100 m, drawn instanced) are neither
+  tinted nor swapped and look like dust. It returns the `Cargo` handle for slots, or
   `Cargo.None` when refused. Vanilla cargo handles are `Cargo.Dust`, `Cargo.Sand`, `Cargo.Stone`.
 - **Processors** (`StructureDefinition.Processor`): `RunningKw`, `CycleSeconds`, up to 8 `Slots`: at least one
   `Slot.Input`, at least one `Slot.Batch`, and one `Slot.Output` unless `ProducesPower`. Capacities are kilograms. A
@@ -265,7 +270,10 @@ Power UX checks (`DevPowerChecks.cs`), one line each:
   `ForceArcs`, or when neither `power-vanilla-fed` nor `power-grinder-runs-on-burner` runs).
 - `cargo-tint`: after the other checks, a ground dust canister is made grit with the walker away, its near view reads
   grit's tint, dust views read white, a pooled view that showed grit reads its next canister's own colour, and the
-  canister goes back to dust (it moves the walker 250 m away twice and puts it back).
+  canister goes back to dust (it moves the walker 250 m away twice and puts it back). With grit registered with a
+  `CanisterModel` (the example's `example_grit.bin`), the grit view must also carry its `StructureLibCargo_<value>`
+  holder with every capsule renderer disabled, every other view the capsule with no holder on, and a view that showed
+  the model must later show the capsule again.
 
 The belt checks need their own configs: belt input with `AutoBuild = 96,ryanhartwig.example-grinder,94`, `AutoFeed =
 96:Dust:10`, `AutoBelt = 96:output->ryanhartwig.example-grinder:Dust in` (`ring`, `SunOverhead`; `belt-canister-modded`
@@ -306,7 +314,7 @@ belt). Removal runs last because the game saves a few seconds after it.
 | Build menu | Catalog entry, note, rendered card art; placement through the menu's own path (`PlanStructure`, site check, `TryBuildStructure`, which records a free pose) saves and reloads cleanly with its pose (dev `AutoBuildViaPlan`) | | Placing a structure by hand (the real ghost and the remove tool) |
 | Build and remove | Build, refund, removal, `Built` and `Removed` | | |
 | Save | Sidecar for depots (pose included), production states and modded-cargo canisters; orphans kept; reload restores (see [Save audit](#save-audit)) | A modded robot dock's robots-off setting (resets on load); a modded garage holding vehicles | |
-| Cargo | Names, unit mass, price, canister round trip, modded canisters riding belts (see [Cargo audit](#cargo-audit)); `CanisterTint` on the near canister view, a pooled view reused for another cargo getting its own colour back (`cargo-tint`) | Depositing modded cargo at the collector; co-op cargo events; `CanisterTint` on far (instanced) canisters, which stay dust | Tint at the player's eye in real lighting (checked on a screenshot only) |
+| Cargo | Names, unit mass, price, canister round trip, modded canisters riding belts (see [Cargo audit](#cargo-audit)); `CanisterTint` on the near canister view, a pooled view reused for another cargo getting its own colour back (`cargo-tint`); `CanisterModel` on the near canister view (the capsule's renderers off, its colliders kept) and the capsule back on a reused view (`cargo-tint` with the example grit lump) | Depositing modded cargo at the collector; co-op cargo events; `CanisterTint` and `CanisterModel` on far (instanced) canisters, which stay dust | Tint and model at the player's eye in real lighting (checked on screenshots only) |
 | Processors | Cycle, batch moved at the same mass, `CycleFinished`, loading through `CrewProcessorLoad`; belt input through a declared port (`HandOff` prefix, `CargoEntered`; a canister of another cargo, or one arriving while its slot is full, waits at the belt end); belt output (vanilla `EmitProduct`/`EmitCargo`, 1 kg canisters, `CargoEmitted`); machine-to-machine chains by belt (the example grinder to burner, self-test `belt-chain-feeds`), saved and reloaded with canisters on the belts | Walker loading (`LoadProcessor` refuses: "Not a production machine"); a structure without a processor taking belt input | Belt input in co-op (the host decides; clients untested) |
 | Ports | Declared ports (and a port on a port-less donor) written into the cloned definition as `sl:<cargo>:<Name>`; `PortCargo` answers the declared cargo; the game shows "input"/"output" and "<name> input/output"; refusal at freeze for a port cargo no slot holds | | Belts placed by hand onto modded ports (dev `AutoBelt` builds through the game's `TryBuildConveyor`); ports inherited from a donor (no example uses them) |
 | Models | `Model` file on the donor template (donor renderers hidden, colliders kept unless `Footprint` is set), ports from its `Port_*` nodes, card picture rendered from it (the example burner); a missing file falls back to the donor model and declared ports | The donor's animated effects on a custom model | Donors with a non-unit `scale` or a skinned mesh (none of the donors checked so far has either) |
