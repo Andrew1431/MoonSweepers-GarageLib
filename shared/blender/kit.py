@@ -24,7 +24,7 @@ PALETTE = {
     "MS_Steel":        ((0.55, 0.56, 0.58), 0.3, 1.0, 0.0),
     "MS_Cyan":         ((0.1, 0.75, 0.9), 0.3, 0.0, 3.0),
     # Pressed sand, matte: for cargo models (StructureLib makes the material from the colour; no game material has it).
-    "MS_Sand":         ((0.50, 0.36, 0.22), 0.9, 0.0, 0.0),
+    "MS_Sand":         ((0.36, 0.25, 0.14), 0.9, 0.0, 0.0),
 }
 WHITE, BLACK, ORANGE, LAMP, GLASS, STEEL, CYAN, SAND = PALETTE.keys()
 
