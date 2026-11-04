@@ -9,7 +9,7 @@ Sand briquettes are regolith sand pressed into dense bricks that burn hot in the
 
 | | Numbers |
 |---|---|
-| **Sand briquette** (cargo) | 2 kg per unit, sells for $7 per unit. Cargo value 3 (see [the cargo registry](../../docs/cargo-registry.md)). |
+| **Sand briquette** (cargo) | 2 kg per unit, sells for $7 per unit. Cargo value 3 (see [the cargo registry](../../docs/cargo-registry.md)). Shown as a sand-coloured brick (its own model, `sand_briquette.bin`) on belts, on the ground and in the hand, in place of the game's dust capsule. |
 | **Sand compactor** (Production, $800) | Built on the stone press's footprint, with its own model. Holds 16 kg of sand, presses 4 kg per 8 s cycle at 12 kW. Mass is kept: 4 kg of sand becomes 4 kg of briquettes (2 units). The output slot holds 10 kg. |
 | **Briquette generator** (Power, $1,500) | Built on the solar post's footprint, with its own model. Holds 10 kg of briquettes (5 units) and burns one 2 kg briquette per 20 s cycle. Each burn adds 3 kWh to its 6 kWh battery (half of it), so two briquettes fill it; no burn starts while the battery is full. Supplies up to 10 kW to machines within 24 m, wirelessly: StructureLib machines and vanilla ones (a vanilla machine draws what its own solar grid leaves unmet), with a power arc drawn to each while the build tool is held. Its look-at panel shows its own output, battery, fuel and what it powers. |
 
@@ -88,7 +88,9 @@ Limits (StructureLib today):
 - **The generator feeds machines within its 24 m range only.** A vanilla machine farther away on the same solar grid is not fed: the game's
   power grid totals cannot be written from a mod, so the supply is per machine, not per grid. A fed vanilla machine's status reads "Powered by Briquette generator".
 - **A generator's running power draw is ignored;** it never takes power from the grid.
-- **Briquette canisters are tinted up close only.** Beyond about 100 m the game draws canisters instanced, and those stay dust-coloured.
+- **Briquettes are bricks up close only.** Within about 100 m a briquette canister shows the brick model; beyond that
+  the game draws canisters instanced, and those are the plain dust capsule. The brick is a look: the capsule's
+  colliders stay underneath it, so a briquette takes the same room on a belt and in the hand as any canister.
 - **A modded-only group gets its own grid.** Generators and machines that no vanilla power node reaches share a
   StructureLib-owned grid, reported as a negative grid id.
 - **Selling briquettes at the collector is unchecked.** The price is answered, but the deposit path is not verified.
@@ -118,4 +120,4 @@ stays clean.
 
 ## Changelog
 
-- 0.1.0: first version: the compactor and the generator with their own models and belt ports; the generator feeds vanilla machines in range, draws power arcs and shows its own look-at panel; briquette canisters are tinted (StructureLib power UX).
+- 0.1.0: first version: the compactor and the generator with their own models and belt ports; the generator feeds vanilla machines in range, draws power arcs and shows its own look-at panel; briquettes are sand bricks on belts, on the ground and in the hand (their own model through StructureLib's `CanisterModel`; they were tinted dust capsules before).

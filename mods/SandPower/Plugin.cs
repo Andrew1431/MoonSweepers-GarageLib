@@ -26,8 +26,12 @@ namespace SandPower
                 ShortName = "briquette",
                 UnitKilograms = 2,
                 Price = 7m,
-                // Pressed-sand brown on the canisters (near view; far canisters stay dust).
+                // Pressed-sand brown: the look-at panel's briquette rows, and the capsule when the brick model below is
+                // missing (far canisters stay dust either way).
                 CanisterTint = new Color(0.42f, 0.33f, 0.24f),
+                // blender/sand_briquette.py: a chamfered sand brick shown in place of the dust capsule on belts, on the
+                // ground and in the hand (the capsule's colliders stay, so riding, pickup and the hoppers are unchanged).
+                CanisterModel = "sand_briquette.bin",
             }, Guid);
 
             MoonStructures.Register(new StructureDefinition

@@ -4,6 +4,12 @@ Fundamental decisions about the repo and its libraries, newest first, so every m
 Andrew asked (2026-11-01) for a change log the agents contribute to; the work-order board is the other copy, for
 whoever can write there. One line per decision: date, who, what, where the detail lives.
 
+- 2026-11-04, Ryan (briquettes read as dark capsules in play): **A cargo may bring its own canister model:**
+  `CargoDefinition.CanisterModel` (a `.bin` beside the mod's DLL) is built under the near canister view in place of
+  the capsule, whose renderers are hidden and whose colliders, rigidbody and scripts are kept (riding, pickup and
+  hoppers unchanged); far, instanced canisters stay the dust capsule, as with the tint. Models are sized against the
+  capsule's measured box (`shared/blender/STRUCTURES.md`, "Canister models"); the kit gains `MS_Sand`, a matte made
+  from its colour. SandPower's briquette is the first (`sand_briquette.bin`).
 - 2026-11-03, agent (Ryan not answering design questions during this work): **Power UX for modded structures:** the
   library draws its own power arcs and range ring with a second `MoonPowerLinks` (vanilla's `ShowGrid` cannot include
   modded members, and `powerLinks` / `powerGrids` are not written), shown with the build tool held on a fuel-network

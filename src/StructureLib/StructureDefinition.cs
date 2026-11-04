@@ -143,6 +143,18 @@ namespace StructureLib
         public decimal Price;
         /// <summary>Tint of the cargo canister. Null keeps the default.</summary>
         public Color? CanisterTint;
+        /// <summary>
+        /// A model file (<c>"name.bin"</c> next to the registering mod's DLL, exported with <c>shared/blender</c>) shown in
+        /// place of the vanilla capsule on the near canister view: on belts, on the ground and in the hand. It is built at
+        /// the view's origin and scale (shared/blender/STRUCTURES.md, "Canister models", gives the capsule's size); the
+        /// capsule's renderers are hidden while it shows and its colliders stay, so the canister still rides, is picked up
+        /// and feeds machines as before. Far canisters (instanced, beyond about 100 m) stay the dust capsule. A missing or
+        /// unreadable file logs one error and keeps the capsule (tinted with <see cref="CanisterTint"/>).
+        /// </summary>
+        public string CanisterModel;
+
+        // CanisterModel resolved next to the registering assembly at RegisterCargo; null without one.
+        internal string CanisterModelPath;
     }
 
     /// <summary>Handle to a cargo kind, vanilla or modded, used in <see cref="Slot"/>s.</summary>

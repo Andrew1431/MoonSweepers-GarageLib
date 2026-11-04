@@ -39,7 +39,9 @@ texture. They are friendly industrial kit, slightly toy-like, never rusty and ne
 Use only the kit's materials (the loader maps the names to the game's own): `MS_BodyWhite` (panels, tanks, pedestals),
 `MS_BlackPlastic` (base plates, skirts, housings, hopper mouths), `MS_OrangeMetal` (bands, intake lips, moving or
 hot parts), `MS_LampOrange` (glowing windows, an intake ring), `MS_Steel` (frames, rails, chutes, fittings),
-`MS_Glass` (windows, PV glass), `MS_Cyan` (one status light, or a thin glow band). `kit.export` refuses anything else.
+`MS_Glass` (windows, PV glass), `MS_Cyan` (one status light, or a thin glow band), and for cargo models only
+`MS_Sand` (pressed sand, matte; StructureLib makes it from the colour, no game material has it). `kit.export` refuses
+anything else.
 
 - **Structures are boxy industrial units on a visible skid or foot**: a dark plate or skid under everything, a few
   clear white volumes on it. No floating parts.
@@ -90,6 +92,34 @@ kit.port("Briquettes out", (-4.1, 0, 0.85), (-1, 0, 0), True, "ryanhartwig.sand-
 - `python shared/blender/check_bin.py <file.bin>` (or `"<blender.exe>" -b --factory-startup --python
   shared/blender/check_bin.py -- <file.bin>`) prints every node, its props and triangles, and for `Port_*` nodes the
   position and flow direction in Unity axes (`rootpos=`, `dir=`): what the loader will see. Blender +Y is Unity -Z.
+
+## Canister models
+
+A modded cargo may bring its own model for the near canister view (`CargoDefinition.CanisterModel`, a `.bin` beside
+the mod's DLL): StructureLib builds it under the view in place of the game's dust capsule, on belts, on the ground
+and in the hand, with the capsule's renderers hidden and its colliders kept. Far canisters (beyond about 100 m,
+drawn instanced) stay the capsule. `mods/SandPower/blender/sand_briquette.py` is the worked example;
+`examples/ExampleStructure/blender/example_grit.py` the smallest one.
+
+- **The model's origin is the view's origin.** The capsule's meshes span the box below in view space (Unity axes,
+  read in game by the library's one-time `Vanilla canister view` log line); the view's scale is 1. Blender Z is Unity
+  Y, so floor the model at Z = 0 and keep it inside the box, in plan and height: a canister then takes the same room
+  on a belt and against the walker's hand as the capsule whose colliders it keeps.
+- No ports, no footprint guide, no skid: a cargo model is one small solid. Keep it under a few hundred triangles (a
+  belt may show dozens at once).
+- `kit.preview(root, ..., structure=True, figure=False)` renders it on the ground plane without the 1.8 m figure.
+
+| Vanilla capsule part (view space, Unity x, y, z; measured 2026-11-04) | min | max |
+|---|---|---|
+| Body (`Graphite`, `Ivory`): the capsule shell | (-0.18, 0.01, -0.21) | (0.18, 0.61, 0.21) |
+| `Orange` bands and handle | (-0.18, 0.07, -0.18) | (0.18, 0.61, 0.18) |
+| `Rubber` foot | (-0.17, 0.00, -0.19) | (0.17, 0.01, 0.19) |
+| `Glass` window and `Dust` fill | (-0.16, 0.13, -0.16) | (0.16, 0.45, 0.16) |
+| `Stone block` (shown for stone cargo instead of the capsule) | (-0.25, 0.00, -0.25) | (0.25, 0.28, 0.25) |
+
+So a canister model fits a 0.36 x 0.42 m footprint (x by z) and 0.61 m of height from the origin; a block the size
+of the stone block (0.5 x 0.5 m, 0.28 m tall) is the game's own precedent for a non-capsule canister. In Blender
+that box is X ±0.18, Y ±0.21, Z 0..0.61.
 
 ## Running a build
 
