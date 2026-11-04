@@ -382,6 +382,9 @@ namespace StructureLib
         static float ctOpened = -1f, ctUntil = -1f, ctNext, ctStageAt;
         static int ctStage, ctGrit = -1, ctSamples;
         static bool ctGritOk, ctDustOk, ctReused, ctPutBack;
+        // CanisterModel (CanisterModels.cs): grit's view shows its model holder with the capsule hidden, and a view that
+        // showed it gets the capsule back for another cargo. Only judged when grit is registered with a CanisterModel.
+        static bool ctGritModel, ctModelOk, ctModelBack;
         static byte ctGritValue;
         static Color ctTint;
         static Vector3 ctSpot, ctStand, ctFar, ctLook, ctHome;
@@ -406,10 +409,12 @@ namespace StructureLib
             if (world == null || streaming == null) { CoreLog.Info($"[selftest] {name} not applicable: no {(world == null ? "MoonWorld" : "MoonCanisterStreaming")}"); return; }
             ctTint = grit.CanisterTint.Value;
             ctGritValue = grit.Value;
+            ctGritModel = grit.CanisterModelPath != null;
+            ctModelOk = ctModelBack = false;
             ctOpened = Time.unscaledTime;
             ctUntil = ctOpened + WaitLimit + 60f;
             ctStage = 0;
-            CoreLog.Info($"[selftest] {name} opened: grit value {ctGritValue} tint {PowerUx.C(ctTint)}; ActiveViews {streaming.ActiveViews}; waits for the other checks{(DevTools.PowerUxProbe?.Value == true ? " and the probe's tour" : "")}");
+            CoreLog.Info($"[selftest] {name} opened: grit value {ctGritValue} tint {PowerUx.C(ctTint)}{(ctGritModel ? $" canister model '{grit.CanisterModel}'" : "")}; ActiveViews {streaming.ActiveViews}; waits for the other checks{(DevTools.PowerUxProbe?.Value == true ? " and the probe's tour" : "")}");
         }
 
         static bool OthersPending => cycleUntil >= 0f || PowerPending || VanillaFedPending || ArcPending || ArcShotPending || sandOpen.Count > 0 ||
@@ -588,19 +593,25 @@ namespace StructureLib
                 var want = cargo == ctGritValue ? ctTint : (MoonStructures.IsModded((MoonCargo)cargo) ? MoonStructures.CargoDefinition((MoonCargo)cargo)?.CanisterTint : null) ?? Color.white;
                 var got = ViewColours(v);
                 int vid = v.GetInstanceID();
-                string text = got == null ? "no block" : $"own {PowerUx.C(got.Value.own)} dust renderer {PowerUx.C(got.Value.dust)}";
-                if (got == null || !Near(got.Value.own, want) || !Near(got.Value.dust, want))
+                // A cargo with a CanisterModel wants its holder on and no capsule renderer enabled; every other cargo wants
+                // no holder on and the capsule enabled (what CanisterModels restores on a pooled view).
+                bool wantModel = MoonStructures.IsModded((MoonCargo)cargo) && MoonStructures.CargoDefinition((MoonCargo)cargo)?.CanisterModelPath != null;
+                var look = ModelLook(v, cargo);
+                bool modelWrong = wantModel ? !look.model || look.capsule : look.model || !look.capsule;
+                string text = (got == null ? "no block" : $"own {PowerUx.C(got.Value.own)} dust renderer {PowerUx.C(got.Value.dust)}") + $" model {look.model} capsule {look.capsule}";
+                if (got == null || !Near(got.Value.own, want) || !Near(got.Value.dust, want) || modelWrong)
                 {
                     string key = $"{vid}:{id}:{cargo}";
                     live.Add(key);
                     if (!ctWrongSince.TryGetValue(key, out float since)) ctWrongSince[key] = since = now;
                     if (now - since >= 1.5f && ctBad.Count < 6 && !ctBad.Any(b => b.StartsWith($"view {vid} canister {id} ", StringComparison.Ordinal)))
-                        ctBad.Add($"view {vid} canister {id} cargo {cargo}: {text} for {now - since:F1} s, want {PowerUx.C(want)}");
+                        ctBad.Add($"view {vid} canister {id} cargo {cargo}: {text} for {now - since:F1} s, want {PowerUx.C(want)}{(wantModel ? " model on, capsule off" : " capsule on, no model")}");
                     continue;
                 }
                 if (cargo == ctGritValue)
                 {
                     if (id == ctGrit && !ctGritOk) { ctGritOk = true; CoreLog.Info($"[selftest] cargo-tint: grit canister {id} view {vid} reads {text}"); }
+                    if (id == ctGrit && wantModel) ctModelOk = true;
                     ctTinted[vid] = id;
                 }
                 else
@@ -612,10 +623,33 @@ namespace StructureLib
                         ctReused = true;
                         CoreLog.Info($"[selftest] cargo-tint: view {vid} showed grit canister {was} and now shows canister {id} of cargo {cargo}: {text}");
                     }
+                    if (ctTinted.ContainsKey(vid) && ctGritModel && !wantModel) ctModelBack = true;
                 }
                 if (ctSeen.Count < 6 && !ctSeen.Any(s => s.StartsWith($"view {vid} canister {id} ", StringComparison.Ordinal))) ctSeen.Add($"view {vid} canister {id} cargo {cargo}: {text}");
             }
             foreach (var k in ctWrongSince.Keys.Where(k => !live.Contains(k)).ToList()) ctWrongSince.Remove(k);
+        }
+
+        // Whether the view's holder for this cargo (CanisterModels.HolderName) is on, and whether any renderer outside the
+        // library's holders is enabled (the capsule, whichever of its parts vanilla has active).
+        static (bool model, bool capsule) ModelLook(MoonDustCanisterView v, byte cargo)
+        {
+            bool model = false, capsule = false;
+            var holders = new List<Transform>();
+            var root = v.transform;
+            foreach (var t in v.GetComponentsInChildren<Transform>(true))
+            {
+                if (t.parent == null || t.parent.Pointer != root.Pointer || !t.name.StartsWith(CanisterModels.HolderPrefix, StringComparison.Ordinal)) continue;
+                holders.Add(t);
+                if (t.name == CanisterModels.HolderName(cargo) && t.gameObject.activeSelf) model = true;
+            }
+            foreach (var r in v.GetComponentsInChildren<Renderer>(true))
+            {
+                if (r == null || !r.enabled || holders.Any(h => r.transform.IsChildOf(h))) continue;
+                capsule = true;
+                break;
+            }
+            return (model, capsule);
         }
 
         // The near views (instance:canister) and the pool size; a view that showed grit is marked *.
@@ -651,10 +685,11 @@ namespace StructureLib
                 }
                 catch (Exception e) { CoreLog.Warn($"[selftest] {name}: putting the walker back home threw {e.Message}"); }
             }
-            string detail = $"grit canister {ctGrit} matched {ctGritOk}, dust white {ctDustOk}, a grit view reused for another cargo with its colour {ctReused} ({ctTinted.Count} view(s) showed grit), back to dust {(ctGrit >= 0 ? ctPutBack.ToString() : "n/a")}, {ctSamples} samples; wrong: [{string.Join("; ", ctBad)}]; seen: [{string.Join("; ", ctSeen)}]";
+            string modelText = ctGritModel ? $", grit view showed its canister model with the capsule hidden {ctModelOk}, a view that showed it got the capsule back {ctModelBack}" : ", no canister model on grit (not judged)";
+            string detail = $"grit canister {ctGrit} matched {ctGritOk}, dust white {ctDustOk}, a grit view reused for another cargo with its colour {ctReused} ({ctTinted.Count} view(s) showed grit){modelText}, back to dust {(ctGrit >= 0 ? ctPutBack.ToString() : "n/a")}, {ctSamples} samples; wrong: [{string.Join("; ", ctBad)}]; seen: [{string.Join("; ", ctSeen)}]";
             if (skip == null && ctBad.Count == 0 && ctGritOk && ctDustOk && !ctReused) skip = "the pool never reused a view that showed grit for another canister";
             if (skip != null && ctBad.Count == 0) { CoreLog.Info($"[selftest] {name} not applicable: {skip} ({detail})"); return; }
-            bool ok = ctGritOk && ctDustOk && ctReused && ctBad.Count == 0 && (ctGrit < 0 || ctPutBack);
+            bool ok = ctGritOk && ctDustOk && ctReused && ctBad.Count == 0 && (ctGrit < 0 || ctPutBack) && (!ctGritModel || (ctModelOk && ctModelBack));
             Assert(name, ok, skip != null ? $"{skip}; {detail}" : detail);
             if (ok) CoreLog.Info($"[selftest] {name}: {detail}");
         }

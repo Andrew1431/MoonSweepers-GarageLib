@@ -46,6 +46,8 @@ namespace StructureLib
                 "MS_Glass" => m.glass,
                 "MS_Steel" => m.metal,
                 "MS_Cyan" => m.cyan,
+                // Pressed sand (cargo models): no game material has the colour, so one is made from it on the game's shader.
+                "MS_Sand" => m.Mat("StructureLib_MS_Sand", colour),
                 _ => null,
             };
             if (mat == null)

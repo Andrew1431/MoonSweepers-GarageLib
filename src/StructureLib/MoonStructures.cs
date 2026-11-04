@@ -90,7 +90,7 @@ namespace StructureLib
                 CoreLog.Error($"Register('{def.Id}'): CardImageKey '{def.CardImageKey}' uses the reserved 'structurelib:' prefix; ignored.");
                 def.CardImageKey = null;
             }
-            if (!string.IsNullOrWhiteSpace(def.Model)) def.ModelPath = ResolveModel(def, System.Reflection.Assembly.GetCallingAssembly());
+            if (!string.IsNullOrWhiteSpace(def.Model)) def.ModelPath = ResolveModel(def.Id, def.Model, System.Reflection.Assembly.GetCallingAssembly());
             def.Owner = ownerGuid ?? "unknown";
             def.OwnerVersion = PluginVersion(ownerGuid);
             def.Name ??= def.Id;
@@ -104,19 +104,19 @@ namespace StructureLib
             return def;
         }
 
-        // Model is a file name next to the registering mod's DLL. The file is read (and a missing one reported) when the
-        // registry freezes and when the model is built.
-        static string ResolveModel(StructureDefinition def, System.Reflection.Assembly owner)
+        // A structure's Model or a cargo's CanisterModel is a file name next to the registering mod's DLL. The file is read
+        // (and a missing one reported) when the registry freezes and when the model is built, or when a canister first shows.
+        static string ResolveModel(string id, string file, System.Reflection.Assembly owner)
         {
             string dir = null;
-            try { dir = Path.GetDirectoryName(owner?.Location); } catch (Exception e) { CoreLog.Warn($"Register('{def.Id}'): the registering assembly has no location ({e.Message})"); }
+            try { dir = Path.GetDirectoryName(owner?.Location); } catch (Exception e) { CoreLog.Warn($"Register('{id}'): the registering assembly has no location ({e.Message})"); }
             if (string.IsNullOrEmpty(dir)) dir = BepInEx.Paths.PluginPath;
-            string path = Path.Combine(dir, def.Model);
+            string path = Path.Combine(dir, file);
 #if DEVBUILD
             if (DevTools.BreakModelPath != null && DevTools.BreakModelPath.Value)
             {
-                path = Path.Combine(dir, "missing-" + Path.GetFileName(def.Model));
-                CoreLog.Info($"[dev] BreakModelPath: '{def.Id}' model points at {path}");
+                path = Path.Combine(dir, "missing-" + Path.GetFileName(file));
+                CoreLog.Info($"[dev] BreakModelPath: '{id}' model points at {path}");
             }
 #endif
             return path;
@@ -126,6 +126,7 @@ namespace StructureLib
         /// Register a cargo kind. Returns its handle for use in slots, or <see cref="Cargo.None"/> if it was rejected.
         /// Value clashes between different cargo are only detected when the registry freezes.
         /// </summary>
+        [MethodImpl(MethodImplOptions.NoInlining)] // GetCallingAssembly must see the mod, not an inlined caller
         public static Cargo RegisterCargo(CargoDefinition def, string ownerGuid = null)
         {
             if (def == null) throw new ArgumentNullException(nameof(def));
@@ -147,9 +148,11 @@ namespace StructureLib
             }
             def.Name ??= def.Id;
             def.ShortName ??= def.Name;
+            if (!string.IsNullOrWhiteSpace(def.CanisterModel)) def.CanisterModelPath = ResolveModel(def.Id, def.CanisterModel, System.Reflection.Assembly.GetCallingAssembly());
             cargoById[def.Id] = def;
             cargoOwner[def.Id] = (ownerGuid ?? "unknown", PluginVersion(ownerGuid));
-            CoreLog.Info($"Registered cargo '{def.Id}' ('{def.Name}', value {def.Value}) from {cargoOwner[def.Id].Guid} {cargoOwner[def.Id].Version}");
+            CoreLog.Info($"Registered cargo '{def.Id}' ('{def.Name}', value {def.Value}) from {cargoOwner[def.Id].Guid} {cargoOwner[def.Id].Version}" +
+                         (def.CanisterModelPath != null ? $", canister model {def.CanisterModelPath}" : ""));
             return new Cargo(def.Value, def.Id);
         }
 

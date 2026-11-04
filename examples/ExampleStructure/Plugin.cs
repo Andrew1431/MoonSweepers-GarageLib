@@ -49,6 +49,9 @@ namespace ExampleStructure
                 Price = 2m,
                 // Grey-blue grit in a near canister view (belt, ground, hand); far canisters still look like dust.
                 CanisterTint = new Color(0.55f, 0.55f, 0.60f),
+                // A grit lump (blender/example_grit.py) shown in place of the capsule on the near view: the cargo-tint
+                // self-test expects its holder on grit views and the capsule back on reused ones.
+                CanisterModel = "example_grit.bin",
             }, Guid);
 
             // A processor on the pressure chamber's model: grinds moon dust into example grit, 2 kg per 4 s cycle.

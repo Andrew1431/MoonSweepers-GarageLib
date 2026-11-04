@@ -14,7 +14,7 @@ REPO = os.path.abspath(os.path.join(os.path.dirname(__file__), "..", ".."))
 
 # Name -> (base colour linear RGB, roughness, metallic, emission strength). Names map to MoonPrototypeModels materials:
 # MS_BodyWhite=shell, MS_BlackPlastic=dark, MS_OrangeMetal/MS_LampOrange=orange, MS_Glass=glass, MS_Steel=metal,
-# MS_Cyan=cyan.
+# MS_Cyan=cyan; MS_Sand is made from its colour by StructureLib (cargo models only).
 PALETTE = {
     "MS_BodyWhite":    ((0.80, 0.79, 0.76), 0.32, 0.35, 0.0),
     "MS_BlackPlastic": ((0.018, 0.021, 0.026), 0.55, 0.0, 0.0),
@@ -23,8 +23,10 @@ PALETTE = {
     "MS_Glass":        ((0.06, 0.10, 0.14), 0.08, 0.3, 0.0),
     "MS_Steel":        ((0.55, 0.56, 0.58), 0.3, 1.0, 0.0),
     "MS_Cyan":         ((0.1, 0.75, 0.9), 0.3, 0.0, 3.0),
+    # Pressed sand, matte: for cargo models (StructureLib makes the material from the colour; no game material has it).
+    "MS_Sand":         ((0.50, 0.36, 0.22), 0.9, 0.0, 0.0),
 }
-WHITE, BLACK, ORANGE, LAMP, GLASS, STEEL, CYAN = PALETTE.keys()
+WHITE, BLACK, ORANGE, LAMP, GLASS, STEEL, CYAN, SAND = PALETTE.keys()
 
 
 def reset():
