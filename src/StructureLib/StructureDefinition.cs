@@ -34,7 +34,7 @@ namespace StructureLib
         /// </summary>
         public Func<ModelContext, GameObject> BuildModel;
         /// <summary>
-        /// Optional model file (e.g. <c>"sand_compactor.bin"</c>, exported by shared/blender/export_mesh_model.py) next to the
+        /// Optional model file (e.g. <c>"coking_oven.bin"</c>, exported by shared/blender/export_mesh_model.py) next to the
         /// registering mod's DLL. When set and <see cref="BuildModel"/> is null, the library shows it on the base structure:
         /// every base renderer is hidden (colliders and scripts stay) and the model stands under a child named
         /// <c>"StructureLibModel"</c>, its lowest vertex on template-local y = 0 (the game adds the definition's

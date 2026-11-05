@@ -33,7 +33,7 @@ kit.cyl("Status", 0.05, 0.04, (0.7, -0.7, 1.62), CYAN, root, "Z", 12)
 kit.hopper("Intake", (0, -1.1, 0.8), 0.8, 0.5, 0.45, root)
 kit.chute("Outlet", (0, 1.1, 0.4), 0.6, 0.5, root)
 kit.port("In", (0, -1.1, 0.8), (0, 1, 0), False, "Sand", root)
-kit.port("Out", (0, 1.1, 0.4), (0, 1, 0), True, "ryanhartwig.sand-briquette", root)
+kit.port("Out", (0, 1.1, 0.4), (0, 1, 0), True, "ryanhartwig.coalite", root)
 kit.footprint_guide(1.2, 1.2, 1.6, root)
 
 lo, hi = kit.bounds(root)
@@ -48,7 +48,7 @@ check_bin.dump(mats, nodes)
 byname = {n["name"]: n for n in nodes}
 assert not any(n["name"].startswith("Guide_") for n in nodes), "guide was exported"
 assert byname["Port_In"]["props"] == {"output": 0.0, "cargo": "Sand"}, byname["Port_In"]["props"]
-assert byname["Port_Out"]["props"] == {"output": 1.0, "cargo": "ryanhartwig.sand-briquette"}, byname["Port_Out"]["props"]
+assert byname["Port_Out"]["props"] == {"output": 1.0, "cargo": "ryanhartwig.coalite"}, byname["Port_Out"]["props"]
 # Blender (x, y, z) -> Unity (-x, z, -y): flow +Y in Blender is -Z in Unity; positions map the same way.
 for n, pos in (("Port_In", (0, 0.8, 1.1)), ("Port_Out", (0, 0.4, -1.1))):
     d, p = byname[n]["dir"], byname[n]["rootpos"]

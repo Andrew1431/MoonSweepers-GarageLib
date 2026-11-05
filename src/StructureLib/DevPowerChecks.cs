@@ -91,7 +91,7 @@ namespace StructureLib
         // burner. Within 60 s, at some tick: vanilla's solve left the chamber below Power 0.99 and the top-up raised it to
         // 0.99 or more, its Cycles rose since the check opened, and the summed ChargeKwh of the fuel generators that fed it
         // (LastSolve.Fed when it first read the raised Power) is below its value then. In a world where the burner shares a
-        // network with another generator (slot-2: the briquette generator 28), that one may be the generator drawn from
+        // network with another generator (slot-2: the coalite furnace 28), that one may be the generator drawn from
         // first, so the energy check follows whichever generators fed the chamber. Not applicable when the chamber is not
         // in the burner's network after 20 s.
         static int vfChamber = -1, vfBurner = -1, vfCycles;
@@ -268,7 +268,7 @@ namespace StructureLib
             // A side-on screenshot of a fuel generator and a machine it fed, once the probe's tour is over (it moves the walker
             // for about 90 s from 24 s after load). The pressure chambers within 20 m of the burner get their full outputs
             // emptied first; the pair framed is the burner and its nearest fed machine when it feeds one, else the generator
-            // that does (in slot-2 the briquette generator 28 draws first and covers one chamber alone).
+            // that does (in slot-2 the coalite furnace 28 draws first and covers one chamber alone).
             var burner = MoonStructures.Definition(BurnerId);
             var world = CoreState.World ?? CoreState.FindWorld();
             int burnerAt = burner != null && world?.depots != null ? DepotOfKind(world, burner.Kind) : -1;
