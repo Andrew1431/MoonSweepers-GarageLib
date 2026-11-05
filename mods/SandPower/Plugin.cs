@@ -52,7 +52,7 @@ namespace SandPower
                     Slots =
                     {
                         Slot.Input("Sand", Cargo.Sand, 16),
-                        Slot.Batch("Pressing", Cargo.Sand, 4),
+                        Slot.Batch("Baking", Cargo.Sand, 4),
                         Slot.Output("Coalite", coalite, 10),
                     },
                 },
