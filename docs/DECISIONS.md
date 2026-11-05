@@ -4,6 +4,13 @@ Fundamental decisions about the repo and its libraries, newest first, so every m
 Andrew asked (2026-11-01) for a change log the agents contribute to; the work-order board is the other copy, for
 whoever can write there. One line per decision: date, who, what, where the detail lives.
 
+- 2026-11-04, Ryan: **SandPower renamed before release:** cargo `ryanhartwig.sand-briquette` -> `ryanhartwig.coalite`
+  ("coalite"), `ryanhartwig.sand-compactor` "Sand compactor" -> `ryanhartwig.coking-oven` "Coking oven",
+  `ryanhartwig.briquette-generator` "Briquette generator" -> `ryanhartwig.coalite-furnace` "Coalite furnace"; model
+  files, port nodes (`Port_Coalite ...`) and dev checks follow. Vanilla names machines after their mechanism (Pressure
+  chamber, Stone press, Fuel generator) and "briquette generator" named the burner after its fuel; the ids were
+  unreleased, so they could still change. The GUID `com.ryanhartwig.sandpower`, the `SandPower` folder and cargo value 3
+  stay. Older lines below keep the old names.
 - 2026-11-04, Ryan (briquettes read as dark capsules in play): **A cargo may bring its own canister model:**
   `CargoDefinition.CanisterModel` (a `.bin` beside the mod's DLL) is built under the near canister view in place of
   the capsule, whose renderers are hidden and whose colliders, rigidbody and scripts are kept (riding, pickup and

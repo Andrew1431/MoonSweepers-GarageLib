@@ -284,7 +284,7 @@ namespace StructureLib.Patches
             return "kind " + kind;
         }
 
-        // A fully fed vanilla machine's status text: Status reads powerStatus back ("Powered by Briquette generator" in the
+        // A fully fed vanilla machine's status text: Status reads powerStatus back ("Powered by Coalite furnace" in the
         // Task 3 run, where vanilla's own text was "No power: build solar panels within reach"). Vanilla's solve rewrites
         // powerStatus every solve (that run read vanilla's text again before each of our writes), so the write is
         // reapplied every solve like Power; the text per generator name is built once.

@@ -160,35 +160,35 @@ namespace StructureLib
         // SandPower's models (run from the chain and reload checks in DevBelts.cs, once the depots exist):
         //  sandpower-model-swapped: both views carry the StructureLibModel holder with enabled renderers, every donor
         //    mesh/skinned renderer disabled (the ones Swapped counts) and the donor prefab's colliders (stone press 97
-        //    for the compactor, solar post 93 for the generator).
-        //  sandpower-model-ports: the clones' ports are the models' Port_* nodes: the compactor 'sl:<sand>:Sand in' in at
-        //    (-4.10, 0.85, 0.00) and 'sl:3:Briquettes out' out at (3.90, 0.85, 0.00); the generator 'sl:3:Briquettes in' in
+        //    for the oven, solar post 93 for the generator).
+        //  sandpower-model-ports: the clones' ports are the models' Port_* nodes: the oven 'sl:<sand>:Sand in' in at
+        //    (-4.10, 0.85, 0.00) and 'sl:3:Coalite out' out at (3.90, 0.85, 0.00); the generator 'sl:3:Coalite in' in
         //    at (-0.90, 0.85, 0.00); all flowing (1, 0, 0).
         static void SandModelChecks(MoonWorld world)
         {
-            StructureDefinition c = MoonStructures.Definition(CompactorId), g = MoonStructures.Definition(GeneratorId);
+            StructureDefinition c = MoonStructures.Definition(OvenId), g = MoonStructures.Definition(GeneratorId);
             var construction = UnityEngine.Object.FindFirstObjectByType<MoonDepotConstruction>();
-            var viewC = compactorDepot < 0 ? null : construction?.ViewOf(compactorDepot);
+            var viewC = ovenDepot < 0 ? null : construction?.ViewOf(ovenDepot);
             var viewG = generatorDepot < 0 ? null : construction?.ViewOf(generatorDepot);
             string skip = world == null ? "no MoonWorld found" : c == null || g == null ? "SandPower is not registered"
-                : viewC == null ? $"no view for compactor depot {compactorDepot}" : viewG == null ? $"no view for generator depot {generatorDepot}" : null;
+                : viewC == null ? $"no view for oven depot {ovenDepot}" : viewG == null ? $"no view for generator depot {generatorDepot}" : null;
             Check("sandpower-model-swapped", skip, () =>
             {
-                var (okC, whyC) = Swapped(world, viewC, MoonWorld.StonePressKind, "compactor");
+                var (okC, whyC) = Swapped(world, viewC, MoonWorld.StonePressKind, "oven");
                 var (okG, whyG) = Swapped(world, viewG, MoonWorld.SolarPostKind, "generator");
-                return (okC && okG, $"compactor: {whyC}; generator: {whyG}");
+                return (okC && okG, $"oven: {whyC}; generator: {whyG}");
             });
             Check("sandpower-model-ports", world == null || c == null || g == null ? "SandPower is not registered" : null, () =>
             {
                 var pc = world.BuildDefinition(c.Kind)?.conveyorPorts;
                 var pg = world.BuildDefinition(g.Kind)?.conveyorPorts;
-                CoreLog.Info($"[selftest] compactor clone ports (rule '{c.PortRule}'): {Describe(pc)}; generator clone ports (rule '{g.PortRule}'): {Describe(pg)}");
-                int b = MoonStructures.CargoDefinition(BriquetteId)?.Value ?? -1;
-                string sandIn = $"sl:{(byte)MoonCargo.Sand}:Sand in", briqOut = $"sl:{b}:Briquettes out", briqIn = $"sl:{b}:Briquettes in";
+                CoreLog.Info($"[selftest] oven clone ports (rule '{c.PortRule}'): {Describe(pc)}; generator clone ports (rule '{g.PortRule}'): {Describe(pg)}");
+                int b = MoonStructures.CargoDefinition(CoaliteId)?.Value ?? -1;
+                string sandIn = $"sl:{(byte)MoonCargo.Sand}:Sand in", briqOut = $"sl:{b}:Coalite out", briqIn = $"sl:{b}:Coalite in";
                 bool okC = c.PortRule == "model Port_* nodes" && (pc?.Length ?? 0) == 2 &&
                            Has(pc, sandIn, false, new Vector3(-4.10f, 0.85f, 0f)) && Has(pc, briqOut, true, new Vector3(3.90f, 0.85f, 0f));
                 bool okG = g.PortRule == "model Port_* nodes" && (pg?.Length ?? 0) == 1 && Has(pg, briqIn, false, new Vector3(-0.90f, 0.85f, 0f));
-                return (okC && okG, $"compactor rule '{c.PortRule}' ports {Describe(pc)}, expected '{sandIn}' in at (-4.10,0.85,0.00) and '{briqOut}' out at (3.90,0.85,0.00); generator rule '{g.PortRule}' ports {Describe(pg)}, expected '{briqIn}' in at (-0.90,0.85,0.00); all dir (1,0,0)");
+                return (okC && okG, $"oven rule '{c.PortRule}' ports {Describe(pc)}, expected '{sandIn}' in at (-4.10,0.85,0.00) and '{briqOut}' out at (3.90,0.85,0.00); generator rule '{g.PortRule}' ports {Describe(pg)}, expected '{briqIn}' in at (-0.90,0.85,0.00); all dir (1,0,0)");
             });
 
             static bool Has(Il2CppInterop.Runtime.InteropTypes.Arrays.Il2CppReferenceArray<MoonDepotBuildDefinition.ConveyorPort> ports, string name, bool output, Vector3 at)

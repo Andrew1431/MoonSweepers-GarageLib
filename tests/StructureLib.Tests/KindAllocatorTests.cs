@@ -20,7 +20,7 @@ namespace StructureLib.Tests
         [Fact]
         public void KindOf_NeverBelowFirstModdedKind()
         {
-            foreach (var id in new[] { "", "a", "ryanhartwig.sand-compactor", "zzz" })
+            foreach (var id in new[] { "", "a", "ryanhartwig.coking-oven", "zzz" })
                 Assert.InRange(KindAllocator.KindOf(id), 1_000_000, int.MaxValue);
         }
 

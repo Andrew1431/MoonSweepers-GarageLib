@@ -82,7 +82,7 @@ A port is an empty named `Port_<name>` (the name the game shows, e.g. `Port_Sand
 
 ```python
 kit.port("Sand in", (4.1, 0, 0.85), (-1, 0, 0), False, "Sand", root)          # input: +Y points into the machine
-kit.port("Briquettes out", (-4.1, 0, 0.85), (-1, 0, 0), True, "ryanhartwig.sand-briquette", root)  # output: out of it
+kit.port("Coalite out", (-4.1, 0, 0.85), (-1, 0, 0), True, "ryanhartwig.coalite", root)  # output: out of it
 ```
 
 - Position = the empty's position (where the belt end snaps). Local **+Y = the flow direction**: into the machine for
@@ -98,7 +98,7 @@ kit.port("Briquettes out", (-4.1, 0, 0.85), (-1, 0, 0), True, "ryanhartwig.sand-
 A modded cargo may bring its own model for the near canister view (`CargoDefinition.CanisterModel`, a `.bin` beside
 the mod's DLL): StructureLib builds it under the view in place of the game's dust capsule, on belts, on the ground
 and in the hand, with the capsule's renderers hidden and its colliders kept. Far canisters (beyond about 100 m,
-drawn instanced) stay the capsule. `mods/SandPower/blender/sand_briquette.py` is the worked example;
+drawn instanced) stay the capsule. `mods/SandPower/blender/coalite.py` is the worked example;
 `examples/ExampleStructure/blender/example_grit.py` the smallest one.
 
 - **The model's origin is the view's origin.** The capsule's meshes span the box below in view space (Unity axes,

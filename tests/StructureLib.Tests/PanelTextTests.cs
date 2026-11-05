@@ -7,24 +7,24 @@ namespace StructureLib.Tests;
 public class PanelTextTests
 {
     static PanelLayout Gen(bool running = true, double charge = 3.5, double fuelKg = 6, int fed = 1) =>
-        PanelText.Generator("Briquette generator", 24f, 10f, 4f, 6f, charge, "sand briquette", "briquette", fuelKg, 10, running, fed);
+        PanelText.Generator("Coalite furnace", 24f, 10f, 4f, 6f, charge, "coalite", "coalite", fuelKg, 10, running, fed);
 
     static PanelSlot[] Slots() => new[]
     {
         new PanelSlot("sand", 4.5, 16, 1, true),
-        new PanelSlot("briquette", 0, 10, 3, false),
+        new PanelSlot("coalite", 0, 10, 3, false),
     };
 
     static PanelLayout Mach(bool running = true, int grid = 14, float progress = 0.25f, int cycles = 3, PanelSlot[] slots = null, bool withPower = true, int maxRows = 8, string status = null) =>
-        PanelText.Machine("Briquetter", status, running, grid, 0.5f, 6f, 12f, progress, cycles, slots ?? Slots(), withPower, maxRows);
+        PanelText.Machine("Coking oven", status, running, grid, 0.5f, 6f, 12f, progress, cycles, slots ?? Slots(), withPower, maxRows);
 
     [Fact]
     public void Generator_Running_ShowsBurningAndFourRows()
     {
         var l = Gen();
         Assert.Equal("FUEL POWER  ·  24 M RANGE", l.Kicker);
-        Assert.Equal("Briquette generator", l.Title);
-        Assert.Equal("Burning briquette", l.State);
+        Assert.Equal("Coalite furnace", l.Title);
+        Assert.Equal("Burning coalite", l.State);
         Assert.Equal(PanelColour.Mint, l.StateColour);
         Assert.Equal(4, l.Rows.Count);
         Assert.Equal(new[] { "OUTPUT", "BATTERY", "FUEL", "POWERING" }, l.Rows.Select(r => r.Label));
@@ -54,7 +54,7 @@ public class PanelTextTests
     public void Generator_NoFuel_Coral()
     {
         var l = Gen(running: false, fuelKg: 0);
-        Assert.Equal("No fuel: feed sand briquette by belt", l.State);
+        Assert.Equal("No fuel: feed coalite by belt", l.State);
         Assert.Equal(PanelColour.Coral, l.StateColour);
     }
 
@@ -104,7 +104,7 @@ public class PanelTextTests
         Assert.Equal("SAND", l.Rows[1].Label);
         Assert.Equal("4.5 / 16 kg", l.Rows[1].Value);
         Assert.Equal(PanelColour.Sand, l.Rows[1].Colour);
-        Assert.Equal("BRIQUETTE", l.Rows[2].Label);
+        Assert.Equal("COALITE", l.Rows[2].Label);
         Assert.Equal("0 / 10 kg", l.Rows[2].Value);
         Assert.Equal(PanelColour.Tint, l.Rows[2].Colour);
         Assert.Equal("CYCLE", l.Rows[3].Label);
@@ -147,7 +147,7 @@ public class PanelTextTests
     [Fact]
     public void Kicker_UsesFirstInputAndOutput()
     {
-        Assert.Equal("PRODUCTION  ·  SAND INTO BRIQUETTE", Mach().Kicker);
+        Assert.Equal("PRODUCTION  ·  SAND INTO COALITE", Mach().Kicker);
         Assert.Equal("PRODUCTION", Mach(slots: new[] { new PanelSlot("sand", 0, 1, 0, true) }).Kicker);
     }
 

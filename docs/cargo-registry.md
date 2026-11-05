@@ -24,5 +24,5 @@ don't claim it at once. A mod outside this repo can claim a value the same way.
 | 0 | `dust` | (game) | Moon Sweepers | vanilla |
 | 1 | `sand` | (game) | Moon Sweepers | vanilla |
 | 2 | `stone` | (game) | Moon Sweepers | vanilla |
-| 3 | `ryanhartwig.sand-briquette` | `com.ryanhartwig.sandpower` | [SandPower](../mods/SandPower) | 2026-11-01 |
+| 3 | `ryanhartwig.coalite` | `com.ryanhartwig.sandpower` | [SandPower](../mods/SandPower) | 2026-11-01 |
 | 250 | `ryanhartwig.example-grit` | `com.ryanhartwig.structurelib.examplestructure` | [ExampleStructure](../examples/ExampleStructure) (dev only, never released) | 2026-11-01 |

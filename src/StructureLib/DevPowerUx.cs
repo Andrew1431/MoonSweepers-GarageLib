@@ -25,7 +25,7 @@ namespace StructureLib
         static void BindPowerUx(ConfigFile cfg)
         {
             PowerUxProbe = cfg.Bind("Dev", "PowerUxProbe", false, "Dev build: the power-UX recon probe ([powerux] log lines): traces the look-at panel, the power solve, the power arcs and canister views, tours the walker's view over the AutoBuild depots and takes screenshots to BepInEx/cache/structurelib/powerux-<n>.png.");
-            PowerUxTest = cfg.Bind("Dev", "PowerUxTest", "", "Dev build: comma-separated PowerUxProbe experiments: fuel (raise the AutoBuilt pressure chamber's Power from the briquette generator after the solve), link (add the generator-chamber pair to powerLinks), anchor (add the generator to powerAnchors), arc (log PowerLinksView.ArcsDrawn on every tour shot and judge the build-tool and aim gate at the end of the tour), tint (close-ups of the belt and ground canisters; the tint itself is the library's CanisterPatches), far (walk 70 m away from the canisters and look back), gates (instead of the tour: aim the compactor, open the pause menu, then mount a vehicle (spawning one if none is out), logging the look-at panel each time).");
+            PowerUxTest = cfg.Bind("Dev", "PowerUxTest", "", "Dev build: comma-separated PowerUxProbe experiments: fuel (raise the AutoBuilt pressure chamber's Power from the coalite furnace after the solve), link (add the generator-chamber pair to powerLinks), anchor (add the generator to powerAnchors), arc (log PowerLinksView.ArcsDrawn on every tour shot and judge the build-tool and aim gate at the end of the tour), tint (close-ups of the belt and ground canisters; the tint itself is the library's CanisterPatches), far (walk 70 m away from the canisters and look back), gates (instead of the tour: aim the oven, open the pause menu, then mount a vehicle (spawning one if none is out), logging the look-at panel each time).");
             PowerUxTeleport = cfg.Bind("Dev", "PowerUxTeleport", 0f, "Dev build: with PowerUxProbe, 6 s after load move the walker this many metres to the free side of the base (away from every depot), before AutoBuild. 0 = stay.");
             PowerUxHome = cfg.Bind("Dev", "PowerUxHome", "", "Dev build: with PowerUxProbe, 6 s after load put the walker on the ground under this world point (x,y,z), before AutoBuild. The walker's position is saved, so a probe run that walked it away is undone here. Empty = stay.");
             CoreLog.Info($"[dev] PowerUxProbe={PowerUxProbe.Value} PowerUxTest='{PowerUxTest.Value}' PowerUxTeleport={PowerUxTeleport.Value}");
@@ -41,7 +41,7 @@ namespace StructureLib
 
     internal static class PowerUx
     {
-        internal const string GenId = "ryanhartwig.briquette-generator", CompactorId = "ryanhartwig.sand-compactor", SplitterId = "ryanhartwig.box-splitter", BriqId = "ryanhartwig.sand-briquette";
+        internal const string GenId = "ryanhartwig.coalite-furnace", OvenId = "ryanhartwig.coking-oven", SplitterId = "ryanhartwig.box-splitter", BriqId = "ryanhartwig.coalite";
         static bool On => DevTools.PowerUxProbe?.Value == true;
         internal static bool Test(string t) => (DevTools.PowerUxTest?.Value ?? "").Split(',').Any(x => x.Trim().Equals(t, StringComparison.OrdinalIgnoreCase));
 
@@ -53,7 +53,7 @@ namespace StructureLib
         internal static string T(Func<string> f) { try { return f(); } catch (Exception e) { return "threw " + e.GetType().Name + ": " + e.Message; } }
 
         static bool teleported, layoutDone, tourStarted, canistersDone, routeLogged;
-        internal static int Gen = -1, Chamber = -1, Compactor = -1, Splitter = -1;
+        internal static int Gen = -1, Chamber = -1, Oven = -1, Splitter = -1;
         internal static bool RoutesLive;   // set by the tour once the baseline look-around is done
         internal static float TraceUntil = -1f;          // unscaled time; power order trace is live while now < TraceUntil
         internal static int TraceLines;
@@ -88,19 +88,19 @@ namespace StructureLib
 
         static void Resolve(MoonWorld world)
         {
-            Gen = Fresh(GenId); Compactor = Fresh(CompactorId); Splitter = Fresh(SplitterId);
+            Gen = Fresh(GenId); Oven = Fresh(OvenId); Splitter = Fresh(SplitterId);
             Chamber = BuiltDepot(MoonWorld.PressureChamberKind.ToString());
             // Not built this run: the nearest depot of that kind to the walker (slot-2 keeps the last run's layout).
             if (Gen < 0) Gen = Nearest(world, MoonStructures.Definition(GenId)?.Kind ?? -1);
-            if (Compactor < 0) Compactor = Nearest(world, MoonStructures.Definition(CompactorId)?.Kind ?? -1);
+            if (Oven < 0) Oven = Nearest(world, MoonStructures.Definition(OvenId)?.Kind ?? -1);
             if (Splitter < 0) Splitter = Nearest(world, MoonStructures.Definition(SplitterId)?.Kind ?? -1);
             if (Chamber < 0) Chamber = NearestTo(world, MoonWorld.PressureChamberKind, At(world, Gen));
-            L($"depots: generator {Gen}, chamber {Chamber} (PressureChamberKind {MoonWorld.PressureChamberKind}), compactor {Compactor}, splitter {Splitter}; StallPower {MoonWorld.StallPower}");
+            L($"depots: generator {Gen}, chamber {Chamber} (PressureChamberKind {MoonWorld.PressureChamberKind}), oven {Oven}, splitter {Splitter}; StallPower {MoonWorld.StallPower}");
             // Carrying a canister turns the look-at panel and the arcs off: drop anything held from a saved session.
             var held = UnityEngine.Object.FindFirstObjectByType<MoonDustCanisterInteraction>();
             if (held != null && held.IsCarrying) L($"walker was carrying a canister (cargo {(byte)held.CarriedCargo}): TryDrop {T(() => { bool ok = held.TryDrop(out string msg); return ok + " '" + msg + "'"; })}; IsCarrying now {held.IsCarrying}");
             byte briq = (byte)(MoonStructures.CargoDefinition(BriqId)?.Value ?? 3);
-            foreach (var (id, cargo, kg) in new[] { (Gen, (MoonCargo)briq, 10.0), (Chamber, MoonCargo.Dust, 12.0), (Compactor, MoonCargo.Sand, 8.0) })
+            foreach (var (id, cargo, kg) in new[] { (Gen, (MoonCargo)briq, 10.0), (Chamber, MoonCargo.Dust, 12.0), (Oven, MoonCargo.Sand, 8.0) })
             {
                 if (id < 0) continue;
                 world.CrewProcessorLoad(MoonWorld.LocalPlayer, id, cargo, kg);
@@ -226,7 +226,7 @@ namespace StructureLib
                 string name = MoonStructures.IsModded(r.kind) ? MoonStructures.Definition(r.kind)?.Id : def?.displayName;
                 L($"depot {r.id} kind {r.kind} '{name}' {d:F1} m from walker at {V(p)}");
             }
-            foreach (int id in new[] { Gen, Chamber, Compactor, Splitter })
+            foreach (int id in new[] { Gen, Chamber, Oven, Splitter })
             {
                 if (id < 0) continue;
                 L($"PowerAnchor({id}) {T(() => world.PowerAnchor(id, out Vector3 a) ? V(a) : "false")}; IsSolarPanelId {T(() => world.IsSolarPanelId(id).ToString())}; IsProcessorId {T(() => world.IsProcessorId(id).ToString())}");
@@ -461,7 +461,7 @@ namespace StructureLib
             }
         }
 
-        // D: canisters to look at: briquette and dust on the compactor->generator belt, on the ground, and in the hand.
+        // D: canisters to look at: coalite and dust on the oven->generator belt, on the ground, and in the hand.
         internal static class Canisters
         {
             static readonly HashSet<int> ids = new();
@@ -471,7 +471,7 @@ namespace StructureLib
             internal static Vector3 GroundSpot;
             static int hand = -1;
 
-            // After the tour (carrying hides the look-at panel): pick up the hand briquette.
+            // After the tour (carrying hides the look-at panel): pick up the hand coalite.
             internal static void Carry(MoonWorld world)
             {
                 var inter = UnityEngine.Object.FindFirstObjectByType<MoonDustCanisterInteraction>();
@@ -489,7 +489,7 @@ namespace StructureLib
                 {
                     var path = world.BeltPath(beltId);
                     L($"canisters: belt {beltId} into the generator, length {path.Length:F2}");
-                    Add(world, SelfTest.Spawn(world, path, Mathf.Max(0.2f, path.Length - 2.4f), (MoonCargo)briq, 2.0, out string w1), "briquette on belt", w1);
+                    Add(world, SelfTest.Spawn(world, path, Mathf.Max(0.2f, path.Length - 2.4f), (MoonCargo)briq, 2.0, out string w1), "coalite on belt", w1);
                     Add(world, SelfTest.Spawn(world, path, Mathf.Max(0.2f, path.Length - 3.4f), MoonCargo.Dust, out string w2), "dust on belt", w2);
                     Add(world, SelfTest.Spawn(world, path, Mathf.Max(0.2f, path.Length - 4.4f), MoonCargo.Sand, out string w3), "sand on belt", w3);
                     Add(world, SelfTest.Spawn(world, path, Mathf.Max(0.2f, path.Length - 5.4f), MoonCargo.Stone, 2.0, out string w4), "stone on belt", w4);
@@ -502,10 +502,10 @@ namespace StructureLib
                     var fwd = Vector3.ProjectOnPlane(t.forward, up).normalized;
                     var side = Vector3.Cross(up, fwd).normalized;
                     GroundSpot = t.position + fwd * 2.5f;
-                    Add(world, Ground(world, t.position + fwd * 2.5f + side * 0.5f, up, (MoonCargo)briq), "briquette on ground", null);
+                    Add(world, Ground(world, t.position + fwd * 2.5f + side * 0.5f, up, (MoonCargo)briq), "coalite on ground", null);
                     Add(world, Ground(world, t.position + fwd * 2.5f - side * 0.5f, up, MoonCargo.Dust), "dust on ground", null);
                     hand = Ground(world, t.position + fwd * 1.0f, up, (MoonCargo)briq);
-                    Add(world, hand, "briquette for the hand", null);
+                    Add(world, hand, "coalite for the hand", null);
                 }
                 next = Time.unscaledTime + 1f; until = Time.unscaledTime + 30f;
             }
@@ -601,7 +601,7 @@ namespace StructureLib
         }
 
         // A: walk to each target in turn (teleport 5 m off it, MoonWalker.Face), so the game's own Aimed/ShowPanel/ShowGrid
-        // run; screenshot each. Then carry the hand briquette, then (far) stand 70 m off and look back at the belt.
+        // run; screenshot each. Then carry the hand coalite, then (far) stand 70 m off and look back at the belt.
         internal static class Tour
         {
             static readonly List<(int id, string label)> targets = new();
@@ -619,11 +619,11 @@ namespace StructureLib
                 targets.Clear();
                 var walker = Walker();
                 home = walker != null ? walker.transform.position : Vector3.zero;
-                if (Test("gates") && Compactor >= 0)
+                if (Test("gates") && Oven >= 0)
                 {
-                    // The look-at panel's Update gates: the compactor with the pause menu open, then from a vehicle.
-                    targets.Add((Compactor, "compactor: pause menu"));
-                    targets.Add((Compactor, "compactor: vehicle"));
+                    // The look-at panel's Update gates: the oven with the pause menu open, then from a vehicle.
+                    targets.Add((Oven, "oven: pause menu"));
+                    targets.Add((Oven, "oven: vehicle"));
                     L($"tour: {string.Join(", ", targets.Select(t => $"{t.label} {t.id}"))}");
                     index = -1; t0 = Time.unscaledTime - StepSeconds;
                     return;
@@ -643,7 +643,7 @@ namespace StructureLib
                 {
                     if (Gen >= 0) targets.Add((Gen, "generator"));
                     if (Chamber >= 0) targets.Add((Chamber, "chamber"));
-                    if (Compactor >= 0) targets.Add((Compactor, "compactor"));
+                    if (Oven >= 0) targets.Add((Oven, "oven"));
                     if (Splitter >= 0) targets.Add((Splitter, "splitter"));
                 }
                 if (!string.IsNullOrWhiteSpace(DevTools.PowerUxTest.Value))
@@ -694,7 +694,7 @@ namespace StructureLib
                 }
                 if (stage == 2 && dt > 3.0f) { stage = 3; Capture(inter, aimed, want, "hammer off"); }
                 string lbl = targets[index].label;
-                if (lbl.StartsWith("compactor: ")) { GateStep(inter, walker, world, aimed, want, dt, lbl.EndsWith("vehicle")); return; }
+                if (lbl.StartsWith("oven: ")) { GateStep(inter, walker, world, aimed, want, dt, lbl.EndsWith("vehicle")); return; }
                 if (stage == 3 && dt > 3.2f) { stage = 4; if (want >= 0 || want == -5) { ForceHammer = true; L("tour: HoldingBuildTool forced true"); } else if (want <= -6) Aim(walker, target, -1f); }
                 if (stage == 4 && dt > 6.0f) { stage = 5; if (want >= 0 || want <= -5) Capture(inter, aimed, want, want <= -6 ? "pitch negated" : "hammer on"); }
             }

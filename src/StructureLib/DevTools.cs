@@ -1243,27 +1243,27 @@ namespace StructureLib
             Assert(name, ok, detail);
         }
 
-        // SandPower, when AutoBuild names its compactor: both ids are registered at their hashed kinds and the briquette is
-        // cargo 3. Each machine is fed by AutoFeed (the deadline runs from the feed: 30 s for the compactor, 40 s for the
+        // SandPower, when AutoBuild names its oven: both ids are registered at their hashed kinds and the coalite is
+        // cargo 3. Each machine is fed by AutoFeed (the deadline runs from the feed: 30 s for the oven, 40 s for the
         // generator) or by a belt AutoBelt built into it (the chain in DevBelts.cs: ChainSeconds from the self-test). By
-        // then the compactor has finished a cycle and holds briquettes in its output slot (or EmitCargo saw a modded
+        // then the oven has finished a cycle and holds coalite in its output slot (or EmitCargo saw a modded
         // cargo), and the generator holds charge. A run that restored both from the save runs the reload checks instead.
-        const string CompactorId = "ryanhartwig.sand-compactor", GeneratorId = "ryanhartwig.briquette-generator", BriquetteId = "ryanhartwig.sand-briquette";
+        const string OvenId = "ryanhartwig.coking-oven", GeneratorId = "ryanhartwig.coalite-furnace", CoaliteId = "ryanhartwig.coalite";
         static readonly Dictionary<string, float> sandOpen = new();
-        static int compactorDepot = -1, generatorDepot = -1;
+        static int ovenDepot = -1, generatorDepot = -1;
 
         static void SandPowerChecks()
         {
-            if (!DevTools.AutoBuildNames(CompactorId)) { SandReloadChecks(); return; }
+            if (!DevTools.AutoBuildNames(OvenId)) { SandReloadChecks(); return; }
             var world = CoreState.World ?? CoreState.FindWorld();
-            StructureDefinition c = MoonStructures.Definition(CompactorId), g = MoonStructures.Definition(GeneratorId);
-            var b = MoonStructures.CargoDefinition(BriquetteId);
-            Assert("sandpower-registered", c != null && c.Kind == KindAllocator.KindOf(CompactorId) && g != null && g.Kind == KindAllocator.KindOf(GeneratorId) && b?.Value == 3,
-                $"compactor kind {c?.Kind}, generator kind {g?.Kind}, briquette value {b?.Value} (is SandPower installed?)");
-            compactorDepot = c != null && world != null ? DepotOfKind(world, c.Kind) : -1;
+            StructureDefinition c = MoonStructures.Definition(OvenId), g = MoonStructures.Definition(GeneratorId);
+            var b = MoonStructures.CargoDefinition(CoaliteId);
+            Assert("sandpower-registered", c != null && c.Kind == KindAllocator.KindOf(OvenId) && g != null && g.Kind == KindAllocator.KindOf(GeneratorId) && b?.Value == 3,
+                $"oven kind {c?.Kind}, generator kind {g?.Kind}, coalite value {b?.Value} (is SandPower installed?)");
+            ovenDepot = c != null && world != null ? DepotOfKind(world, c.Kind) : -1;
             generatorDepot = g != null && world != null ? DepotOfKind(world, g.Kind) : -1;
-            Open("sandpower-compactor-cycles", c, compactorDepot, CompactorId, 30f);
-            Open("sandpower-briquette-out", c, compactorDepot, CompactorId, 30f);
+            Open("sandpower-oven-cycles", c, ovenDepot, OvenId, 30f);
+            Open("sandpower-coalite-out", c, ovenDepot, OvenId, 30f);
             Open("sandpower-generator-charges", g, generatorDepot, GeneratorId, 40f);
             SandChainChecks(world);
 
@@ -1282,12 +1282,12 @@ namespace StructureLib
         {
             var world = CoreState.World ?? CoreState.FindWorld();
             MoonProductionState c = null, g = null;
-            try { c = world?.ProductionOf(compactorDepot); g = world?.ProductionOf(generatorDepot); } catch (Exception) { }
-            string text = $"compactor {StateText(c)}; generator {PowerText(g)}; modded EmitCargo calls {Patches.ProductionPatches.ModdedCargoEmits}";
-            PollOpen(sandOpen, "sandpower-compactor-cycles", text, () => (c != null && c.Cycles >= 1, text));
-            PollOpen(sandOpen, "sandpower-briquette-out", text, () =>
+            try { c = world?.ProductionOf(ovenDepot); g = world?.ProductionOf(generatorDepot); } catch (Exception) { }
+            string text = $"oven {StateText(c)}; generator {PowerText(g)}; modded EmitCargo calls {Patches.ProductionPatches.ModdedCargoEmits}";
+            PollOpen(sandOpen, "sandpower-oven-cycles", text, () => (c != null && c.Cycles >= 1, text));
+            PollOpen(sandOpen, "sandpower-coalite-out", text, () =>
             {
-                var spec = MoonWorld.Processor(MoonStructures.Definition(CompactorId).Kind);
+                var spec = MoonWorld.Processor(MoonStructures.Definition(OvenId).Kind);
                 int o = spec.output;
                 int cargo = o >= 0 ? (byte)spec.slotCargo[o] : -1;
                 return ((cargo == 3 && Stored(c, o) > 0) || Patches.ProductionPatches.ModdedCargoEmits > 0, $"output slot {o} (cargo {cargo}) holds {Stored(c, o)} kg; {text}");
