@@ -1,8 +1,8 @@
-# Sand compactor: SandPower's briquette press, built on the stone press's (kind 97) footprint. Sand arrives by belt
-# into a black hopper on the +X end (Unity -X), an auger feeds the white press housing, a steel ram under a white
-# portal crosshead compacts it, and briquettes slide out of a steel chute on the -X end (Unity +X). Run from the repo root:
-#   "<blender.exe>" -b --factory-startup --python mods/SandPower/blender/sand_compactor.py
-# Writes sand_compactor.blend and preview_compactor_{hero,side,front,rear}.png here and ../sand_compactor.bin.
+# Coking oven: SandPower's coalite maker, built on the stone press's (kind 97) footprint. Sand arrives by belt
+# into a black hopper on the +X end (Unity -X), an auger feeds the white oven housing, a steel ram under a white
+# portal crosshead compacts it, and coalite bricks slide out of a steel chute on the -X end (Unity +X). Run from the repo root:
+#   "<blender.exe>" -b --factory-startup --python mods/SandPower/blender/coking_oven.py
+# Writes coking_oven.blend and preview_oven_{hero,side,front,rear}.png here and ../coking_oven.bin.
 import os, sys, math
 HERE = os.path.dirname(os.path.abspath(__file__))
 sys.path.insert(0, os.path.join(HERE, "..", "..", "..", "shared", "blender"))
@@ -15,7 +15,7 @@ DECK = 0.85                                   # belt deck height: every vanilla 
 IN_X, OUT_X = 4.10, -3.90                     # the press's own port distances from centre (Unity -4.10 / +3.90)
 
 kit.reset()
-r = kit.root("SandCompactor_Root")
+r = kit.root("CokingOven_Root")
 
 SKID_T = 0.25
 # Skid: one long black base plate on steel feet, like the vanilla machines' dark base plates.
@@ -67,16 +67,16 @@ kit.cyl("Auger", 0.2, IN_X - HX1, ((IN_X + HX1) / 2, 0, SKID_T + 0.25), STEEL, r
 kit.box("AugerFoot", (0.5, 0.6, 0.12), (IN_X, 0, SKID_T + 0.06), BLACK, r, 0.02)
 kit.cyl("IntakeRing", 0.26, 0.08, (HX1 + 0.05, 0, SKID_T + 0.25), LAMP, r, "X", 20, 0.01)
 
-# Outlet: black discharge box on the -X end, steel chute whose lip is the Briquettes out port.
+# Outlet: black discharge box on the -X end, steel chute whose lip is the Coalite out port.
 DX0 = -3.0
 kit.box("Discharge", (HX0 - DX0 + 0.1, 2.0, 1.5), ((HX0 + DX0) / 2 - 0.05, 0, SKID_T + 0.75), BLACK, r, 0.05)
 kit.box("DischargeHood", (HX0 - DX0 + 0.2, 2.1, 0.1), ((HX0 + DX0) / 2 - 0.05, 0, SKID_T + 1.55), WHITE, r, 0.02)
 CHUTE_A = 25
 kit.chute("Chute", (OUT_X, 0, DECK), (DX0 - OUT_X) + 0.15, 1.0, r, STEEL, direction=(-1, 0, 0), angle=CHUTE_A, depth=0.22)
 tan_a = math.tan(math.radians(CHUTE_A))
-for i, (dx, y) in enumerate(((0.35, -0.2), (0.7, 0.18))):    # two briquettes sliding out, resting on the chute floor
+for i, (dx, y) in enumerate(((0.35, -0.2), (0.7, 0.18))):    # two coalite bricks sliding out, resting on the chute floor
     bx = OUT_X + dx
-    kit.box(f"Briquette{i}", (0.24, 0.22, 0.14), (bx, y, DECK + dx * tan_a + 0.07 / math.cos(math.radians(CHUTE_A))),
+    kit.box(f"Coalite{i}", (0.24, 0.22, 0.14), (bx, y, DECK + dx * tan_a + 0.07 / math.cos(math.radians(CHUTE_A))),
             BLACK, r, 0.02).rotation_euler = (0, -math.radians(CHUTE_A), 0)
 
 # Control box with the cyan status light, beside the housing on the front (-Y) side.
@@ -89,7 +89,7 @@ kit.rod("Conduit", (1.9, -1.8, SKID_T + 0.2), (1.9, -1.62, SKID_T + 0.2), 0.05, 
 
 # Ports: Unity -X is Blender +X, so the flow along Unity +X is Blender (-1, 0, 0) for both.
 kit.port("Sand in", (IN_X, 0, DECK), (-1, 0, 0), False, "Sand", r)
-kit.port("Briquettes out", (OUT_X, 0, DECK), (-1, 0, 0), True, "ryanhartwig.sand-briquette", r)
+kit.port("Coalite out", (OUT_X, 0, DECK), (-1, 0, 0), True, "ryanhartwig.coalite", r)
 
 # Fit, measured on the model parts only (the guide is added after).
 lo, hi = kit.bounds(r)
@@ -110,6 +110,6 @@ for o in sorted((c for c in r.children if c.name.startswith("Port_")), key=lambd
     print("PORT %s output=%d cargo=%s unity pos=(%.2f, %.2f, %.2f) dir=(%.2f, %.2f, %.2f)" %
           (o.name, o["output"], o["cargo"], *[round(x, 4) + 0.0 for x in unity(p)], *[round(x, 4) + 0.0 for x in unity(d)]))
 
-kit.save(os.path.join(HERE, "sand_compactor.blend"))
-kit.preview(r, os.path.join(HERE, "preview_compactor"), structure=True)
-kit.export(r, os.path.join(HERE, "..", "sand_compactor.bin"))
+kit.save(os.path.join(HERE, "coking_oven.blend"))
+kit.preview(r, os.path.join(HERE, "preview_oven"), structure=True)
+kit.export(r, os.path.join(HERE, "..", "coking_oven.bin"))

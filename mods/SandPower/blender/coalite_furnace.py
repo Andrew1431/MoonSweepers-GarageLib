@@ -1,9 +1,9 @@
-# Briquette generator: SandPower's power producer, built on the solar post's (kind 93) small footprint. Briquettes
-# arrive by belt into a black hopper on the +X end (Unity -X) over a firebox with big glowing windows; the white boiler
+# Coalite furnace: SandPower's power producer, built on the solar post's (kind 93) small footprint. Coalite
+# arrives by belt into a black hopper on the +X end (Unity -X) over a firebox with big glowing windows; the white boiler
 # drum beside it drives the generator, a steel radiator stack sits behind the hopper and the exhaust stack with its
 # orange heat band tops out at the post's height. Run from the repo root:
-#   "<blender.exe>" -b --factory-startup --python mods/SandPower/blender/briquette_generator.py
-# Writes briquette_generator.blend and preview_generator_{hero,side,front,rear}.png here and ../briquette_generator.bin.
+#   "<blender.exe>" -b --factory-startup --python mods/SandPower/blender/coalite_furnace.py
+# Writes coalite_furnace.blend and preview_furnace_{hero,side,front,rear}.png here and ../coalite_furnace.bin.
 import os, sys, math
 HERE = os.path.dirname(os.path.abspath(__file__))
 sys.path.insert(0, os.path.join(HERE, "..", "..", "..", "shared", "blender"))
@@ -16,7 +16,7 @@ DECK = 0.85                                   # belt deck height (every vanilla 
 IN_X = 0.90                                   # port on the +X footprint edge (Unity x = -0.90)
 
 kit.reset()
-r = kit.root("BriquetteGenerator_Root")
+r = kit.root("CoaliteFurnace_Root")
 
 # Base: one black plinth over the whole footprint, everything stands on it.
 BASE = 0.12
@@ -40,7 +40,7 @@ kit.box("FireWindowEnd", (0.012, 0.9, 0.24), (FX1 + 0.009, 0, WZ), GLASS, r, 0.0
 kit.box("FireGlowEnd", (0.01, 0.8, 0.15), (FX1 + 0.014, 0, WZ - 0.02), LAMP, r, 0.004)
 
 # Intake: full-width black hopper with an orange lip on top of the firebox. The footprint ends 1 cm past the port, so
-# the hopper sits inboard with its outer rim on the port: the belt end lands on the lip and briquettes drop in.
+# the hopper sits inboard with its outer rim on the port: the belt end lands on the lip and coalite drops in.
 HOP_W, HOP_D = 0.44, 1.24
 kit.hopper("Hopper", (IN_X - HOP_W / 2, 0, DECK), HOP_W, HOP_D, DECK - FZ1, r, throat=0.6)
 
@@ -82,7 +82,7 @@ kit.cyl("StatusLight", 0.05, 0.06, (DX + 0.02, -0.28, DZ + DR + 0.06), CYAN, r, 
 # Output cable to the grid: black conduit from the drum hub down into the base.
 kit.rod("Cable", (DX - 0.1, -0.58, DZ - 0.15), (DX - 0.32, -0.56, BASE + 0.01), 0.025, BLACK, r, 8)
 
-kit.port("Briquettes in", (IN_X, 0, DECK), (-1, 0, 0), False, "ryanhartwig.sand-briquette", r)
+kit.port("Coalite in", (IN_X, 0, DECK), (-1, 0, 0), False, "ryanhartwig.coalite", r)
 
 # Fit, measured on the model parts only (the guide is added after).
 lo, hi = kit.bounds(r)
@@ -102,6 +102,6 @@ for o in sorted((c for c in r.children if c.name.startswith("Port_")), key=lambd
     print("PORT %s output=%d cargo=%s unity pos=(%.2f, %.2f, %.2f) dir=(%.2f, %.2f, %.2f)" %
           (o.name, o["output"], o["cargo"], *[round(x, 4) + 0.0 for x in unity(p)], *[round(x, 4) + 0.0 for x in unity(d)]))
 
-kit.save(os.path.join(HERE, "briquette_generator.blend"))
-kit.preview(r, os.path.join(HERE, "preview_generator"), structure=True)
-kit.export(r, os.path.join(HERE, "..", "briquette_generator.bin"))
+kit.save(os.path.join(HERE, "coalite_furnace.blend"))
+kit.preview(r, os.path.join(HERE, "preview_furnace"), structure=True)
+kit.export(r, os.path.join(HERE, "..", "coalite_furnace.bin"))
