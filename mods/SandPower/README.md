@@ -15,10 +15,12 @@ Coalite is regolith sand baked into dense bricks that burn hot in the furnace's 
 | **Coking oven** (Production, $800) | Built on the stone press's footprint, with its own model. Holds 16 kg of sand, bakes 4 kg per 8 s cycle at 12 kW. Mass is kept: 4 kg of sand becomes 4 kg of coalite (2 units). The output slot holds 10 kg. |
 | **Coalite furnace** (Power, $1,500) | Built on the solar post's footprint, with its own model. Holds 10 kg of coalite (5 units) and burns one 2 kg lump of coalite per 20 s cycle. It needs a power pole within 12 m and feeds up to 10 kW into the power grid through it. The grid pools its sources (solar arrays, battery banks, furnaces) and shares the load evenly among the machines on the grid. The furnace burns a lump only when the grid still has a deficit after solar and the battery banks, so it idles while they cover the load. Its look-at panel shows its own output, fuel and the grid row with the pole count. |
 
-The furnace alone runs an oven at 10 of its 12 kW (power 0.83, seen in game before the grid): a cycle takes 8 s at full power,
+The furnace alone, with a pole in reach, runs an oven at 10 of its 12 kW (power 0.83, seen in game before the grid): a cycle takes 8 s at full power,
 so at 0.83 about 9.6 s (derived, not timed).
 
-The generator is built on the solar post rather than the battery bank, because the battery bank prefab has no
+Vanilla solar panels are left untouched: the grid tops up what they leave unmet. Supply runs in order: solar, then battery banks, then fuel (the furnace). The furnace has no battery of its own; it offers 10 kW while a lump burns.
+
+The furnace is built on the solar post rather than the battery bank, because the battery bank prefab has no
 production view (the part of a model that runs a machine).
 
 ## Belting it
@@ -33,9 +35,9 @@ the input is at one end, the output at the other, so put the machine that feeds 
 | Coalite furnace | `Coalite in` ("Coalite furnace input") | (−0.90, 0.85, 0.00), the black hopper over the firebox | Takes **coalite** only, into its 10 kg slot. |
 
 A full chain: a pressure chamber's sand output belted into the oven's `Sand in`, and the oven's
-`Coalite out` belted into the generator's `Coalite in`. Nothing is loaded by hand. Checked in game (StructureLib's
+`Coalite out` belted into the furnace's `Coalite in`. Nothing is loaded by hand. Checked in game (StructureLib's
 self-test `sandpower-chain`, single player): 12 kg of dust loaded into the chamber, all 12 kg of sand rode into the
-oven, its coalite rode into the generator, and the generator charged:
+oven, its coalite rode into the furnace, and the furnace charged its battery. This block was checked before the power grid (StructureLib 0.1 and earlier, when the furnace was a battery-charging generator); the furnace no longer has a battery:
 
 | From the chamber's dust load | Seconds |
 |---|---|
@@ -43,10 +45,10 @@ oven, its coalite rode into the generator, and the generator charged:
 | First sand into the oven | 14.7 |
 | First oven cycle done | 24.8 |
 | First coalite emitted | 25.1 |
-| First coalite into the generator | 27.0 |
-| First generator charge (3 kWh) | 47.7 |
+| First coalite into the furnace | 27.0 |
+| First battery charge (3 kWh, pre-grid) | 47.7 |
 
-The chain ran beside a vanilla solar tracker (the oven at full power from the tracker's grid). The belts, the
+The chain ran beside a vanilla solar tracker (pre-grid: the oven at full power from the tracker's grid). The belts, the
 coalite canisters on them and both machines' contents came back after a save and reload.
 
 ## The models
@@ -69,9 +71,9 @@ The `.bin` files ship next to `SandPower.dll`; the belt ports are read from them
 
 ## What works, and what does not yet
 
-Checked in game (the StructureLib dev self-test, single player): both structures build with their models, their ports
+Checked in game before the power grid (StructureLib 0.1 and earlier, the dev self-test, single player): both structures build with their models, their ports
 are the models' ports, the belt chain above runs and survives a save and reload, the oven bakes sand into
-coalite, and the generator burns coalite into charge and powers the oven on its own. Loading through the
+coalite, and the then-generator burned coalite into battery charge and powered the oven on its own. Loading through the
 game's crew load call (`CrewProcessorLoad`) works too.
 
 Limits (StructureLib today):
@@ -81,28 +83,28 @@ Limits (StructureLib today):
 - **Outputs are 1 kg canisters.** The game emits 1 kg per canister for any cargo, so a 2 kg lump of coalite leaves the
   oven as two 1 kg canisters; nothing is lost.
 - **The models start on stand-in materials.** The game's own materials come from the player's equipment, which does not
-  exist yet when a world loads, so for the first seconds both models (most visibly the generator's glow and steel) wear
+  exist yet when a world loads, so for the first seconds both models (most visibly the furnace's glow and steel) wear
   tinted stand-ins, which then become the game's materials in place.
 - **No animated effects.** The stone press's moving parts and the solar post's lights are hidden with their meshes; the
   models are static.
 - **The furnace needs a power pole within 12 m.** Without one it powers nothing, and a machine on no pole's grid names the missing power pole in its status.
-- **A generator's running power draw is ignored;** it never takes power from the grid.
+- **The furnace consumes no grid power.** Its running draw is ignored.
 - **Coalite is a brick up close only.** Within about 100 m a coalite canister shows the brick model; beyond that
   the game draws canisters instanced, and those are the plain dust capsule. The brick is a look: the capsule's
   colliders stay underneath it, so a coalite canister takes the same room on a belt and in the hand as any canister.
-- **A modded-only group gets its own grid.** Generators and machines that no vanilla power node reaches share a
-  StructureLib-owned grid, reported as a negative grid id.
+- **Power is per pole grid.** Poles link within 24 m and power machines within 12 m; a grid pools every source on it and shares the load evenly. A machine no pole reaches is unpowered and its status names a power pole.
 - **Selling coalite at the collector is unchecked.** The price is answered, but the deposit path is not verified.
 
 ## Checking it by hand
 
 Not covered by the self-test; worth a look before a release:
 
+- **The furnace on the grid (outstanding, not yet run in game).** A furnace fed with coalite, a power pole within 12 m, and a coking oven in the pole's radius at night: the oven should run and the furnace panel's GRID row show the pole count. Without the pole, the oven's status should name a power pole.
 - **Belts placed by hand.** Lay a belt with the belt tool from a pressure chamber's output onto the oven's sand
-  hopper, and from the oven's chute onto the generator's hopper. The self-test builds belts through the game's own
+  hopper, and from the oven's chute onto the furnace's hopper. The self-test builds belts through the game's own
   call, not the belt tool, so whether the tool snaps to these ports is unchecked.
-- **The models at player scale and in the real lighting:** does the oven read as a coking oven and the generator as a
-  kiln next to a walker; do the generator's glow and the steel parts look right once the stand-in materials have become
+- **The models at player scale and in the real lighting:** does the oven read as a coking oven and the furnace as a
+  kiln next to a walker; do the furnace's glow and the steel parts look right once the stand-in materials have become
   the game's own; is anything floating or sunk.
 - **Building both from the build menu by hand** (the real ghost and the remove tool). The build menu's own placement
   call is checked in StructureLib's self-test with the example lamp.
@@ -120,3 +122,4 @@ stays clean.
 ## Changelog
 
 - 0.1.0: first version: the oven and the generator with their own models and belt ports; the generator feeds vanilla machines in range, draws power arcs and shows its own look-at panel; coalite is a sand brick on belts, on the ground and in the hand (its own model through StructureLib's `CanisterModel`; it was a tinted dust capsule before).
+- Unreleased: the furnace feeds the power grid through a power pole within 12 m instead of powering machines in a 24 m range, and burns only when the grid is short after solar and battery banks; requires PowerGrid.
