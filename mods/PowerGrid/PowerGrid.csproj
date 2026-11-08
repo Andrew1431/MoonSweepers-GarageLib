@@ -1,0 +1,10 @@
+<Project Sdk="Microsoft.NET.Sdk">
+  <PropertyGroup>
+    <AssemblyName>PowerGrid</AssemblyName>
+    <RootNamespace>PowerGrid</RootNamespace>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <ProjectReference Include="$(RepoRoot)src\StructureLib\StructureLib.csproj" Private="false" />
+  </ItemGroup>
+</Project>
