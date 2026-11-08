@@ -44,6 +44,30 @@ namespace StructureLib.Tests
             Assert.Equal(1, g.GridCount);
         }
 
+        // The overload with caller-measured distances (the postfix passes the game's FootprintDistance): poles in id order.
+        [Fact]
+        public void AttachSiteByDistance_NearestReachingPoleWins_TieToLowerId_NoneIsZero()
+        {
+            var g = PoleGraph.Build(new List<Pole> { P(3, 100), P(1, 0, supply: 5), P(2, 50) });
+            Assert.Equal(new[] { 1, 2, 3 }, new[] { g.Poles[0].Id, g.Poles[1].Id, g.Poles[2].Id });
+
+            // Pole 1 is nearest but its radius (5) does not reach 6; pole 2 at 8 does (12).
+            Assert.Equal(g.GridOf(2), g.AttachSite(new[] { 6f, 8f, 9f }, out int pole, out float d));
+            Assert.Equal(2, pole);
+            Assert.Equal(8f, d);
+
+            // A tie between poles 2 and 3 goes to the lower id; infinity and NaN never win.
+            Assert.Equal(g.GridOf(2), g.AttachSite(new[] { float.NaN, 4f, 4f }, out pole, out _));
+            Assert.Equal(2, pole);
+            Assert.Equal(g.GridOf(3), g.AttachSite(new[] { float.PositiveInfinity, float.NaN, 1f }, out pole, out _));
+            Assert.Equal(3, pole);
+
+            // Nothing within any radius: 0.
+            Assert.Equal(0, g.AttachSite(new[] { 6f, 13f, float.PositiveInfinity }, out pole, out d));
+            Assert.Equal(0, pole);
+            Assert.True(float.IsPositiveInfinity(d));
+        }
+
         [Fact]
         public void AttachSite_NearestReachingPole()
         {

@@ -122,6 +122,33 @@ namespace StructureLib
             return _grid[best];
         }
 
+        /// <summary>The poles in id order (duplicates dropped): the index order of <see cref="AttachSite(IReadOnlyList{float}, out int, out float)"/>.</summary>
+        public IReadOnlyList<Pole> Poles => _poles;
+
+        /// <summary>
+        /// Attaches a site whose footprint distance to each pole the caller measured (<paramref name="distanceToPole"/>[i]
+        /// for <see cref="Poles"/>[i]; +infinity or NaN for a pole out of the question), e.g. with the game's own
+        /// footprint distance on the sphere. The nearest pole whose SupplyRadius reaches wins; equal distances go to the
+        /// lower pole id. Returns that pole's grid id, or 0 (then <paramref name="poleId"/> is 0 and
+        /// <paramref name="distance"/> +infinity).
+        /// </summary>
+        public int AttachSite(IReadOnlyList<float> distanceToPole, out int poleId, out float distance)
+        {
+            int best = -1;
+            float bestDist = float.PositiveInfinity;
+            for (int i = 0; i < _poles.Length && i < distanceToPole.Count; i++)
+            {
+                float d = distanceToPole[i];
+                if (!(d <= _poles[i].SupplyRadius) || !(d < bestDist)) continue;
+                best = i;
+                bestDist = d;
+            }
+            if (best < 0) { poleId = 0; distance = float.PositiveInfinity; return 0; }
+            poleId = _poles[best].Id;
+            distance = bestDist;
+            return _grid[best];
+        }
+
         static float FootprintDistance(Pole p, Site s)
         {
             double dx = p.X - s.X, dz = p.Z - s.Z;

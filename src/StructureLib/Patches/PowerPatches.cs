@@ -53,6 +53,9 @@ namespace StructureLib.Patches
             internal Role Role;
             internal StructureDefinition Def;
             internal Vector3 At;
+            // The footprint for the game's FootprintDistance: rotation and half extents (local X, local Z).
+            internal Quaternion Rotation;
+            internal Vector2 Half;
             internal int Grid, Pole;
             internal float PoleDistance;
             // A modded machine: the vanilla node whose own PowerRange reaches it (today's sun-surplus path), or -1.
@@ -195,7 +198,10 @@ namespace StructureLib.Patches
             for (int i = 0; i < members.Count; i++)
             {
                 var m = members[i];
-                if (m.Role != Role.Fuel || m.State == null) continue;
+                if (m.State == null) continue;
+                // A bank's charge, for the next save (Sidecar keeps it: the vanilla save cannot).
+                if (m.Role == Role.Storage) { Sidecar.NoteBankCharge(m.Id, m.State.ChargeKwh); continue; }
+                if (m.Role != Role.Fuel) continue;
                 AddNode(world, m);
                 if (m.State.SuppliedKw > 0f) CoreLog.Once("supply:" + m.Id, $"Power: fuel source '{m.Def.Id}' depot {m.Id} supplies {m.State.SuppliedKw:F3} kW to grid {m.Grid}", 1);
             }
@@ -256,8 +262,9 @@ namespace StructureLib.Patches
                 else if (d.Processor != null && d.Processor.ProducesPower) role = Role.Fuel;
                 else continue;
                 if (role == Role.Storage || role == Role.Solar) EnsureState(production, id, rec.kind, d);
+                if (role == Role.Storage) RestoreCharge(production, id, d);
                 var half = HalfOf(world, rec.kind);
-                var m = new Member { Id = id, Kind = rec.kind, Role = role, Def = d, At = at };
+                var m = new Member { Id = id, Kind = rec.kind, Role = role, Def = d, At = at, Rotation = RotationOf(rec, at), Half = half };
                 members.Add(m);
                 m.Grid = 0;
                 m.Pole = 0;
@@ -268,7 +275,7 @@ namespace StructureLib.Patches
             {
                 var n = kv.Value;
                 if (n.panel) continue;
-                var m = new Member { Id = kv.Key, Kind = n.record.kind, Role = Role.Vanilla, At = n.position };
+                var m = new Member { Id = kv.Key, Kind = n.record.kind, Role = Role.Vanilla, At = n.position, Rotation = n.rotation, Half = n.half };
                 members.Add(m);
                 sites.Add(new Site(kv.Key, n.position.x, n.position.y, n.position.z, n.half.x, n.half.y, YawOf(n.rotation)));
             }
@@ -296,7 +303,7 @@ namespace StructureLib.Patches
             for (int i = 0; i < members.Count; i++)
             {
                 var m = members[i];
-                m.Grid = graph.AttachSite(sortedSites[i], out m.Pole, out m.PoleDistance);
+                m.Grid = Attach(graph, m, sortedSites[i]);
                 if (m.Grid != 0)
                 {
                     byGrid[m.Grid].Add(m);
@@ -346,6 +353,16 @@ namespace StructureLib.Patches
             catch (Exception e) { CoreLog.Once("newprod:" + d.Id, $"Power: creating the production state of '{d.Id}' depot {id} threw: {e}", 2); }
         }
 
+        // A bank restored from a save: the charge the sidecar kept (Sidecar.TakeLoadedCharge), clamped to its capacity.
+        static void RestoreCharge(Il2CppSystem.Collections.Generic.Dictionary<int, MoonProductionState> production, int id, StructureDefinition d)
+        {
+            if (!production.ContainsKey(id) || !Sidecar.TakeLoadedCharge(id, out double kwh)) return;
+            var s = production.get_Item(id);
+            if (s == null) return;
+            s._ChargeKwh_k__BackingField = Math.Min(Math.Max(0, kwh), d.Power.BatteryKwh);
+            CoreLog.Once("bank-charge:" + id, $"Power: bank '{d.Id}' depot {id} gets back its saved charge, {s.ChargeKwh:F4} kWh", 1);
+        }
+
         // The build definition's half footprint (local X, local Z), per kind for the session (registry frozen).
         static Vector2 HalfOf(MoonWorld world, int kind)
         {
@@ -358,6 +375,56 @@ namespace StructureLib.Patches
             catch (Exception e) { CoreLog.Once("half:" + kind, $"Power: reading the footprint of kind {kind} threw; using a point: {e.Message}", 2); half = Vector2.zero; }
             halfOfKind[kind] = half;
             return half;
+        }
+
+        // A member attaches by the game's own MoonWorld.FootprintDistance (pole centre to the member's footprint on the
+        // sphere's tangent plane), measured only for poles whose centre is within SupplyRadius plus the footprint's half
+        // diagonal (the others cannot reach it). If the game call throws, PoleGraph's pure world-X/Z rectangle distance
+        // is the fallback (logged once): right near the moon's +Y pole only.
+        static readonly List<float> distances = new();
+        static bool footprintFailed;
+
+        static int Attach(PoleGraph graph, Member m, Site site)
+        {
+            if (!footprintFailed)
+            {
+                try
+                {
+                    var all = graph.Poles;
+                    distances.Clear();
+                    float diagonal = m.Half.magnitude;
+                    for (int i = 0; i < all.Count; i++)
+                    {
+                        var p = all[i];
+                        var at = new Vector3(p.X, p.Y, p.Z);
+                        distances.Add(Vector3.Distance(at, m.At) <= p.SupplyRadius + diagonal + 0.01f
+                            ? MoonWorld.FootprintDistance(at, m.At, m.Rotation, m.Half)
+                            : float.PositiveInfinity);
+                    }
+                    return graph.AttachSite(distances, out m.Pole, out m.PoleDistance);
+                }
+                catch (Exception e)
+                {
+                    footprintFailed = true;
+                    CoreLog.Error($"[solvepower] MoonWorld.FootprintDistance threw; poles attach by the pure X/Z footprint distance from now on (wrong away from the moon's +Y pole): {e}");
+                }
+            }
+            return graph.AttachSite(site, out m.Pole, out m.PoleDistance);
+        }
+
+        // A modded depot's world rotation. A free pose (placedPose) carries it. Otherwise it is built from the surface up
+        // and the record's yaw in degrees: the tangent frame whose +X is world +X projected on the tangent plane (the
+        // structures' +X at yaw 0 near slot-2's walker, DevBelts AutoLine), turned by yaw about the up. (Not checked
+        // against the game's own StructurePose away from slot-2's base; StructurePose has struct outs, which interop
+        // must not call.)
+        static Quaternion RotationOf(MoonDepotSnapshot rec, Vector3 at)
+        {
+            if (rec.placedPose) return new Quaternion(rec.qx, rec.qy, rec.qz, rec.qw);
+            var up = at.sqrMagnitude > 1e-6f ? at.normalized : Vector3.up;
+            var x = Vector3.ProjectOnPlane(Vector3.right, up);
+            if (x.sqrMagnitude < 1e-6f) x = Vector3.ProjectOnPlane(Vector3.forward, up);
+            var forward = Vector3.Cross(x.normalized, up); // LookRotation's right = cross(up, forward) = x
+            return Quaternion.LookRotation(forward, up) * Quaternion.Euler(0f, rec.yaw, 0f);
         }
 
         // Site.Yaw is Unity's rotation about +Y in radians (local X = (cos, -sin) in (X, Z)). A free pose (placedPose)

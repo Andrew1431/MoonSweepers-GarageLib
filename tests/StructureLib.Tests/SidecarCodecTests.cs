@@ -11,6 +11,19 @@ namespace StructureLib.Tests
         [Fact] public void SidecarCodec_Merge_KeepsNullIdRecords() { var loaded = new SidecarFile { Structures = { new StructureRecord { Id = null, DepotId = 3 }, new StructureRecord { Id = "", DepotId = 4 } } }; var merged = SidecarCodec.Merge(new SidecarFile(), loaded, _ => true); Assert.Equal(new[] { 3, 4 }, merged.Structures.Select(s => s.DepotId).ToArray()); }
         [Fact] public void SidecarCodec_Deserialize_Garbage_Throws() { Assert.ThrowsAny<Exception>(() => SidecarCodec.Deserialize("{not json")); }
 
+        // A battery bank's record carries its charge only (no slots); it round-trips, and an orphaned one (mod gone) is kept.
+        [Fact]
+        public void SidecarCodec_BankChargeRecord_RoundTripsAndOrphanIsKept()
+        {
+            var file = new SidecarFile { Production = { new ProductionRecord { Id = "a.bank", DepotId = 12, Charge = 0.625 } } };
+            var back = SidecarCodec.Deserialize(SidecarCodec.Serialize(file)).Production.Single();
+            Assert.Equal(("a.bank", 12, 0.625), (back.Id, back.DepotId, back.Charge));
+            Assert.Empty(back.Stores);
+            Assert.Empty(back.SlotCargoIds);
+            Assert.Single(SidecarCodec.Merge(new SidecarFile(), file, _ => false).Production);
+            Assert.Empty(SidecarCodec.Merge(new SidecarFile(), file, _ => true).Production);
+        }
+
         [Fact]
         public void SidecarCodec_CanisterRecord_RoundTrips()
         {
