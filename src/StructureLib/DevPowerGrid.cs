@@ -323,11 +323,12 @@ namespace StructureLib
                     var rec = world.depots.get_Item(p1);
                     var at = new Vector3(rec.x, rec.y, rec.z);
                     var dir = Vector3.ProjectOnPlane(Vector3.right, at.normalized).normalized;
-                    previewGhost = at + dir * 10f;
+                    float gap = Math.Min(10f, def.Power.LinkRange * 0.8f);
+                    previewGhost = at + dir * gap;
                     PowerLinksView.DevGhost = previewGhost;
                     previewUntil = now + 5f;
                     previewStage = 2;
-                    CoreLog.Info($"[selftest] arc-preview: pole selected (builder kind {builder.selectedBuildId}, want {def.Kind}); ghost {PowerUx.V(previewGhost)}, 10 m from pole1 at {PowerUx.V(at)}");
+                    CoreLog.Info($"[selftest] arc-preview: pole selected (builder kind {builder.selectedBuildId}, want {def.Kind}); ghost {PowerUx.V(previewGhost)}, {gap:F1} m from pole1 at {PowerUx.V(at)}");
                     return;
                 }
                 var ring = PowerLinksView.RingAt;

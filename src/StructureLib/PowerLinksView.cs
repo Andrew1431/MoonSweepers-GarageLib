@@ -100,8 +100,20 @@ namespace StructureLib
                 float ringRadius = 0f;
                 if (show)
                 {
-                    // MoonPowerLinks keeps one ring: the aimed pole's, else the first pole of the (first) grid drawn.
+                    // MoonPowerLinks keeps one ring: the aimed pole's, else (member aimed) the pole that reaches it or the grid's nearest pole, else (ForceArcs) the first pole of the first grid.
                     int ringAt = aimed > 0 && Pole(world, aimed) != null ? aimed : -1;
+                    if (ringAt < 0 && aimed > 0)
+                    {
+                        // A member is aimed: the pole whose reach includes it, else the grid's pole nearest to it.
+                        foreach (var (pole, member) in GridState.Reach)
+                            if (member == aimed) { ringAt = pole; break; }
+                        if (ringAt < 0 && Position(world, aimed, out var aimPos) && GridState.Grids.TryGetValue(aimedGrid, out var ag))
+                        {
+                            float best = float.MaxValue;
+                            foreach (int id in ag.PoleIds)
+                                if (Position(world, id, out var pp) && (pp - aimPos).sqrMagnitude < best) { best = (pp - aimPos).sqrMagnitude; ringAt = id; }
+                        }
+                    }
                     if (ringAt < 0)
                         foreach (var kv in GridState.Grids)
                             if ((force || kv.Key == aimedGrid) && kv.Value.PoleIds.Count > 0) { ringAt = kv.Value.PoleIds[0]; break; }
@@ -195,26 +207,18 @@ namespace StructureLib
             catch (Exception e) { CoreLog.Once("power-links-ghost", "Reading the placement ghost threw: " + e, 3); return null; }
         }
 
-        // Ids of the existing poles the ghost would link to: the pure graph with the ghost added (3D distance within the
-        // larger of the two LinkRanges).
+        // Ids of the existing poles the ghost would link to: PoleGraph's rule (3D distance within the larger of the two
+        // LinkRanges) as a plain filter, so no graph is built per frame.
         static List<int> GhostLinks(MoonWorld world, Vector3 ghost, StructureDefinition def)
         {
-            const int GhostId = int.MaxValue;
-            var poles = new List<StructureLib.Pole>();
+            var result = new List<int>();
             foreach (var kv in GridState.Grids)
                 foreach (int id in kv.Value.PoleIds)
                 {
                     var pd = Pole(world, id);
-                    if (pd != null && Position(world, id, out var at))
-                        poles.Add(new StructureLib.Pole(id, at.x, at.y, at.z, pd.Power.LinkRange, pd.Power.SupplyRadius));
+                    if (pd == null || !Position(world, id, out var at)) continue;
+                    if (Vector3.Distance(at, ghost) <= Math.Max(def.Power.LinkRange, pd.Power.LinkRange)) result.Add(id);
                 }
-            poles.Add(new StructureLib.Pole(GhostId, ghost.x, ghost.y, ghost.z, def.Power.LinkRange, def.Power.SupplyRadius));
-            var result = new List<int>();
-            foreach (var (a, b) in PoleGraph.Build(poles).Links)
-            {
-                if (a == GhostId) result.Add(b);
-                else if (b == GhostId) result.Add(a);
-            }
             return result;
         }
 
