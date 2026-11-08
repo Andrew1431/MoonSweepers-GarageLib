@@ -54,6 +54,10 @@ vanilla panels are neither sources nor storage of a modded grid.
      (`PeakKw`, at most what their stored charge lasts over the solve, as `FuelGrid.AvailableKw` does today), so two
      furnaces burn evenly and neither burns while the sun or the banks can carry the grid. Fuel never charges storage:
      a furnace's own buffer is its storage (it fills by burning coalite, as today, and stops burning when full).
+     **(amended 2026-11-08 during implementation)** Fuel sources have no kWh buffer: a furnace offers `PeakKw` while a
+     coalite burns (`Running`), and a burn starts only when the grid's last solve still had a deficit after solar and
+     storage (`GridState.WantsFuel`, host side). See Multiplayer: clients skip `FinishCycle`, so a charge raised by a
+     cycle event would never reach them. A source can waste up to one burn at low demand.
    - satisfaction = `(solar + discharged + fuel) / demand`, capped at 1, **the same number for every consumer** on the
      grid. No consumer is favoured by distance, build order or kind.
    - A consumer's satisfaction below the game's `StallPower` (0.08) stalls it, as vanilla does; above that, its cycle
@@ -61,8 +65,15 @@ vanilla panels are neither sources nor storage of a modded grid.
    - `SunFactor` is the grid's, not vanilla's: the library computes it from the lunar clock (`MoonSolarSystem`:
      `Daylight`, `SunDirectionAt`, which DevMoney already drives) and the array's placement normal. The recon task
      below settles the formula against the sun factor vanilla panels show, so an array and a twin side by side agree.
-     A modded array answers `IsSolarPanel` and `IsPowerNode` **false**: it is not a vanilla node, vanilla's solve, arcs
-     and panels ignore it, and the library owns everything about it.
+     **(amended 2026-11-08 during implementation)** The formula in the code is provisional: it is read from the game's
+     machine code, not sampled. `s = SunDirectionAt(LunarTime)`, `h = dot(up, s)`,
+     `d = smoothstep(clamp01((h + 0.0096) / 0.0192))`, `factor = max(0, dot(s, n)) x d` with `n` the array's up;
+     fallback `MoonSolarSystem.Daylight`. Sampling against a vanilla twin (`[Dev] LogSun`) is pending.
+     A modded array answers `IsSolarPanel` **false** and, **(amended 2026-11-08 during implementation)**,
+     `IsPowerNode` **true** (originally false). `IsSolarPanel` stays false so vanilla's panel code, sun-surplus
+     bookkeeping and arcs never treat it as a vanilla panel; `IsPowerNode` must be true for every modded depot with
+     a `Power` definition (poles, arrays, banks) so the look-at panel (a `TryPanel` path) reaches them. The library
+     owns everything else about it.
 4. **Vanilla panels still power what they reach; the grid tops up.** **(call, Ryan may flip it)** Vanilla's solve
    runs first and powers whatever vanilla machines its panels reach. Today the library also lets a modded machine
    within a vanilla panel's range run on that panel's sun surplus and batteries (`GridShare`, the charging take-back).
@@ -97,7 +108,7 @@ vanilla panels are neither sources nor storage of a modded grid.
    (and keeps its burner, with `Range` removed) so the library's DEVBUILD self-tests and the xunit tests never
    reference another mod's ids. The library's existing self-tests (`power-burner-supplies`,
    `power-grinder-runs-on-burner`, `power-vanilla-fed`, `arc-drawn`) are rewritten around the example pole.
-6. **SandPower joins the grid.** The coalite furnace keeps `PeakKw` 10 and its 6 kWh buffer, loses its 24 m direct
+6. **SandPower joins the grid.** The coalite furnace keeps `PeakKw` 10 (no buffer, see goal 3), loses its 24 m direct
    range, and powers only through a pole. Its Note becomes "Burns one coalite every 20 s for 10 kW into the power
    grid. Needs a power pole within 12 m." The coking oven is a consumer like any modded machine. Nothing else in
    SandPower changes.
@@ -109,7 +120,7 @@ vanilla panels are neither sources nor storage of a modded grid.
        public PowerRole Role;
        public SupplyMode SupplyMode;      // Source only: Solar or Fuel
        public float PeakKw;               // Source
-       public float BatteryKwh;           // Fuel source's buffer (filled by burning), or Storage capacity
+       public float BatteryKwh;           // Storage capacity; ignored for Fuel sources (no buffer; amended 2026-11-08 during implementation, see Multiplayer)
        public float RateKw;               // Storage: max charge / discharge kW
        public float LinkRange;            // Relay: pole to pole
        public float SupplyRadius;         // Relay: pole to member footprint
@@ -142,6 +153,17 @@ vanilla panels are neither sources nor storage of a modded grid.
     then has to be deterministic too. "Untested in co-op" is **not** acceptable for the PR that ships the grid: the
     test plan includes one two-player session (Ryan and Andrew, as PR #5's README plans for belt scrap) checking a
     pole chain, a short grid and a furnace from both seats.
+
+    **(amended 2026-11-08 during implementation)** Recon verdict S (`research/POWER_UX_RECON.md` section F): every peer
+    runs `SolvePower` over the replicated depot set; the host streams only Running, Progress, Cycles and stores, and
+    clients skip `FinishCycle`. So there is **no host gate** on the solve: every peer computes the same grid from
+    replicated inputs. Fuel has no kWh buffer (goal 3), so nothing that only the host's cycle events change feeds the
+    supply; a burn starts only on the host, gated by the grid's last deficit. Bank charge integrates per peer, as
+    vanilla batteries do; the host's save restores it through the StructureLib sidecar (a charge-only record), and a
+    client starts a bank at 0 until it joins fresh (a display-only divergence). The two-player session must confirm:
+    both seats see the same pole panel numbers, machine statuses and arcs for one grid; a client-placed pole joins the
+    grid on both seats; a bank's displayed charge stays close between seats after a join; a furnace burns only when
+    the grid is short and both seats agree.
 11. **Performance.** The pole graph and the member-to-pole assignment are rebuilt only when the set of depots changes
     (a build, a removal, a world load); the per-solve work is the sums and the writes, linear in members. A spatial
     index (cells of `LinkRange`) keeps the rebuild well under a millisecond for a few hundred poles. The solve path
@@ -166,6 +188,11 @@ Two facts the plan's first task measures in game before the solver is written, w
 2. **Co-op state flow.** Whether `SolvePower` and `StepProduction` run on a client, and whether a `MoonProductionState`
    written on the host is seen on the client, by logging from both seats in a two-player session (or, failing a second
    player, from the type dumps plus a loopback client if the game allows one). Goal 10 picks its model from this.
+
+**(amended 2026-11-08 during implementation)** Item 1 settled provisionally: the formula was read from the game's
+machine code (see goal 3), not sampled; the sampling with `[Dev] LogSun` is still pending and the spec is updated
+again if the curve disagrees by more than a few percent. Item 2 settled as verdict S (see goal 10): every peer
+simulates, so there is no host gate.
 
 ## Non-goals
 

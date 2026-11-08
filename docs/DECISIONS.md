@@ -4,6 +4,24 @@ Fundamental decisions about the repo and its libraries, newest first, so every m
 Andrew asked (2026-11-01) for a change log the agents contribute to; the work-order board is the other copy, for
 whoever can write there. One line per decision: date, who, what, where the detail lives.
 
+- 2026-11-08, Ryan (poles and a pooled grid instead of per-source ranges): **Power grid: poles and pooled supply:**
+  modded power is a grid of poles (`PowerRole.Relay`, `LinkRange` 24 m, `SupplyRadius` 12 m); a pole powers the modded
+  sources, banks and machines in reach and every consumer on the grid gets the same satisfaction. Supply order is
+  Factorio's: solar, then batteries, then fuel for the remaining deficit only; fuel never charges a bank. (1)
+  **Vanilla panels are untouched:** `SolvePower` is native, holds its totals in structs managed code cannot write back,
+  and an earlier attempt to feed a vanilla machine from a modded source created energy (a vanilla battery cannot be
+  debited); so the grid is a parallel system of modded structures (PowerGrid's pole, array and bank), vanilla machines
+  get only a top-up (`vanilla share + (1 - vanilla share) x satisfaction`, never lowered). (2) **Fuel has no kWh
+  buffer:** multiplayer verdict S (every peer runs `SolvePower`; the host streams only Running, Progress, Cycles and
+  stores; clients skip `FinishCycle`), so a charge raised by a cycle event would never reach a client; a furnace offers
+  `PeakKw` while a coalite burns and a burn starts only when the last solve still had a deficit (host-gated,
+  `GridState.WantsFuel`). Cost: up to one burn wasted at low demand. No host gate on the solve; bank charge integrates
+  per peer and the host's save restores it through the sidecar. (3) **`IsPowerNode` stays true for modded power
+  depots** (poles, arrays, banks) so they get the look-at panel; `IsSolarPanel` stays false for every modded kind so
+  vanilla panel code ignores them. (4) **The sun formula is provisional:** read from the game's machine code
+  (`SunDirectionAt`, a smoothstep at the horizon, `max(0, dot(sun, normal))`), not yet sampled against a vanilla panel.
+  SandPower now depends on PowerGrid; `PowerDefinition.Range` is gone. Detail:
+  `docs/superpowers/specs/2026-11-08-power-grid-design.md`, `src/StructureLib/README.md` "Power".
 - 2026-11-04, Ryan: **SandPower renamed before release:** cargo `ryanhartwig.sand-briquette` -> `ryanhartwig.coalite`
   ("coalite"), `ryanhartwig.sand-compactor` "Sand compactor" -> `ryanhartwig.coking-oven` "Coking oven",
   `ryanhartwig.briquette-generator` "Briquette generator" -> `ryanhartwig.coalite-furnace` "Coalite furnace"; model
