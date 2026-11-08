@@ -11,8 +11,8 @@ namespace StructureLib
     public static class GridShare
     {
         /// <summary>
-        /// Satisfaction (0..1) and the kW taken from the sun surplus, from fuel sources (at most <paramref name="fuelKw"/>,
-        /// see FuelGrid) and from the batteries. An idle machine reads 1 when any of the three has something to give, else 0.
+        /// Satisfaction (0..1) and the kW taken from the sun surplus, from fuel sources (at most <paramref name="fuelKw"/>;
+        /// the pole grid passes 0, its fuel is pooled in GridSolve) and from the batteries. An idle machine reads 1 when any of the three has something to give, else 0.
         /// </summary>
         public static (float Satisfaction, float FromSunKw, float FromFuelKw, float FromBatteryKw) Draw(float demandKw, float sunSurplusKw, float fuelKw, double storedKwh)
         {

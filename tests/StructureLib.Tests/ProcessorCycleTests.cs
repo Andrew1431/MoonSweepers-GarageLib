@@ -49,12 +49,5 @@ namespace StructureLib.Tests
         [Fact] public void StartMoves_NoMatchingInput_IsNull() => Assert.Null(ProcessorCycle.StartMoves(new List<(SlotRole, byte, double)> { (SlotRole.Input, 1, 10), (SlotRole.Batch, 0, 2), (SlotRole.Output, 2, 10) }, new[] { 10.0, 0, 0 }, false));
 
         [Fact] public void BatchSlots_AreTheBatchIndexes() => Assert.Equal(new[] { 2, 3 }, ProcessorCycle.BatchSlots(Press.Select(s => s.Role).ToList()));
-
-        // A fuel generator (2 kWh battery): each burned batch stores half the battery, capped; no burn into a full battery.
-        [Fact] public void Burn_AddsHalfTheBattery() => Assert.Equal(1.0, ProcessorCycle.ChargeAfterBurn(0, 2));
-        [Fact] public void Burn_TwoCyclesFill() => Assert.Equal(2.0, ProcessorCycle.ChargeAfterBurn(ProcessorCycle.ChargeAfterBurn(0, 2), 2));
-        [Fact] public void Burn_IsCappedAtTheBattery() => Assert.Equal(2.0, ProcessorCycle.ChargeAfterBurn(1.9, 2));
-        [Fact] public void CanBurn_BelowFull() => Assert.True(ProcessorCycle.CanBurn(1.999, 2));
-        [Fact] public void CanBurn_NotWhenFull() { Assert.False(ProcessorCycle.CanBurn(2, 2)); Assert.False(ProcessorCycle.CanBurn(2.5, 2)); }
     }
 }

@@ -56,11 +56,5 @@ namespace StructureLib
                 if (roles[i] == SlotRole.Batch) batch.Add(i);
             return batch;
         }
-
-        /// <summary>A fuel generator's stored charge after burning one batch: half its battery more, capped at the battery.</summary>
-        public static double ChargeAfterBurn(double chargeKwh, double batteryKwh) => Math.Min(Math.Max(0, chargeKwh) + batteryKwh / 2, batteryKwh);
-
-        /// <summary>False when a fuel generator's battery is full: it does not burn what it cannot store.</summary>
-        public static bool CanBurn(double chargeKwh, double batteryKwh) => chargeKwh < batteryKwh;
     }
 }

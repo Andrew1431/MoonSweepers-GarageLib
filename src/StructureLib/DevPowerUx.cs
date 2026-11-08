@@ -876,9 +876,8 @@ namespace StructureLib
             {
                 if (!Test("arc")) return;
                 int n = PowerLinksView.ArcsDrawn;
-                var last = StructureLib.Patches.PowerPatches.LastSolve.Fed;
-                bool inNet = aimed > 0 && StructureLib.Patches.PowerPatches.LastSolve.NetworkOf.ContainsKey(aimed);
-                L($"arc: shot ({how}) Aimed {aimed}, want {want}: PowerLinksView.ArcsDrawn {n}; aimed in a fuel network {inNet}; HoldingBuildTool forced {Tour.ForceHammer}; fed {string.Join("; ", last.Select(kv => $"{kv.Key} -> [{string.Join(", ", kv.Value)}]"))}");
+                bool inNet = aimed > 0 && GridState.GridOfDepot(aimed, out _);
+                L($"arc: shot ({how}) Aimed {aimed}, want {want}: PowerLinksView.ArcsDrawn {n}; aimed in a pole grid {inNet}; HoldingBuildTool forced {Tour.ForceHammer}; reach {string.Join(", ", GridState.Reach.Select(r => $"{r.Pole}->{r.Member}"))}");
                 if (how == "hammer on" && aimed == want && inNet) aimedMax = Math.Max(aimedMax, n);
                 else if (how == "hammer off" && aimedMax > 0 && offAfter < 0) offAfter = n;
             }

@@ -111,21 +111,29 @@ namespace StructureLib.Patches
         {
             var d = Remap.Live(record.kind);
             var look = inter != null ? inter.look : null;
-            if (d?.Processor == null || look == null || world == null) return false;
+            if (d == null || look == null || world == null) return false;
+            if (d.Processor == null && d.Power == null) return false;
             var state = world.ProductionOf(record.id);
-            var slots = d.Processor.Slots;
+            var slots = d.Processor != null ? d.Processor.Slots : null;
 
             PanelLayout l;
             var rowCargo = new List<byte?>();
-            if (d.Power != null && d.Processor.ProducesPower)
+            if (d.Processor == null)
+            {
+                // A pole, solar array or battery bank: no processor, only the grid.
+                l = GridPart(d, record.id, state);
+                foreach (var r in l.Rows) rowCargo.Add(null);
+            }
+            else if (d.Power != null && d.Processor.ProducesPower)
             {
                 int fuel = slots.FindIndex(s => s.Role == SlotRole.Input);
                 // No Input slot: no fuel to name; the FUEL row reads 0 / 0 kg.
                 byte? cargo = fuel >= 0 ? slots[fuel].Cargo.Value : null;
                 double capacity = fuel >= 0 ? slots[fuel].Capacity : 0;
-                l = PanelText.Generator(d.Name, d.Power.Range, d.Power.PeakKw, state?.SuppliedKw ?? 0f, d.Power.BatteryKwh, state?.ChargeKwh ?? 0,
+                bool onGrid = GridState.GridOfDepot(record.id, out int g);
+                l = PanelText.Generator(d.Name, d.Power.PeakKw, state?.SuppliedKw ?? 0f,
                     cargo.HasValue ? CargoName((MoonCargo)cargo.Value) : "", cargo.HasValue ? CargoShortName((MoonCargo)cargo.Value) : "",
-                    Kg(state, fuel), capacity, state?.Running ?? false, PowerPatches.FedCountOf(record.id));
+                    Kg(state, fuel), capacity, state?.Running ?? false, onGrid, PolesOf(g));
                 foreach (var r in l.Rows) rowCargo.Add(r.Label == "FUEL" ? cargo : null);
             }
             else if (!d.Processor.ProducesPower)
@@ -161,6 +169,31 @@ namespace StructureLib.Patches
             }
             look.Rows(l.Rows.Count);
             return true;
+        }
+
+        static int PolesOf(int gridId) => GridState.Grids.TryGetValue(gridId, out var grid) ? grid.Poles : 0;
+
+        // The panel of a structure with a power role and no processor. Null Power never gets here with a null Processor.
+        static PanelLayout GridPart(StructureDefinition d, int depotId, MoonProductionState state)
+        {
+            var p = d.Power;
+            bool onGrid = GridState.GridOfDepot(depotId, out int g);
+            int poles = PolesOf(g);
+            if (p.Role == PowerRole.Relay)
+            {
+                // The grid's totals from the last solve; a client without a solve reads the pole's own state, which carries
+                // the same totals (peak and capacity are not replicated: the figures stand in for them).
+                if (GridState.Grids.TryGetValue(g, out var grid))
+                    return PanelText.Pole(d.Name, grid.Poles, grid.SolarKw + grid.FuelKw + Math.Max(0f, grid.StorageKw), grid.PeakKw, grid.UsedKw, grid.DemandKw,
+                        grid.StoredKwh, grid.CapacityKwh, grid.Satisfaction, grid.Fed);
+                float supplied = state?.SuppliedKw ?? 0f;
+                double stored = state?.ChargeKwh ?? 0;
+                return PanelText.Pole(d.Name, 1, supplied, supplied, state?.UsedKw ?? 0f, state?.DemandKw ?? 0f, stored, (float)stored,
+                    state?.Power ?? 0f, -1);
+            }
+            if (p.Role == PowerRole.Storage)
+                return PanelText.Storage(d.Name, state?.ChargeKwh ?? 0, p.BatteryKwh, state?.BatteryKw ?? 0f, onGrid, poles);
+            return PanelText.Solar(d.Name, state?.SuppliedKw ?? 0f, p.PeakKw, state?.SunFactor ?? 0f, onGrid, poles);
         }
 
         static double Kg(MoonProductionState s, int slot) =>

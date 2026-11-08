@@ -15,7 +15,7 @@ namespace StructureLib
     internal static partial class DevTools
     {
         internal static ConfigEntry<string> AutoBelt, AutoBuildLayout, AutoBuildGap;
-        internal static ConfigEntry<bool> DumpCards, RegisterBadPorts, SunOverhead, RegisterBoxProbe;
+        internal static ConfigEntry<bool> DumpCards, RegisterBadPorts, SunOverhead, RegisterBoxProbe, LogSun;
         static bool cardsDumped, sunSet;
 
         static void BindBelts(ConfigFile cfg)
@@ -24,6 +24,7 @@ namespace StructureLib
             DumpCards = cfg.Bind("Dev", "DumpCards", false, "Dev build: once in game (30 s after load, so modded pictures are rendered), write every build-menu card picture (vanilla and modded) to BepInEx/cache/structurelib/cards/<kind>-<name>.png.");
             RegisterBadPorts = cfg.Bind("Dev", "RegisterBadPorts", false, "Dev build: the example plugin also registers ryanhartwig.example-bad-ports, whose input port takes a cargo no slot holds; the registry must drop it at freeze (self-test ports-rules-logged).");
             SunOverhead = cfg.Bind("Dev", "SunOverhead", false, "Dev build: 5 s after a world loads, set the lunar clock (MoonSolarSystem.SetLunarTime) so the sun stands overhead at the walker, so vanilla solar panels supply power (the belt checks need the pressure chamber to make sand). The clock runs in real time, so a cloned save is often at night.");
+            LogSun = cfg.Bind("Dev", "LogSun", false, "Dev build: once a second, log every vanilla solar node in world.powerNodes ([sun] lines): kind, SunFactor, Daylight, SunAim, TrackerTilt, MoonSolarSystem.Daylight, LunarTime, dot(sun, up), the spec tilt, and the SunFactor the library predicts from SolvePower's formula (research/POWER_UX_RECON.md section E) with its error. Drive the hour with DevMoney's [Time] TimeOfDay.");
             AutoBuildLayout = cfg.Bind("Dev", "AutoBuildLayout", "ring", "Dev build: where AutoBuild puts its entries. 'ring': 10 m from the walker at 0, 90, 180, 270, 45, ... deg from its facing (a refused site tries the next free heading). 'line': in entry order along the structures' +X (their belt flow axis at yaw 0), AutoBuildGap metres between neighbouring footprints, centred 6 m to the walker's side, so each entry's output faces the next entry's input (a chain of three or more machines).");
             AutoBuildGap = cfg.Bind("Dev", "AutoBuildGap", "1.3", "Dev build: with AutoBuildLayout = line, the metres between neighbouring footprints. One number is every gap; a comma-separated list gives the gaps in entry order (the first is between entries 1 and 2) and its last number repeats for any later gap. A belt box's side belts need room to swing round (at 1.3 m a side-port U-turn is refused: 'Turn too tight'), and the end entries must stay within the build reach (18 m from the walker is refused), so widen only the gaps that need it.");
             CoreLog.Info($"[dev] AutoBuildLayout={AutoBuildLayout.Value} AutoBuildGap={AutoBuildGap.Value}");
@@ -35,6 +36,7 @@ namespace StructureLib
             SelfTest.TrackChain();
             BoxSpike.Tick(gameT);
             if (SunOverhead.Value && !sunSet && gameT > 5f) { sunSet = true; SetSunOverhead(); }
+            if (LogSun.Value) SunLog.Tick(gameT);
             if (DumpCards.Value && !cardsDumped && gameT > 30f)
             {
                 cardsDumped = true;
@@ -65,6 +67,91 @@ namespace StructureLib
             }
             catch (Exception e) { CoreLog.Error("[dev] SunOverhead threw: " + e); }
         }
+    }
+
+    // [Dev] LogSun: once a second, one [sun] line per vanilla solar node in world.powerNodes, for fitting the sun factor
+    // (research/POWER_UX_RECON.md section E). Besides the game's fields, each line carries the factor Predict computes
+    // from SolvePower's own arithmetic, read from GameAssembly.dll, and its error against the game's SunFactor.
+    internal static class SunLog
+    {
+        static float next;
+        static string lastSession;
+
+        internal static void Tick(float gameT)
+        {
+            if (gameT < next && next - gameT <= 1f) return; // gameT restarts at 0 on each world load
+            next = gameT + 1f;
+            try
+            {
+                var world = CoreState.World ?? CoreState.FindWorld();
+                if (world == null) return;
+                var sun = world.solarSystem;
+                float lunar = sun != null ? sun.LunarTime : float.NaN;
+                Vector3 s = world.SunDirection;
+                Vector3 sAt = sun != null ? MoonSolarSystem.SunDirectionAt(lunar) : Vector3.zero;
+                string session = $"InLobby {MoonSteamLobby.InLobby} IsHost {MoonSteamLobby.IsHost} MoonCrew.Joined {MoonCrew.Joined}";
+                if (session != lastSession) { lastSession = session; CoreLog.Info("[sun] session: " + session); }
+                var nodes = world.powerNodes;
+                int panels = 0;
+                for (int i = 0; nodes != null && i < nodes.Count; i++)
+                {
+                    var n = nodes.get_Item(i);
+                    if (n == null || !n.panel || n.record == null || n.state == null) continue;
+                    panels++;
+                    try
+                    {
+                        int kind = n.record.kind;
+                        string name = kind == MoonWorld.SolarPostKind ? "post" : kind == MoonWorld.SolarTwinKind ? "twin" : kind == MoonWorld.SolarTrackerKind ? "tracker" : "kind" + kind;
+                        var spec = n.spec;
+                        var st = n.state;
+                        float predicted = Predict(s, n.up, n.rotation, spec.tiltDeg, spec.maxTiltDeg, spec.tracker);
+                        float err = Mathf.Abs(predicted - st.SunFactor);
+                        CoreLog.Info($"[sun] t {gameT:F0} depot {n.record.id} {name}: SunFactor {st.SunFactor:F4} predicted {predicted:F4} err {err:F4}" +
+                            $" Daylight {st.Daylight} SunAim {V(st.SunAim)} TrackerTilt {st.TrackerTilt:F2} | solar.Daylight {MoonSolarSystem.Daylight} LunarTime {lunar:F4}" +
+                            $" dot(SunDirectionAt, up) {Vector3.Dot(sAt, n.up):F4} dot(world.SunDirection, up) {Vector3.Dot(s, n.up):F4}" +
+                            $" | spec tilt {spec.tiltDeg:F1} max {spec.maxTiltDeg:F1} tracker {spec.tracker} peak {spec.peakKw} UsedKw {st.UsedKw:F3} up {V(n.up)}");
+                    }
+                    catch (Exception e) { CoreLog.Once("sunlog-node", "[sun] node read threw: " + e.Message); }
+                }
+                if (panels == 0) CoreLog.Once("sunlog-none", "[sun] no vanilla solar node in world.powerNodes (build a post 93, twin 94 or tracker 95)", 3);
+            }
+            catch (Exception e) { CoreLog.Once("sunlog", "[sun] LogSun threw: " + e); }
+        }
+
+        // MoonWorld.SolvePower's per-panel sun factor (GameAssembly.dll RVA 0x744AC0, +0xDA0..+0x124E), s = world.SunDirection:
+        //   h = dot(up, s); d = smoothstep(clamp01((h + 0.0096) / 0.0192)); Daylight = d > 0.5
+        //   fixed:   n = rotation * (0, cos tilt, -sin tilt)
+        //   tracker: p = normalize(s - up * dot(s, up) / |up|^2) (rotation * back if that is ~0); zenith = 90 - asin(h) deg;
+        //            tilt = tiltDeg > zenith ? tiltDeg : min(maxTiltDeg, zenith); n = up * cos tilt + p * sin tilt
+        //   SunFactor = max(0, dot(s, n)) * d
+        internal static float Predict(Vector3 s, Vector3 up, Quaternion rotation, float tiltDeg, float maxTiltDeg, bool tracker)
+        {
+            float h = Vector3.Dot(up, s);
+            float t = Mathf.Clamp01((h + 0.0096f) / 0.0192f);
+            float d = t * t * (3f - 2f * t);
+            Vector3 n;
+            if (!tracker)
+            {
+                float r = tiltDeg * Mathf.Deg2Rad;
+                n = rotation * new Vector3(0f, Mathf.Cos(r), -Mathf.Sin(r));
+            }
+            else
+            {
+                Vector3 p = s;
+                float upSq = up.sqrMagnitude;
+                if (upSq >= 1e-6f) p = s - up * (Vector3.Dot(s, up) / upSq);
+                if (p.sqrMagnitude < 1e-6f) p = rotation * Vector3.back;
+                float m = p.magnitude;
+                p = m > 1e-5f ? p / m : Vector3.zero;
+                float zenith = 90f - Mathf.Asin(Mathf.Clamp(h, -1f, 1f)) * Mathf.Rad2Deg;
+                float tilt = tiltDeg > zenith ? tiltDeg : Mathf.Min(maxTiltDeg, zenith);
+                float r = tilt * Mathf.Deg2Rad;
+                n = up * Mathf.Cos(r) + p * Mathf.Sin(r);
+            }
+            return Mathf.Max(0f, Vector3.Dot(s, n)) * d;
+        }
+
+        static string V(Vector3 v) => $"({v.x:F3},{v.y:F3},{v.z:F3})";
     }
 
     // [Dev] AutoBelt. Each entry becomes a MoonWorld/ConveyorPlan from the output port to the input port, with the ports'
@@ -1091,7 +1178,7 @@ namespace StructureLib
     // ryanhartwig.coalite-furnace; AutoFeed 96:Dust:12 only; AutoBelt 96:output->ryanhartwig.coking-oven:Sand in;
     // ryanhartwig.coking-oven:Coalite out->ryanhartwig.coalite-furnace:Coalite in; AutoSave; SunOverhead).
     // The vanilla chamber's sand rides into the oven, the oven's coalite rides into the generator:
-    //  1 sandpower-chain: within ChainSeconds of the self-test the generator holds charge with no AutoFeed entry for
+    //  1 sandpower-chain: within ChainSeconds of the self-test the generator was fed (holds coalite or burnt some) with no AutoFeed entry for
     //    either SandPower machine, with CargoEntered seen for both and CargoEmitted of coalite (cargo 3) from the
     //    oven. The first sand canister, oven cycle, coalite and charge are timed from the chamber's feed.
     //  2 sandpower-save-clean: a coalite canister put on the sand belt (the oven refuses it at its sand port, so it
@@ -1211,12 +1298,12 @@ namespace StructureLib
             var inC = entered.Where(e => e.DepotId == ovenDepot).ToList();
             var inG = entered.Where(e => e.DepotId == generatorDepot).ToList();
             var outC = emitted.Where(x => x.e.DepotId == ovenDepot && x.e.Cargo.Value == CoaliteValue).ToList();
-            bool ok = g != null && g.ChargeKwh > 0 && noFeed && inC.Count > 0 && inG.Count > 0 && outC.Count > 0;
+            bool ok = g != null && (Stored(g, 0) > 0 || g.Cycles > 0 || g.Running) && noFeed && inC.Count > 0 && inG.Count > 0 && outC.Count > 0;
             if (!ok && now < chainUntil) return;
             CoreLog.Info($"[selftest] sandpower-chain: {TimingText()}");
             CoreLog.Info($"[selftest] sandpower-chain: CargoEntered oven {inC.Count}x ({inC.Sum(e => e.Kilograms)} kg {string.Join("/", inC.Select(e => e.Cargo.Id).Distinct())}), generator {inG.Count}x ({inG.Sum(e => e.Kilograms)} kg {string.Join("/", inG.Select(e => e.Cargo.Id).Distinct())}); CargoEmitted from the oven {outC.Count}x ({outC.Sum(x => x.e.Kilograms)} kg, belts [{string.Join(",", outC.Select(x => x.e.BeltId).Distinct())}]); riders on belt {sandBelt}: {RidersText(world, sandBelt)}; on belt {briqBelt}: {RidersText(world, briqBelt)}");
             CoreLog.Info($"[selftest] sandpower-chain: oven {StateText(c)} power {c?.Power:F2} grid {c?.Grid}; generator {PowerText(g)}");
-            Assert("sandpower-chain", ok, $"generator charge {g?.ChargeKwh:F4} kWh, AutoFeed of a SandPower machine {!noFeed}, CargoEntered oven {inC.Count} generator {inG.Count}, CargoEmitted cargo {CoaliteValue} from the oven {outC.Count} (within {ChainSeconds:F0} s)");
+            Assert("sandpower-chain", ok, $"generator fed (coalite {Stored(g, 0):0.##} kg, cycles {g?.Cycles}, running {g?.Running}), AutoFeed of a SandPower machine {!noFeed}, CargoEntered oven {inC.Count} generator {inG.Count}, CargoEmitted cargo {CoaliteValue} from the oven {outC.Count} (within {ChainSeconds:F0} s)");
             StartPin(world);
         }
 

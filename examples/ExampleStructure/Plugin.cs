@@ -82,10 +82,36 @@ namespace ExampleStructure
                 },
             }, Guid);
 
+            // A power pole: links to other poles within 20 m and powers what stands within 10 m of it. The library's
+            // grid self-tests (DevPowerGrid.cs) chain three of these. The solar post's model, no model of its own.
+            MoonStructures.Register(new StructureDefinition
+            {
+                Id = "ryanhartwig.example-pole",
+                Name = "Example pole",
+                Category = "Power",
+                Note = "StructureLib example: a power pole. Links to poles within 20 m; powers machines within 10 m.",
+                Price = 10m,
+                BaseStructure = MoonWorld.SolarPostKind,
+                Power = new PowerDefinition { Role = PowerRole.Relay, LinkRange = 20, SupplyRadius = 10 },
+            }, Guid);
+
+            // A battery cell: stores 1 kWh, charges and discharges at up to 5 kW, through a pole.
+            MoonStructures.Register(new StructureDefinition
+            {
+                Id = "ryanhartwig.example-cell",
+                Name = "Example cell",
+                Category = "Power",
+                Note = "StructureLib example: a 1 kWh battery cell. Needs a power pole within 10 m.",
+                Price = 10m,
+                BaseStructure = MoonWorld.SolarPostKind,
+                Power = new PowerDefinition { Role = PowerRole.Storage, BatteryKwh = 1, RateKw = 5 },
+            }, Guid);
+
             // A fuel generator on the solar post's model (the battery bank prefab has no MoonProductionView; see the recon
-            // note, "Power sources (Task 11)"): burns 1 kg of example grit per 5 s cycle into its 2 kWh
-            // battery (two cycles fill it) and supplies up to 12 kW to machines within 20 m: enough for a vanilla pressure
-            // chamber's 10 kW plus the example grinder (the power-vanilla-fed self-test).
+            // note, "Power sources (Task 11)"): burns 1 kg of example grit per 5 s cycle and supplies up to 12 kW into the
+            // grid of a pole within 10 m while a batch burns, and only burns while that grid is short: enough for a vanilla
+            // pressure chamber's 10 kW plus the example grinder (the power-vanilla-fed self-test). Its BatteryKwh is
+            // ignored by the grid (it has no kWh buffer); the look-at panel still shows it.
             MoonStructures.Register(new StructureDefinition
             {
                 Id = "ryanhartwig.example-burner",
@@ -97,7 +123,7 @@ namespace ExampleStructure
                 // Shown instead of the solar post (blender/example_burner.py); its Port_Grit in node sits exactly on the declared
                 // port below, and model ports win.
                 Model = "example_burner.bin",
-                Power = new PowerDefinition { PeakKw = 12, BatteryKwh = 2, Range = 20, SupplyMode = SupplyMode.Fuel },
+                Power = new PowerDefinition { Role = PowerRole.Source, SupplyMode = SupplyMode.Fuel, PeakKw = 12, BatteryKwh = 2 },
                 Processor = new ProcessorDefinition
                 {
                     RunningKw = 0,

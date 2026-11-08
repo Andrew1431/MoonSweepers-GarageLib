@@ -38,27 +38,86 @@ public static class PanelText
     static string G(float v) => v.ToString("G", Inv);
     static string G(double v) => v.ToString("G", Inv);
 
-    public static PanelLayout Generator(string name, float rangeM, float peakKw, float suppliedKw, float batteryKwh, double chargeKwh,
-        string fuelName, string fuelShortName, double fuelKg, double fuelCapacityKg, bool running, int machinesFed)
+    static string Poles(int n) => n == 1 ? "1 pole" : n.ToString(Inv) + " poles";
+
+    /// <summary>The GRID row of a source or bank: its grid's pole count, or coral when no pole reaches it.</summary>
+    static PanelRow GridRow(bool onGrid, int gridPoles) =>
+        !onGrid ? new PanelRow("GRID", 0f, "No pole in reach", PanelColour.Coral)
+        : gridPoles <= 0 ? new PanelRow("GRID", 1f, "on a grid", PanelColour.Cyan)
+        : new PanelRow("GRID", 1f, Poles(gridPoles), PanelColour.Cyan);
+
+    public static PanelLayout Generator(string name, float peakKw, float suppliedKw, string fuelName, string fuelShortName,
+        double fuelKg, double fuelCapacityKg, bool running, bool onGrid, int gridPoles)
     {
         string state;
         PanelColour colour;
         if (running) { state = "Burning " + fuelShortName; colour = PanelColour.Mint; }
-        else if (chargeKwh >= batteryKwh) { state = "Battery full: burns when power is drawn"; colour = PanelColour.Muted; }
         else if (fuelKg <= 0) { state = "No fuel: feed " + fuelName + " by belt"; colour = PanelColour.Coral; }
-        else { state = "Starting"; colour = PanelColour.Muted; }
+        else if (!onGrid) { state = "No pole in reach"; colour = PanelColour.Coral; }
+        else { state = "Standing by: grid has power"; colour = PanelColour.Muted; }
 
         var rows = new List<PanelRow>
         {
             new PanelRow("OUTPUT", Fill(suppliedKw, peakKw), Kw(suppliedKw) + " / " + G(peakKw) + " kW", PanelColour.Cyan),
-            new PanelRow("BATTERY", Fill(chargeKwh, batteryKwh), chargeKwh.ToString("F1", Inv) + " / " + G(batteryKwh) + " kWh", PanelColour.Mint),
             new PanelRow("FUEL", Fill(fuelKg, fuelCapacityKg), Kg(fuelKg) + " / " + G(fuelCapacityKg) + " kg", PanelColour.Tint),
-            new PanelRow("POWERING",
-                machinesFed > 0 ? 1f : 0f,
-                machinesFed <= 0 ? "no machine running" : machinesFed == 1 ? "1 machine" : machinesFed.ToString(Inv) + " machines",
-                machinesFed > 0 ? PanelColour.Cyan : PanelColour.Amber),
+            GridRow(onGrid, gridPoles),
         };
-        return new PanelLayout("FUEL POWER" + Sep + G(rangeM) + " M RANGE", name, state, colour, rows);
+        return new PanelLayout("FUEL POWER", name, state, colour, rows);
+    }
+
+    /// <summary>
+    /// A pole's panel: its whole grid's totals. <paramref name="machinesFed"/> is the machines the grid powered in the
+    /// last solve (negative when unknown, as on a client).
+    /// </summary>
+    public static PanelLayout Pole(string name, int poles, float supplyKw, float peakKw, float usedKw, float demandKw, double storedKwh,
+        float capacityKwh, float satisfaction, int machinesFed)
+    {
+        int pct = (int)Math.Round(Math.Max(0f, Math.Min(1f, satisfaction)) * 100f, MidpointRounding.AwayFromZero);
+        bool shortGrid = demandKw > 0f && satisfaction < 0.995f;
+        string state;
+        PanelColour colour;
+        if (shortGrid) { state = "Grid short: " + pct.ToString(Inv) + " %"; colour = PanelColour.Amber; }
+        else if (machinesFed < 0) { state = "Grid powered"; colour = PanelColour.Cyan; }
+        else if (machinesFed == 0) { state = "Nothing drawing power"; colour = PanelColour.Muted; }
+        else { state = "Powering " + (machinesFed == 1 ? "1 machine" : machinesFed.ToString(Inv) + " machines"); colour = PanelColour.Cyan; }
+
+        var rows = new List<PanelRow>
+        {
+            new PanelRow("SUPPLY", Fill(supplyKw, peakKw), Kw(supplyKw) + " / " + G(peakKw) + " kW", PanelColour.Cyan),
+            new PanelRow("DEMAND", Fill(usedKw, demandKw), Kw(usedKw) + " / " + G(demandKw) + " kW", usedKw < demandKw ? PanelColour.Amber : PanelColour.Cyan),
+            new PanelRow("STORAGE", Fill(storedKwh, capacityKwh), storedKwh.ToString("F1", Inv) + " / " + G(capacityKwh) + " kWh", PanelColour.Mint),
+            new PanelRow("SATISFACTION", Fill(satisfaction, 1), pct.ToString(Inv) + " %", shortGrid ? PanelColour.Amber : PanelColour.Cyan),
+        };
+        return new PanelLayout("POWER GRID" + Sep + (poles == 1 ? "1 POLE" : poles.ToString(Inv) + " POLES"), name, state, colour, rows);
+    }
+
+    public static PanelLayout Solar(string name, float suppliedKw, float peakKw, float sunFactor, bool onGrid, int gridPoles)
+    {
+        bool night = !(sunFactor > 0f);
+        string state = night ? "Night" : "Sun " + Math.Round(Math.Min(1f, sunFactor) * 100f, MidpointRounding.AwayFromZero).ToString("F0", Inv) + " %";
+        var rows = new List<PanelRow>
+        {
+            new PanelRow("OUTPUT", Fill(suppliedKw, peakKw), Kw(suppliedKw) + " / " + G(peakKw) + " kW", PanelColour.Cyan),
+            GridRow(onGrid, gridPoles),
+        };
+        return new PanelLayout("SOLAR POWER", name, state, night ? PanelColour.Muted : PanelColour.Mint, rows);
+    }
+
+    public static PanelLayout Storage(string name, double chargeKwh, float capacityKwh, float batteryKw, bool onGrid, int gridPoles)
+    {
+        string state;
+        PanelColour colour;
+        if (batteryKw > 0.05f) { state = "Charging"; colour = PanelColour.Mint; }
+        else if (batteryKw < -0.05f) { state = "Discharging"; colour = PanelColour.Cyan; }
+        else if (chargeKwh >= capacityKwh - 0.001) { state = "Full"; colour = PanelColour.Mint; }
+        else if (chargeKwh <= 0.001) { state = "Empty"; colour = PanelColour.Amber; }
+        else { state = "Idle"; colour = PanelColour.Muted; }
+        var rows = new List<PanelRow>
+        {
+            new PanelRow("STORED", Fill(chargeKwh, capacityKwh), chargeKwh.ToString("F1", Inv) + " / " + G(capacityKwh) + " kWh", PanelColour.Mint),
+            GridRow(onGrid, gridPoles),
+        };
+        return new PanelLayout("POWER STORAGE", name, state, colour, rows);
     }
 
     public static PanelLayout Machine(string name, string status, bool running, int grid, float power, float usedKw, float runningKw,

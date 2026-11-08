@@ -92,8 +92,10 @@ MoonStructures.Register(new StructureDefinition
 - **Footprint** (`StructureDefinition.Footprint`, optional `Vector2`: full width along X, depth along Z, metres, both
   positive): written into the clone's `halfFootprint` (halved) instead of the donor's. With a `Model` it also replaces
   every donor collider by one `BoxCollider` over the footprint and the model's height. Null keeps the donor's.
-- **Power** (`StructureDefinition.Power`, with a `ProducesPower` processor): `PeakKw`, `BatteryKwh`, `Range`,
-  `SupplyMode.Fuel`. Each burned batch adds half the battery. See [Power](#power) for the rules and limits.
+- **Power** (`StructureDefinition.Power`): a `PowerDefinition` with a `Role` (`Source`, `Relay`, `Storage`),
+  `SupplyMode` (`Fuel` or `Solar`), `PeakKw`, `BatteryKwh` (Storage capacity), `RateKw`, `LinkRange` and
+  `SupplyRadius`. A fuel source also has a `ProducesPower` processor. `PowerRules` checks the numbers at
+  registration. See [Power](#power) for the grid rules and limits.
 - **Events** (main thread): `MoonStructures.Built` (`StructureBuilt`: definition, depot id, depot record, the decorated
   view) when a modded structure is built and again for each one restored at load; `Removed` (depot id) after one is
   removed; `CycleFinished` (`CycleFinished`: definition, depot id, live production state) when a modded machine
@@ -320,56 +322,75 @@ belt). Removal runs last because the game saves a few seconds after it.
 | Ports | Declared ports (and a port on a port-less donor) written into the cloned definition as `sl:<cargo>:<Name>`; `PortCargo` answers the declared cargo; the game shows "input"/"output" and "<name> input/output"; refusal at freeze for a port cargo no slot holds | | Belts placed by hand onto modded ports (dev `AutoBelt` builds through the game's `TryBuildConveyor`); ports inherited from a donor (no example uses them) |
 | Models | `Model` file on the donor template (donor renderers hidden, colliders kept unless `Footprint` is set), ports from its `Port_*` nodes, card picture rendered from it (the example burner); a missing file falls back to the donor model and declared ports | The donor's animated effects on a custom model | Donors with a non-unit `scale` or a skinned mesh (none of the donors checked so far has either) |
 | Routers | Splitter and merger hops on the `HandOff` prefix with `CargoRouted` per hop: round-robin over three outputs (12 hops, 4 each), skipping a removed output belt with nothing lost, mergers serving three inputs in turn, a 3 kg canister hopping whole, grit balanced to 0.01 kg through both boxes (BeltBoxes self-test, `beltboxes-*`); both boxes, five belts and every canister saved and reloaded; `Footprint` written into the clone (`halfFootprint` 0.70 × 0.70) with the collider swap under a `Model`; side-port U-belts (5 m between boxes); routers, belts and waiting canisters saved and reloaded, a router removed mid-traffic with its belts kept | Cut-in onto an existing belt; canisters visibly crossing the box | Belts placed by hand onto router ports (0.7 m port spacing); vanilla paths gated by `Routes` (true for a router clone), cut-in offers among them; routers in co-op (the host decides; clients untested) |
-| Power | Machines on a vanilla grid's surplus and batteries; fuel generators charge, supply modded machines and vanilla machines within `Range` (a pressure chamber run to full power and through a cycle from a generator's charge, `power-vanilla-fed`, status `Powered by <generator>`) and keep their charge across saves; a modded-only group gets a negative grid id; own look-at panel for generators (with the build tool) and machines (with or without it), vanilla panels untouched (`panel-*`); power arcs and one range ring with the build tool held on a fuel-network member (`arc-drawn` with `ForceArcs`; the real gate through the dev probe) | Vanilla grid totals and the vanilla panel's POWER row for a fuel-fed vanilla machine; a vanilla machine fed only through a vanilla grid (out of every generator's `Range`); `SupplyMode.Solar`; `Power` without a `Processor`; a generator's `RunningKw` (ignored); a panel for routers; a ring per generator (one ring only) | The no-tool panel with the map open or while driving (pause menu and a mounted vehicle were checked); arcs and ring by eye at the player's eye in real lighting |
+| Power | Poles linking within `LinkRange` into grids, members attached to the nearest pole whose `SupplyRadius` reaches them (pure `PoleGraph`, `GridSolve` and `PowerRules` under xunit); the post-solve attach, vanilla top-up, sidecar bank charge, panels and arcs are built, with the in-game self-tests (`grid-*`, `power-*`, `panel-*`, `arc-*`) written but not yet run | The sun factor against vanilla's curve; the yaw/rotation of `FootprintDistance` away from the base; bank charge across a save; fuel and banks in co-op | Everything in game, and the two-player session (see the PR test plan) |
 | Co-op | Manifest built and compared with itself | Graceful degradation for a client missing a mod | Both two-player cases (identical mods; client missing a mod) |
 
 ## Power
 
-A modded machine (a `ProcessorDefinition`) and a modded fuel generator (a `ProcessorDefinition` with `ProducesPower`
-plus a `PowerDefinition` with `SupplyMode.Fuel`) are attached to the power grid after the game's own solve; the game's
-solve never sees modded kinds. Details and evidence: `research/STRUCTURES_RECON.md`, "Processors (Task 10)" and
-"Power sources (Task 11)"; the panel, vanilla machines, arcs and canister tint: `research/POWER_UX_RECON.md`.
+Modded power is a grid of poles, Factorio style. Poles link into a grid; a pole powers the modded sources, banks and
+machines in its supply radius; each solve the grid pools its supply, sums its demand and gives every consumer the same
+share. Sources never power anything directly. The attach runs after the game's own solve (`SolvePower` postfix); the
+game's solve never sees modded kinds, and vanilla solar panels and their panel-powers-neighbours behaviour are left
+exactly as they are. Design and reasons: `docs/superpowers/specs/2026-11-08-power-grid-design.md`,
+`docs/DECISIONS.md`. Evidence: `research/STRUCTURES_RECON.md` ("Processors (Task 10)", "Power sources (Task 11)"),
+`research/POWER_UX_RECON.md` (panel, arcs, sun, co-op).
 
-- **Grid id** (`MoonProductionState.Grid`): the vanilla grid of the nearest vanilla power node whose range reaches the
-  structure. Otherwise the id of its fuel network (every modded structure within a fuel generator's `Range`, chained
-  through other generators): the lowest vanilla grid id in the network, else `-(lowest depot id in the network)`.
-  Vanilla grid ids are positive, so a negative id is a StructureLib-owned grid. 0 means no grid.
-- **Supply order** for a machine's `RunningKw` while running: the vanilla grid's sun surplus, then the fuel generators
-  of its network, then the vanilla grid's batteries. `Power` is the share covered.
-- **A fuel generator** burns one batch per cycle into its battery: `ChargeKwh` rises by `BatteryKwh / 2` per cycle,
-  capped at `BatteryKwh`, and no cycle starts while the battery is full. It delivers at most `PeakKw`. Its `Power` is
-  always 1, `SuppliedKw` is what it gave in the last solve, and it is listed in `world.powerNodes` as a panel node
-  between solves. Its charge is saved with the production record.
-- **Vanilla machines** (nodes with demand that their own grid leaves below `Power` 1) within a fuel generator's
-  `Range` (centre to centre) take the unmet share of their demand from that generator's network, after the modded
-  machines and in depot-id order (`Pure/FuelTopUp.cs`). The energy rule: the drawn kW is the smaller of the unmet
-  share (`DemandKw × (1 − Power)`) and what the network's generators still have to give this solve, and it comes out of
-  their `ChargeKwh` exactly like a modded machine's draw; nothing is created. A machine its own grid already covers
-  (or partly covers) keeps that part. Only `Power`, `UsedKw` and the status text change; `Grid` stays the machine's
-  own, and a vanilla machine never changes a modded member's grid id. A fully fed machine's `powerStatus` reads
-  `Powered by <generator name>` (rewritten every solve, since vanilla's solve resets it); a partly fed one keeps
-  vanilla's "No power" text. The vanilla grid's totals still leave out the fuel supply (they cannot be written from
-  managed code), so the vanilla panel's POWER row reads "no panels in reach" for a fuel-fed machine.
-- **Look-at panel** (`Patches/PanelPatches.cs`, texts from `Pure/PanelText.cs`). Aiming a modded generator or machine
-  shows its own panel instead of the solar tracker's. A generator (with the build tool held, as vanilla power sources):
-  kicker `FUEL POWER  ·  <Range> M RANGE`, its name, a state (`Burning <fuel>`, `Battery full: burns when power is
-  drawn`, `No fuel: ...`, `Starting`), rows OUTPUT (supplied / peak kW), BATTERY (charge / capacity kWh), FUEL (kg in
-  its first Input slot) and POWERING (machines it fed in the last solve). A machine (with or without the build tool):
-  kicker `PRODUCTION  ·  <INPUT> INTO <OUTPUT>`, its name and status, a POWER row with the build tool, a row per Input
-  and Output slot (coloured with the cargo's `CanisterTint` for a modded cargo) and CYCLE. Without the tool the panel
-  stands down while a menu is open, the walker is in a vehicle or carries a canister. Routers show no panel (vanilla
-  never aims them); vanilla structures keep their own panels untouched.
-- **Power arcs** (`PowerLinksView.cs`). With the build tool held and a member of a fuel network aimed (a generator or
-  a machine it fed), the library draws a cyan arc from each generator of that network to every machine, modded or
-  vanilla, it fed in the last solve, plus one ring of `Range` around the aimed generator (else the network's first
-  generator): `MoonPowerLinks` has a single ring. It uses its own `MoonPowerLinks`, because vanilla's `ShowGrid` cannot
-  include modded members. Dropping the tool or aiming elsewhere clears them. A generator without a `PowerAnchor`
-  starts its arcs about 2 m above its position.
-- **Not supported:** supply from `SupplyMode.Solar` definitions; supply from a `Power` definition without a
-  `Processor` (it has no production state to hold charge); a vanilla machine out of every generator's `Range` but on a
-  vanilla grid that reaches one (fuel never flows through a vanilla grid); a look-at panel for routers.
-- **A generator's `RunningKw` is ignored:** a fuel generator always reads `Power` 1 and `DemandKw` 0 and never draws
-  from the grid, so setting `RunningKw` on a `ProducesPower` processor has no effect. Leave it 0.
+- **Roles** (`PowerDefinition.Role`): **Source** (`SupplyMode.Solar`: `PeakKw`; `SupplyMode.Fuel`: `PeakKw` plus a
+  `ProducesPower` processor), **Relay** (a pole: `LinkRange`, `SupplyRadius`) and **Storage** (`BatteryKwh` capacity,
+  `RateKw` in and out). `BatteryKwh` is ignored for a Fuel source. A consumer is a `Processor` with `RunningKw`.
+  `MoonStructures.RegisterStructure` validates the role's numbers (`PowerRules`) and refuses nonsense with a logged
+  reason.
+- **Grid rules.** Two poles link when their centre distance is at most the larger of their `LinkRange`s; the connected
+  poles are one grid, and its id is `-(lowest pole depot id)`. A member (source, bank, consumer, vanilla machine)
+  attaches to the nearest pole whose `SupplyRadius` reaches its footprint, measured with the game's
+  `MoonWorld.FootprintDistance` (sphere-correct; a pure fallback exists). A member is in at most one grid. With no pole
+  in reach a consumer is unpowered, a source idle and a bank inert. The graph is rebuilt only when the depot set or the
+  loaded world changes; the per-solve work is the sums and writes.
+- **Supply order, per grid** (Factorio's): solar first (each array `PeakKw x SunFactor`), then battery discharge
+  (split by stored charge, each at most `RateKw`), then fuel for the remaining deficit only. Solar surplus charges the
+  banks (split by free capacity, each at most `RateKw`). Fuel never charges a bank. One satisfaction per grid,
+  `supply / demand` capped at 1, the same for every consumer: no favourites by distance, build order or kind.
+- **Fuel sources have no kWh buffer.** A furnace offers `PeakKw` while a coalite burns (`Running`), and a burn starts
+  only when the grid's last solve still had a deficit after solar and storage (a host-side gate, `GridState.WantsFuel`).
+  Reason: every peer runs the solve and the host streams only Running, Progress, Cycles and stores, so a charge raised
+  by a cycle event would never reach a client. Cost: a source can waste up to one burn at low demand. A source keeps offering `PeakKw` for one solve after its burn ends (one-solve grace), so the solve between two burns does not read Power 0. A modded
+  machine's demand counts while it is Running or its next cycle is ready, so a fuel-only grid can bootstrap.
+- **Sun factor** (provisional, read from the game's machine code, not yet measured): `s = SunDirectionAt(LunarTime)`,
+  `h = dot(up, s)`, `d = smoothstep(clamp01((h + 0.0096) / 0.0192))`, `factor = max(0, dot(s, n)) x d`, with `n` the
+  array's up; the fallback is `MoonSolarSystem.Daylight`. The dev command `[Dev] LogSun` samples it against a vanilla
+  panel.
+- **Vanilla top-up.** Vanilla's solve runs first. A consumer a pole reaches, vanilla or modded, gets
+  `Power = vanilla share + (1 - vanilla share) x grid satisfaction`; the grid never lowers a vanilla machine, and an
+  idle consumer on a live grid reads 1. A modded machine within a vanilla panel's range still runs on that panel's sun
+  surplus and batteries first (`GridShare`, with the charging take-back). `Power`, `UsedKw`, `Grid` and the status text
+  are rewritten every solve.
+- **Leaf answers.** `IsPowerNode` is true for every modded depot with a `Power` definition, so poles, arrays and banks
+  get the look-at panel; `IsSolarPanel` is false for every modded kind, so vanilla panel code and arcs ignore them;
+  `IsProcessorId` is true for Relay, Storage and Solar depots, so each gets a production state (created after a load if
+  missing). A pole's state carries the grid totals it shows.
+- **Look-at panels** (`Patches/PanelPatches.cs`, texts from `Pure/PanelText.cs`): a pole shows `POWER GRID  ·  <n>
+  POLES` with SUPPLY, DEMAND, STORAGE and SATISFACTION and a state (`Powering <k> machines`, `Grid short: <p> %`, or
+  `Grid powered` on a client); a solar array `SOLAR POWER` (`Sun <p> %` or `Night`; OUTPUT, GRID); a bank `POWER
+  STORAGE` (Charging, Discharging, Full, Empty, Idle; STORED, GRID); a fuel generator `FUEL POWER` (OUTPUT, FUEL,
+  GRID; Burning, No fuel, No pole in reach, `Standing by: grid has power`). Machine statuses read `Powered by the
+  grid`, `Grid short: <p> %` and `No power: build a power pole within <r> m` (`r` is the largest registered Relay
+  `SupplyRadius`). Routers show no panel; vanilla structures keep their own.
+- **Arcs** (`PowerLinksView.cs`, the library's own `MoonPowerLinks`). With the build tool held and a grid member aimed:
+  pole-to-pole arcs, thinner pole-to-member arcs, and a `SupplyRadius` ring at the aimed pole (or the pole reaching the
+  aimed member). Placing a Relay previews arcs from the ghost to every pole it would link, plus its ring. Nothing is
+  drawn for vanilla grids.
+- **Multiplayer: no host gate.** Verdict S (`research/POWER_UX_RECON.md` section F): every peer runs `SolvePower` over
+  the replicated depot set, so every peer computes the same grid. Bank charge integrates on each peer, as vanilla
+  batteries do; the host's save restores it through the StructureLib sidecar (a charge-only record). A client starts a
+  bank at 0 until it joins fresh, a display-only divergence; fuel is host-gated so burns agree. The two-player session
+  is still to be run.
+- **Not supported / known limits:** a client's bank charge starts at 0; the sun formula is unmeasured; the rebuild runs
+  whenever the depot set or loaded world changes; a fuel source can waste up to one burn at low demand; vanilla panels
+  and batteries are not part of a modded grid (no energy moves between them and a pole grid); a source or bank without
+  a pole in reach does nothing; a `Power` definition without a `Processor` only works for poles, arrays and banks
+  (which the library gives a state itself); a look-at panel for routers.
+- **A fuel source's `RunningKw` is ignored:** it always reads `Power` 1 and `DemandKw` 0 and never draws from the
+  grid. Leave `RunningKw` 0 on a `ProducesPower` processor.
 - **Do not patch `MoonWorld.TryPanel`:** a Harmony prefix on it killed the game natively after world load. See
   `research/STRUCTURES_RECON.md`, "Interop hazards found".
 - The battery bank (kind 6) prefab has no production view; use `MoonWorld.SolarPostKind` (93) as a generator's

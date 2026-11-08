@@ -148,6 +148,7 @@ namespace StructureLib
                 CanisterOrphans.Clear();
                 cargoPending.Clear();
                 ForgetProduction();
+                Interlocked.Increment(ref loadGeneration);
             }
         }
 
@@ -166,6 +167,7 @@ namespace StructureLib
                 CanisterOrphans.Clear();
                 cargoPending.Clear();
                 ForgetProduction();
+                Interlocked.Increment(ref loadGeneration);
                 string path = PathFor(root);
                 if (path == null) { CoreLog.Warn("Sidecar load: save root unknown, starting empty"); return; }
                 if (!File.Exists(path)) { CoreLog.Info($"Sidecar: none at {CoreLog.Redact(path)} (no modded structures saved yet)"); return; }
@@ -825,6 +827,7 @@ namespace StructureLib
             productionPending.Clear();
             productionSuperseded.Clear();
             RestoredProduction.Clear();
+            lock (bankLock) { bankCharge.Clear(); loadedCharge.Clear(); }
         }
 
         /// <summary>What a production strip took out, with the original indexes. Owned by the caller (the MoonProductionSave.Write prefix).</summary>
@@ -844,7 +847,7 @@ namespace StructureLib
         {
             var records = new List<ProductionRecord>();
             var list = state?.production;
-            if (list == null || list.Count == 0) return records;
+            if (state == null) return records;
             var kindOf = moddedKinds;
             if (kindOf == null)
             {
@@ -858,12 +861,15 @@ namespace StructureLib
 
             var take = new List<int>();
             var unrecorded = new List<(int id, int kind)>();
-            for (int i = 0; i < list.Count; i++)
+            for (int i = 0; list != null && i < list.Count; i++)
             {
                 var p = list.get_Item(i);
                 if (p == null || !kindOf.TryGetValue(p.id, out int kind)) continue;
                 take.Add(i);
                 var d = Remap.Live(kind);
+                // A pole, solar array or bank has a state for the grid's fields but no processor to record: expected, and
+                // PowerPatches gives it a fresh state after a load. A bank's charge is recorded below (BankRecords).
+                if (d != null && d.Processor == null && d.Power != null) continue;
                 if (d?.Processor == null) unrecorded.Add((p.id, kind));
                 else records.Add(ToProductionRecord(d, p));
             }
@@ -874,9 +880,40 @@ namespace StructureLib
                 list.RemoveAt(i);
                 stripped.Items.Insert(0, (i, p));
             }
+            BankRecords(records, kindOf);
             foreach (var (id, kind) in unrecorded)
                 CoreLog.Warn($"Save: production state of depot {id} (modded kind {kind}, no registered processor) left out of the vanilla save and not recorded");
             return records;
+        }
+
+        // ---- bank charge ----
+        // A bank (Storage, no Processor) keeps its charge in its production state, which the vanilla save cannot carry
+        // (the state is stripped with the modded depots). PowerPatches notes every bank's charge each solve (main thread);
+        // a save (maybe off the main thread) writes one ProductionRecord per bank in the save (Id, DepotId, Charge only);
+        // a load hands the charge back (TakeLoadedCharge) once PowerPatches has given the bank its state.
+        static readonly object bankLock = new();
+
+        // Bumped by every load (and every start without one): PowerPatches rebuilds its grid on a new value, so a load into
+        // the same MoonWorld with the same depot ids still gets fresh states and its banks' saved charge.
+        static int loadGeneration;
+        internal static int LoadGeneration => Volatile.Read(ref loadGeneration);
+        static readonly Dictionary<int, double> bankCharge = new(), loadedCharge = new();
+
+        static bool IsBank(StructureDefinition d) => d?.Power != null && d.Processor == null && d.Power.Role == PowerRole.Storage;
+
+        internal static void NoteBankCharge(int depot, double kwh) { lock (bankLock) bankCharge[depot] = kwh; }
+
+        internal static bool TakeLoadedCharge(int depot, out double kwh) { lock (bankLock) return loadedCharge.Remove(depot, out kwh); }
+
+        static void BankRecords(List<ProductionRecord> records, IReadOnlyDictionary<int, int> kindOf)
+        {
+            lock (bankLock)
+                foreach (var kv in bankCharge)
+                {
+                    if (!kindOf.TryGetValue(kv.Key, out int kind)) continue;
+                    var d = Remap.Live(kind);
+                    if (IsBank(d)) records.Add(new ProductionRecord { Id = d.Id, DepotId = kv.Key, Charge = kv.Value });
+                }
         }
 
         /// <summary>Puts stripped production snapshots back at their original indexes; returns how many.</summary>
@@ -968,6 +1005,16 @@ namespace StructureLib
                 foreach (var p in loaded.Production)
                 {
                     var d = MoonStructures.Definition(p.Id);
+                    // A bank's record (charge only): handed to PowerPatches, which gives the bank its state after the load.
+                    if (IsBank(d) && MoonStructures.IsModded(d.Kind) && !p.Superseded)
+                    {
+                        if (!depotOf.TryGetValue((p.Id, p.DepotId), out int bank)) { CoreLog.Warn($"Sidecar: charge record of '{p.Id}' (depot {p.DepotId}) kept in the sidecar untouched: its structure is not in the world"); continue; }
+                        double kwh = Math.Min(Math.Max(0, p.Charge), d.Power.BatteryKwh);
+                        lock (bankLock) { loadedCharge[bank] = kwh; bankCharge[bank] = kwh; }
+                        productionInWorld[p] = bank;
+                        CoreLog.Info($"Sidecar: restoring the charge of '{p.Id}' as depot {bank}: {kwh:F4} kWh");
+                        continue;
+                    }
                     bool registered = d?.Processor != null && MoonStructures.IsModded(d.Kind);
                     bool there = depotOf.TryGetValue((p.Id, p.DepotId), out int id);
                     string mismatch = registered ? ProcessorLayout.RecordMismatch(p.SlotCargoIds, p.Stores.Count, SpecBuilder.SlotCargoIds(d)) : null;

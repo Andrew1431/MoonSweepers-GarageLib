@@ -297,6 +297,152 @@ t 83 chamber 29: ... Progress 0.103 Cycles 1 ... stores [15.00 5.00 5.00]      <
   - Optionally swap `_BaseMap` for a modded texture the same way.
   - This covers belt, ground and hand.
 
+## E. Sun factor
+
+Status, 2026-11-08: **the formula below is read from the machine code. It has not been measured in game.** The game
+could not be run for this task. The sample table is still to be measured; the procedure is at the end of this
+section. Until the table is filled in, treat the formula as a hypothesis with strong static support.
+
+**Method.** Each method's RVA comes from `[Address]` in `BepInEx/dummy/Assembly-CSharp.dll`. The bodies were
+disassembled from `GameAssembly.dll` with MSVC `dumpbin /disasm` (image base `0x180000000`). Field offsets come from
+`[FieldOffset]` in the same dummy assembly. The float constants were read from the image. The three CRT helpers the
+code calls were told apart by mapping a copy of `GameAssembly.dll` without running it (`LoadLibraryEx`,
+`DONT_RESOLVE_DLL_REFERENCES`) and calling each one on 0.5 and 0.1. `0x1802BCD64` is `asin`, `0x1802BBD40` is `cos`
+and `0x1802BC5A0` is `sin`. The tools were scratch programs and are not in the repo.
+
+Offsets used:
+- `PowerNode`: `up` +0x2C, `rotation` +0x38, `panel` +0x50, `spec` +0x58.
+- `PanelSpec`, inline in the node: `peakKw` +0x60, `tiltDeg` +0x6C, `maxTiltDeg` +0x70, `tracker` +0x74.
+- `MoonProductionState`: `DemandKw` +0x2C, `UsedKw` +0x30, `SunFactor` +0x60, `Daylight` +0x64, `SunAim` +0x68,
+  `TrackerTilt` +0x74.
+
+**What `SolvePower` does per panel** (`MoonWorld.SolvePower`, RVA `0x744AC0`, panel loop at +0xDA0..+0x124E):
+- The sun direction is `s = world.SunDirection`. It is read once per solve (call at +0xD03). `get_SunDirection`
+  calls `MoonSolarSystem.get_LunarTime` and `SunDirectionAt`, so it is `SunDirectionAt(LunarTime)` unless
+  `SunOverride` is set.
+- `h = dot(n.up, s)`, using the node's own up, not the walker's.
+- `d = smoothstep(clamp01((h + 0.0096) / 0.0192))`, where `smoothstep(t) = 3t² − 2t³`. This is a soft horizon about
+  ±0.55° wide: `d` is 0 below the horizon and 1 just above it.
+- `Daylight = d > 0.5`, which is the same as `h > 0`.
+- **The panel normal `nrm`:**
+  - Fixed post and twin: `nrm = n.rotation * (0, cos(tiltDeg°), −sin(tiltDeg°))`. That is the panel's local up,
+    tipped by `tiltDeg` toward its local back. `SunAim` and `TrackerTilt` are not written for a fixed panel.
+  - Tracker:
+    - `p` is `s` projected onto the plane normal to `n.up`, then normalised. If that is about 0, the code uses
+      `n.rotation * Vector3.back` instead.
+    - `zenith = 90 − asin(clamp(h, −1, 1))·57.29578` (degrees).
+    - `tilt = tiltDeg > zenith ? tiltDeg : min(maxTiltDeg, zenith)`, so the zenith clamped to
+      `[tiltDeg, maxTiltDeg]`.
+    - `nrm = n.up·cos(tilt) + p·sin(tilt)`.
+    - It writes `SunAim = p` and `TrackerTilt = tilt`. While `d ≤ 0` it writes `rotation * back` and `tiltDeg`
+      instead.
+- **`SunFactor = max(0, dot(s, nrm)) · d`.** Then `UsedKw = SunFactor · spec.peakKw` and `DemandKw = 0`.
+
+So:
+- **Fixed panels (post, twin):** `SunFactor = max(0, dot(s, nrm)) · d`. With `tiltDeg = 0` this is just
+  `max(0, dot(s, up))` above the horizon.
+- **Tracker:** it does **not** read `max(0, elevation)`. While the zenith angle is inside `[tiltDeg, maxTiltDeg]`,
+  the normal points straight at the sun, so `SunFactor = d ≈ 1` whatever the elevation. Outside that range it is
+  `cos(zenith − clampedTilt) · d`. Its azimuth is free, since `p` follows the sun, so it depends on `up` only through
+  `h`.
+- **For the solar array (Task 5):** `Sun.Factor` should copy this. It takes `s` from
+  `MoonSolarSystem.SunDirectionAt(solar.LunarTime)` (or `world.SunDirection`), `up` from the site's surface normal,
+  and a normal from the array's own tilt rule. `MoonSolarSystem.Daylight` is a world-wide value with no per-site
+  geometry. It is not the fallback unless the measurement disagrees with this formula.
+- The vanilla `tiltDeg` / `maxTiltDeg` values are built in `MoonWorld..cctor` from data, not from immediates, so they
+  were not read statically. `LogSun` prints them.
+- One weak check against earlier data: STRUCTURES_RECON.md (b) saw a twin at `SunFactor` 0.744 with the clock set
+  to the time whose sun was closest to the walker's up (best dot up about 0.74). That fits a twin with a small
+  `tiltDeg`. It is not a test of the formula.
+
+**Sample table: to be measured.**
+
+| Hour | Kind | `SunFactor` | predicted | err | `Daylight` | `SunAim` | `TrackerTilt` | solar `Daylight` | dot(sun, up) | LunarTime |
+|---|---|---|---|---|---|---|---|---|---|---|
+| 0, 6, 9, 12, 15, 18 | twin / post / tracker | to be measured | | | | | | | | |
+
+Worst error: to be measured. The pass mark is under 3 % at every sample for the twin and the post.
+
+**Procedure** (for the controller, game closed first, `game.lock` held):
+1. `dotnet build src/StructureLib -c Release -p:InstallToGame=true` (a DevBuild).
+2. Back up `BepInEx/config/com.ryanhartwig.structurelib.cfg`, then set `[Dev] AutoLoadSlot = 2` and
+   `LogSun = true`. Never use slot 1. If slot 2 has no panels, add `AutoBuild = 94` (93 is the post, 95 the tracker)
+   and restore slot 2 afterwards.
+3. Launch `MoonSweepers.exe` directly. Once the `[dev]` lines appear, step DevMoney's `[Time] TimeOfDay`
+   (`com.ryanhartwig.devmoney.cfg`, re-read on change) through 0, 6, 9, 12, 15 and 18, about 8 s each, then set
+   it back to -1.
+4. Collect the lines from `BepInEx/LogOutput.log`. The `[sun] session:` line gives `InLobby`, `IsHost` and
+   `MoonCrew.Joined`. Each `[sun] ... depot <id> <kind>:` line gives `SunFactor`, the `predicted` value from the
+   formula above (`SunLog.Predict` in `src/StructureLib/DevBelts.cs`), `err`, `Daylight`, `SunAim`, `TrackerTilt`,
+   `solar.Daylight`, `LunarTime`, dot(`SunDirectionAt`, up), dot(`world.SunDirection`, up) and the spec's tilt.
+5. Fill in the table. If `err` stays under 0.03 at every sample, the formula is confirmed. If it does not, check
+   first whether `world.SunDirection` and `SunDirectionAt(LunarTime)` disagree (`SunOverride` set).
+6. Close the game, restore the cfg and slot 2, and delete the lock.
+
+## F. Co-op state flow
+
+Status, 2026-11-08: this verdict comes from the dumps and from static reading of the machine code, the same way as
+section E. **No two-player session was run** (no second player was available within the task). Single-player
+logging was not possible either, since the game could not be run. `LogSun`'s `[sun] session:` line will record
+`MoonSteamLobby.IsHost`, `InLobby` and `MoonCrew.Joined` on the next run.
+
+**Verdict: (S) every peer solves its own world.** Power state is not replicated. Only machine cycle state is.
+
+The evidence, from `dump_MoonWorld.txt`, `dump_MoonCrewSession.txt`, `dump_MoonCrew.txt`, `dump_MoonSteamLobby.txt`
+and the disassembly:
+
+1. **`SolvePower` runs on every peer.** The call chain is
+   `MoonWorld.Update` (+0x8A9) → `StepConveyors` (+0x2AB) → `StepProduction` (+0xD0) → `SolvePower`.
+   - `Update` calls `StepConveyors` with nothing around it but the profiler marker. `StepConveyors` calls
+     `StepProduction` without a condition.
+   - `StepProduction` does three things before the call: it checks that `depots` is non-empty, adds `dt` to
+     `productionClock` (+0x920), and calls `SolvePower` once that reaches 0.25 s. It makes no crew, lobby or host
+     check.
+   - `SolvePower` (9440 B) calls neither `MoonCrew.get_Joined` nor any `MoonSteamLobby` getter, and it does not touch
+     their class statics (`0x18236CE80`, `0x182370580`). Its only Assembly-CSharp callees are `TryPanel`,
+     `ProductionOf`, `Processor`, `NodeDistance`, `CanStartCycle`, `BuildDefinition`, `StructurePose`, `Anchor`,
+     `Root`, `get_SunDirection` and `MoonLoc.T`.
+   - This is the only caller of `SolvePower`. No other method has a direct `call` to it.
+2. **Machine cycles are host-only.** Inside `StepProduction`'s per-machine loop, `MoonCrew.get_Joined()` (+0x1E2)
+   skips `TryStartCycle`, the progress step, `FinishCycle` and `EmitProduct` when it is true.
+   - `Joined` is a non-zero test on a `MoonCrew` static. `MoonCrew.Join(root, host)` sets those statics, so it is a
+     client's flag.
+   - A client's `Running`, `Progress` and cycle count therefore come from the host.
+3. **The host streams cycle state, not power state.**
+   - `MoonCrewSession.UpdateWorld` calls `SendProduction()` only when `!MoonCrew.Joined` and
+     `Time.time ≥ nextProduction` (+0xAEE..+0xB0C). That is `Kind.Production = 63` on the crew channel.
+   - `SendProduction` → `MoonWorld.WriteCrewProduction(w, progress)` writes, per processor state only (`Processor(kind)`
+     filter): `Id`, `Running`, `Cycles`, the `stores` (owner and kg per slot), and `Progress` into the second writer.
+   - The client's `MoonCrewSession.HandleWorld` (+0x274F) → `ApplyCrewProduction` writes only `Running`,
+     `Progress`, `lastCycle`, `hostCycles` and the stores.
+   - **No power field travels:** `Power`, `DemandKw`, `UsedKw`, `Grid`, `ChargeKwh`, `SuppliedKw`, `BatteryKw`,
+     `SunFactor`, `Daylight`, `SunAim` and `TrackerTilt` are absent. Solar panels are not processors, so they are not
+     in the message at all.
+4. **The clock is shared, so the sun agrees.** `UpdateWorld` sends `Kind.Sky = 77` (`MoonSolarSystem.WriteCrewClock`).
+   The client applies it in `HandleWorld` (+0x2D21) → `MoonSolarSystem.ApplyCrewClock`. Each peer's `SolvePower`
+   then sees the same `LunarTime`, and so computes the same `SunFactor` for the same panel.
+5. **Battery charge is integrated per peer.** The join stream is the host's save (`SendWorld` / `UnpackWorld`).
+   `SnapshotProduction` → `MoonProductionSnapshot` carries `id`, `progress`, `running`, `charge` and `stores`. So a
+   client starts from the host's `ChargeKwh` at join time and then integrates on its own. That is drift, not a
+   divergence: both peers compute it from the same sun and from the host-driven `Running` / demand.
+
+**What this means for the grid (Task 5):**
+- Under S the `SolvePower` postfix runs on every peer, so **no host gate is needed for the solve**.
+- It must be deterministic from replicated inputs: depots, belts, the clock, and the host-driven `Running` and stores.
+- Anything the library keeps only in managed memory is per peer. Modded battery charge, if it lives in `ChargeKwh`
+  or a sidecar, drifts the same way vanilla's does.
+- **A hazard under S:** anything that charges a fuel generator from `FinishCycle` runs on the host only, because
+  clients skip `FinishCycle`. Fuel power derived from a cycle event will therefore be missing or late on a client.
+  Derive fuel supply from the replicated `Running` / `Progress` rather than from the cycle event.
+
+**What a two-player session must confirm:**
+- `[sun] session:` reads `IsHost True` / `Joined False` on the host and `IsHost False` / `Joined True` on the client.
+- The `SolvePower` postfix fires on the client: the `[sun]` lines keep coming there at 1 Hz with a changing
+  `SunFactor`.
+- Both seats log the same `SunFactor` for the same depot at the same `LunarTime`.
+- A client's machine `Power` / `Grid` match the host's.
+- How far `ChargeKwh` drifts between seats over a few minutes.
+
 ## Not established
 
 - **Panel fix:** no managed call to `MoonLookPanel.Show`, `SetRow` or `Rows` was made. The `Update` postfix route for a
