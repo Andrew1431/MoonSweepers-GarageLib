@@ -95,5 +95,28 @@ namespace StructureLib.Tests
             Assert.Equal(-9, b.GridOf(9));
             Assert.Equal(0, b.GridOf(42));
         }
+
+        static float RotatedDistance(float yaw, float px, float pz)
+        {
+            var g = PoleGraph.Build(new List<Pole> { new(1, px, 0, pz, 24f, 12f) });
+            g.AttachSite(new Site(100, 0, 0, 0, 5f, 1f, yaw), out _, out float d);
+            return d;
+        }
+
+        // Unity yaw: local X = (cos, -sin) in (X, Z). Yaw pi/2 turns the long (5 m) side onto the Z axis.
+        [Fact]
+        public void AttachSite_RotatedFootprint()
+        {
+            const float half = (float)(System.Math.PI / 2);
+            Assert.Equal(0f, RotatedDistance(half, 0, -5), 3);
+            Assert.Equal(0f, RotatedDistance(half, 0, 5), 3);
+            Assert.Equal(4f, RotatedDistance(half, 5, 0), 3);
+            Assert.Equal(4f, RotatedDistance(half, -5, 0), 3);
+
+            // Asymmetric: at pi/4 the rotated +X axis points to (+x, -z); a mirrored convention swaps these two.
+            const float quarter = (float)(System.Math.PI / 4);
+            Assert.Equal(0f, RotatedDistance(quarter, 3.5355f, -3.5355f), 3);
+            Assert.Equal(4f, RotatedDistance(quarter, 3.5355f, 3.5355f), 3);
+        }
     }
 }

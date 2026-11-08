@@ -18,7 +18,7 @@ namespace StructureLib
     /// vanilla grid id (a positive depot id) nor with 0.</item>
     /// <item>A site attaches to the pole with the smallest footprint distance, provided that distance is &lt;= the pole's
     /// SupplyRadius. Footprint distance is horizontal (Y is ignored): from the pole centre to the site's rectangle, which
-    /// has half-extents HalfX/HalfZ and local X axis (cos Yaw, sin Yaw) in the (X, Z) plane; zero inside. Equal distances
+    /// has half-extents HalfX/HalfZ and local X axis (cos Yaw, -sin Yaw) in the (X, Z) plane (Unity left-handed rotation about +Y: Quaternion.Euler(0, yaw, 0) * Vector3.right); zero inside. Equal distances
     /// go to the lower pole id.</item>
     /// </list>
     /// </summary>
@@ -126,7 +126,7 @@ namespace StructureLib
         {
             double dx = p.X - s.X, dz = p.Z - s.Z;
             double cos = Math.Cos(s.Yaw), sin = Math.Sin(s.Yaw);
-            double lx = dx * cos + dz * sin, lz = -dx * sin + dz * cos;
+            double lx = dx * cos - dz * sin, lz = dx * sin + dz * cos;
             double ox = Math.Max(0.0, Math.Abs(lx) - s.HalfX), oz = Math.Max(0.0, Math.Abs(lz) - s.HalfZ);
             return (float)Math.Sqrt(ox * ox + oz * oz);
         }
