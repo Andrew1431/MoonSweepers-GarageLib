@@ -70,7 +70,7 @@ namespace SandPower
                 // blender/coalite_furnace.py. Its Port_Coalite in node, at the -X footprint edge flowing +X, is the
                 // belt port (the solar post has none).
                 Model = "coalite_furnace.bin",
-                Power = new PowerDefinition { PeakKw = 10, BatteryKwh = 6, Range = 24, SupplyMode = SupplyMode.Fuel },
+                Power = new PowerDefinition { Role = PowerRole.Source, SupplyMode = SupplyMode.Fuel, PeakKw = 10, BatteryKwh = 6 },
                 Processor = new ProcessorDefinition
                 {
                     RunningKw = 0,

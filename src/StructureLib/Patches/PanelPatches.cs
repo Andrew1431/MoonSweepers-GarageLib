@@ -123,7 +123,7 @@ namespace StructureLib.Patches
                 // No Input slot: no fuel to name; the FUEL row reads 0 / 0 kg.
                 byte? cargo = fuel >= 0 ? slots[fuel].Cargo.Value : null;
                 double capacity = fuel >= 0 ? slots[fuel].Capacity : 0;
-                l = PanelText.Generator(d.Name, d.Power.Range, d.Power.PeakKw, state?.SuppliedKw ?? 0f, d.Power.BatteryKwh, state?.ChargeKwh ?? 0,
+                l = PanelText.Generator(d.Name, d.Power.SupplyRadius, d.Power.PeakKw, state?.SuppliedKw ?? 0f, d.Power.BatteryKwh, state?.ChargeKwh ?? 0,
                     cargo.HasValue ? CargoName((MoonCargo)cargo.Value) : "", cargo.HasValue ? CargoShortName((MoonCargo)cargo.Value) : "",
                     Kg(state, fuel), capacity, state?.Running ?? false, PowerPatches.FedCountOf(record.id));
                 foreach (var r in l.Rows) rowCargo.Add(r.Label == "FUEL" ? cargo : null);

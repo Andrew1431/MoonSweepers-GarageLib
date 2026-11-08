@@ -97,7 +97,7 @@ namespace StructureLib
                     }
                 }
                 var def = ringAt > 0 ? Generator(world, ringAt) : null;
-                if (def != null && Position(world, ringAt, out var centre)) links.Ring(centre, def.Power.Range, new Color(cyan.r, cyan.g, cyan.b, RingAlpha));
+                if (def != null && Position(world, ringAt, out var centre)) links.Ring(centre, def.Power.SupplyRadius, new Color(cyan.r, cyan.g, cyan.b, RingAlpha));
                 links.End();
                 ArcsDrawn = arcs;
             }

@@ -119,15 +119,22 @@ namespace StructureLib
         public RouterMode Mode;
     }
 
-    public enum SupplyMode { Solar, Fuel }
-
-    /// <summary>Makes a structure a power source.</summary>
+    /// <summary>Makes a structure part of the power grid: a source, a relay or a storage (see <see cref="PowerRole"/>).</summary>
     public sealed class PowerDefinition
     {
-        public float PeakKw;
-        public float BatteryKwh;
-        public float Range;
+        public PowerRole Role = PowerRole.Source;
+        /// <summary>Source only.</summary>
         public SupplyMode SupplyMode = SupplyMode.Fuel;
+        /// <summary>Source: peak output in kW.</summary>
+        public float PeakKw;
+        /// <summary>A fuel source's buffer, or a storage's capacity, in kWh.</summary>
+        public float BatteryKwh;
+        /// <summary>Storage: maximum charge and discharge rate in kW.</summary>
+        public float RateKw;
+        /// <summary>Relay: how far it links to other grid structures.</summary>
+        public float LinkRange;
+        /// <summary>Relay: how far it supplies machines.</summary>
+        public float SupplyRadius;
     }
 
     /// <summary>A new kind of cargo. Values 0..2 belong to the game; mods use 3..255.</summary>
