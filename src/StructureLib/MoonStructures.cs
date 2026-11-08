@@ -99,7 +99,7 @@ namespace StructureLib
             byId[def.Id] = def;
             CoreLog.Info($"Registered structure '{def.Id}' ('{def.Name}', base {def.BaseStructure}, ${def.Price}) from {def.Owner} {def.OwnerVersion}" +
                          (def.Processor != null ? $", processor with {def.Processor.Slots.Count} slots" : "") +
-                         (def.Power != null ? ", power source" : "") +
+                         (def.Power != null ? ", power " + def.Power.Role.ToString().ToLowerInvariant() : "") +
                          (def.ModelPath != null ? $", model {def.ModelPath}" : ""));
             return def;
         }
@@ -237,11 +237,19 @@ namespace StructureLib
                     }
                 }
 
-                // Routers have no processor and no power; a Footprint must be positive.
+                // Routers have no processor and no power; a Footprint must be positive; a power definition must fit its role.
                 foreach (var def in structures.Values.OrderBy(d => d.Id, StringComparer.Ordinal).ToList())
                 {
                     var fp = def.Footprint.HasValue ? (def.Footprint.Value.x, def.Footprint.Value.y) : ((float, float)?)null;
-                    var defErrors = RouterRules.CheckDefinition(def.Id, def.Router != null, def.Processor != null, def.Power != null, fp);
+                    var defErrors = RouterRules.CheckDefinition(def.Id, def.Router != null, def.Processor != null, def.Power != null, fp).ToList();
+                    if (def.Power != null)
+                    {
+                        var p = def.Power;
+                        defErrors.AddRange(PowerRules.CheckDefinition(def.Id, p.Role, p.SupplyMode, p.PeakKw, p.BatteryKwh, p.RateKw, p.LinkRange, p.SupplyRadius,
+                            def.Processor != null, def.Processor != null && def.Processor.ProducesPower));
+                    }
+                    else if (def.Processor != null && def.Processor.ProducesPower)
+                        defErrors.Add($"'{def.Id}': a Processor with ProducesPower needs a Power definition (Role Source, SupplyMode Fuel).");
                     if (defErrors.Count == 0) continue;
                     foreach (var e in defErrors) CoreLog.Error(e);
                     CoreLog.Error($"Structure '{def.Id}' dropped.");

@@ -37,7 +37,7 @@ namespace StructureLib.Patches
         {
             var d = Remap.Live(kind);
             if (d?.Power == null) { Remap.ToBase(ref kind, "PowerRange"); return true; }
-            __result = d.Power.Range;
+            __result = 0f; // placeholder until the grid rewrite (Task 5)
             return false;
         }
 
@@ -162,12 +162,12 @@ namespace StructureLib.Patches
             }
 
             var (gridOf, networkOf) = FuelGrid.Assign(members.Take(modded).Select(m =>
-                new FuelGrid.Member(m.Record.id, m.At.x, m.At.y, m.At.z, m.Source ? m.Def.Power.Range : 0f, m.Vanilla?.state.Grid ?? 0)).ToList());
+                new FuelGrid.Member(m.Record.id, m.At.x, m.At.y, m.At.z, 0f /* placeholder: Task 5 */, m.Vanilla?.state.Grid ?? 0)).ToList());
             // The vanilla members' networks. A vanilla machine within reach of generators of two modded networks bridges
             // them here, for its own (vanilla) draw only: modded members keep the networks of the modded Assign above,
             // which served them.
             var powerNet = members.Count == modded ? networkOf : FuelGrid.Assign(members.Select(m =>
-                new FuelGrid.Member(m.Record.id, m.At.x, m.At.y, m.At.z, m.Source ? m.Def.Power.Range : 0f, m.IsVanilla ? 0 : m.Vanilla?.state.Grid ?? 0)).ToList()).Network;
+                new FuelGrid.Member(m.Record.id, m.At.x, m.At.y, m.At.z, 0f /* placeholder: Task 5 */, m.IsVanilla ? 0 : m.Vanilla?.state.Grid ?? 0)).ToList()).Network;
             // Ledger network ids: a modded member's is the depot id of its modded network's root; a vanilla member's is
             // that of the first generator (member order, the order it draws in) in its network, so a vanilla machine
             // shares the id of the generator network it draws from first. A vanilla member with no generator is left out.

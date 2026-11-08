@@ -96,7 +96,7 @@ namespace StructureLib
                 spec.name = d.Name;
                 spec.peakKw = d.Power.PeakKw;
                 spec.batteryKwh = d.Power.BatteryKwh;
-                spec.range = d.Power.Range;
+                spec.range = d.Power.Role == PowerRole.Relay ? d.Power.SupplyRadius : 0f;
                 spec.tiltDeg = post.tiltDeg;
                 spec.maxTiltDeg = post.maxTiltDeg;
                 spec.tracker = post.tracker;
