@@ -42,25 +42,38 @@ vanilla panels are neither sources nor storage of a modded grid.
    nearest pole whose `SupplyRadius` reaches its footprint (`MoonWorld.FootprintDistance`). A structure is in at most
    one grid. A structure no pole reaches is unpowered (consumer), idle (source), or inert (storage), and its status says
    so.
-3. **Pooled supply, even share.** Each solve, per grid:
-   - `supply` = the sum of every source's available kW this solve (solar: `PeakKw × SunFactor`; fuel: `PeakKw`, at
-     most what its stored charge lasts over the solve, as `FuelGrid.AvailableKw` does today).
+3. **Pooled supply, even share.** Each solve, per grid, in Factorio's order **(call)**: free sources first, then
+   storage, then fuel.
    - `demand` = the sum of every consumer's `RunningKw` while it is running.
-   - If `supply ≥ demand`: every consumer's satisfaction is 1; the surplus charges storage, split across storage units
-     in proportion to their free capacity, each at most its `RateKw`.
-   - If `supply < demand`: storage discharges to cover the deficit, split across units in proportion to their stored
-     charge, each at most its `RateKw` and its charge; satisfaction = `(supply + discharged) / demand`, **the same
-     number for every consumer** on the grid. No consumer is favoured by distance, build order or kind.
-   - Fuel sources drain their charge by what they delivered; they deliver in proportion to their available kW (not in
-     depot order), so two furnaces on one grid burn evenly.
+   - `solar` = the sum of every solar source's `PeakKw × SunFactor` this solve. It covers demand first. Any solar
+     surplus charges storage, split across storage units in proportion to their free capacity, each at most its
+     `RateKw`. Solar never goes to waste while a bank has room.
+   - If `solar < demand`: storage discharges to cover the deficit, split across units in proportion to their stored
+     charge, each at most its `RateKw` and its charge.
+   - If still short: fuel sources deliver **only the remaining deficit**, split in proportion to their available kW
+     (`PeakKw`, at most what their stored charge lasts over the solve, as `FuelGrid.AvailableKw` does today), so two
+     furnaces burn evenly and neither burns while the sun or the banks can carry the grid. Fuel never charges storage:
+     a furnace's own buffer is its storage (it fills by burning coalite, as today, and stops burning when full).
+   - satisfaction = `(solar + discharged + fuel) / demand`, capped at 1, **the same number for every consumer** on the
+     grid. No consumer is favoured by distance, build order or kind.
    - A consumer's satisfaction below the game's `StallPower` (0.08) stalls it, as vanilla does; above that, its cycle
      progresses at `satisfaction` speed (unchanged from today's machine accounting).
-4. **Vanilla machines on a grid.** A vanilla machine (pressure chamber, stone press, ...) that a pole reaches is a
-   consumer of that grid **for the share of its demand vanilla's own solve left unmet** (today's `FuelTopUp` rule).
-   Vanilla's solve runs first and may already have powered it from a vanilla panel; the grid tops up the rest and
-   writes `Power` / `UsedKw`, reapplied every solve. **(call)** The grid never lowers a vanilla machine's power below
-   what vanilla gave it: we cannot stop a vanilla panel feeding it, and a machine beside a solar twin that stalls
-   because a distant grid is short would read as a bug. A base with no vanilla panels gets pure Factorio behaviour.
+   - `SunFactor` is the grid's, not vanilla's: the library computes it from the lunar clock (`MoonSolarSystem`:
+     `Daylight`, `SunDirectionAt`, which DevMoney already drives) and the array's placement normal. The recon task
+     below settles the formula against the sun factor vanilla panels show, so an array and a twin side by side agree.
+     A modded array answers `IsSolarPanel` and `IsPowerNode` **false**: it is not a vanilla node, vanilla's solve, arcs
+     and panels ignore it, and the library owns everything about it.
+4. **Vanilla panels still power what they reach; the grid tops up.** **(call, Ryan may flip it)** Vanilla's solve
+   runs first and powers whatever vanilla machines its panels reach. Today the library also lets a modded machine
+   within a vanilla panel's range run on that panel's sun surplus and batteries (`GridShare`, the charging take-back).
+   Both stay. A consumer that a pole reaches, vanilla or modded, is a consumer of that grid **for the share of its
+   demand that vanilla's panels left unmet** (today's `FuelTopUp` rule, now for every consumer); the grid writes
+   `Power` / `UsedKw` / `Grid`, reapplied every solve, and never lowers a consumer below what a vanilla panel gave it.
+   Reasons: we cannot stop a vanilla panel feeding a vanilla machine, so the rule would otherwise differ by kind; a
+   coking oven beside a solar twin that stalls because a distant grid is short would read as a bug; and every existing
+   play-test base keeps working after the update. A base with no vanilla panels gets pure Factorio behaviour. The
+   alternative, modded consumers ignoring vanilla panels entirely, is a one-rule change in the pure solver and a
+   status text; Ryan can ask for it after a play-test.
 5. **Three new structures in a new mod, `mods/PowerGrid`** (names are **(call)**, Ryan has renamed things before and
    may again; ids are permanent after release so settle them before shipping):
 
@@ -70,10 +83,20 @@ vanilla panels are neither sources nor storage of a modded grid.
    | Solar array | `ryanhartwig.solar-array` | source, solar | `PeakKw` 10 at full sun, no battery | 2×1 cells, a tilted panel on a frame |
    | Battery bank | `ryanhartwig.battery-bank` | storage | `CapacityKwh` 20, `RateKw` 10 in or out | 1 cell, a crate of cells with a charge lamp |
 
-   Prices **(call)**: pole 200, solar array 1 500, battery bank 2 500 (the solar twin is the reference; the builder
-   checks vanilla prices in game and keeps the array a little cheaper per kW than the twin, since it needs poles).
+   Prices **(call)**: the rule governs and the numbers follow it. The recon measured the solar twin at $150 for
+   7.5 kW and 4 kWh, about $20 per kW with its battery thrown in. So: pole $50, solar array $180 (10 kW, no battery,
+   needs poles: a little under the twin per kW), battery bank $300 (20 kWh at $15 per kWh). The builder checks the
+   vanilla prices in game before shipping and keeps these ratios.
    `LinkRange` and `SupplyRadius` are also read from the mod's BepInEx config (`[Grid]`), so Ryan can tune them in a
    play-test without a rebuild; the structure numbers stay in code.
+
+   **Packaging (call).** The pole is a `PowerDefinition` with the Relay role, so any mod can define one; nothing about
+   poles lives in the library beyond the role. `PowerGrid` ships the player-facing pole, array and bank. SandPower
+   declares a BepInEx dependency on PowerGrid (`[BepInDependency("com.ryanhartwig.powergrid")]`) and both ship in the
+   modpack; the furnace's README says it needs PowerGrid's pole. `examples/ExampleStructure` defines its own test pole
+   (and keeps its burner, with `Range` removed) so the library's DEVBUILD self-tests and the xunit tests never
+   reference another mod's ids. The library's existing self-tests (`power-burner-supplies`,
+   `power-grinder-runs-on-burner`, `power-vanilla-fed`, `arc-drawn`) are rewritten around the example pole.
 6. **SandPower joins the grid.** The coalite furnace keeps `PeakKw` 10 and its 6 kWh buffer, loses its 24 m direct
    range, and powers only through a pole. Its Note becomes "Burns one coalite every 20 s for 10 kW into the power
    grid. Needs a power pole within 12 m." The coking oven is a consumer like any modded machine. Nothing else in
@@ -107,10 +130,18 @@ vanilla panels are neither sources nor storage of a modded grid.
    mechanism, or the library's own `MoonPowerLinks` as `PowerLinksView` does today). With the build tool held and any
    grid member aimed, the library draws pole-to-pole arcs for that grid and an arc from each pole to each member it
    reaches, plus the aimed pole's ring. Vanilla's arcs for vanilla grids are untouched.
-10. **Multiplayer.** The host solves; clients see what the host wrote. Clients must show the same readouts, statuses and
-    arcs as the host for the same grid. Where a readout needs numbers that no replicated state carries (grid totals on a
-    pole, which has no production state of its own), the builder gives the pole a replicated state the same way a
-    processor has one, and the host writes the grid totals into it each solve. A client never solves.
+10. **Multiplayer.** Required outcome: on every peer, the same grid shows the same readouts, statuses and arcs, and
+    machines run at the same satisfaction. How that is reached depends on a fact nobody has measured: whether the game
+    replicates `MoonProductionState` (`Power`, `ChargeKwh`, `SuppliedKw`) from host to clients, or every peer runs
+    `SolvePower` / `StepProduction` itself over a replicated depot set. The co-op recon so far is from type dumps only,
+    and power in co-op is listed as untested in the library README. So the plan starts with a recon task (below) and
+    the solver is written so either model works: pure functions of the depot set and the states, deterministic in
+    iteration order (sorted by depot id), allocation-free per solve. If states replicate, the host solves and clients
+    display; grid totals a pole shows come from a replicated state the host writes (the builder gives the pole one the
+    way a processor has one). If every peer simulates, every peer runs the same solve and must agree; the fuel drain
+    then has to be deterministic too. "Untested in co-op" is **not** acceptable for the PR that ships the grid: the
+    test plan includes one two-player session (Ryan and Andrew, as PR #5's README plans for belt scrap) checking a
+    pole chain, a short grid and a furnace from both seats.
 11. **Performance.** The pole graph and the member-to-pole assignment are rebuilt only when the set of depots changes
     (a build, a removal, a world load); the per-solve work is the sums and the writes, linear in members. A spatial
     index (cells of `LinkRange`) keeps the rebuild well under a millisecond for a few hundred poles. The solve path
@@ -122,6 +153,19 @@ vanilla panels are neither sources nor storage of a modded grid.
     array at one end and two consumers at the other (even share when short at night), a battery bank filling by day
     and carrying the night, a furnace with and without a pole in reach, a vanilla pressure chamber topped up through a
     pole. One by-hand tour with screenshots of the preview arcs, the grid readout and a short grid.
+
+## Recon first
+
+Two facts the plan's first task measures in game before the solver is written, with findings appended to
+`research/POWER_UX_RECON.md`:
+
+1. **Sun.** How a vanilla panel's `SunFactor` relates to `MoonSolarSystem.Daylight` / `SunDirectionAt` and the panel's
+   orientation, by sampling a twin's node over a held lunar day (DevMoney's `[Time] TimeOfDay` holds the sun). The
+   array uses the formula that reproduces vanilla's curve; if none does within a few percent, a world-wide `Daylight`
+   factor is acceptable and the spec is updated to say so.
+2. **Co-op state flow.** Whether `SolvePower` and `StepProduction` run on a client, and whether a `MoonProductionState`
+   written on the host is seen on the client, by logging from both seats in a two-player session (or, failing a second
+   player, from the type dumps plus a loopback client if the game allows one). Goal 10 picks its model from this.
 
 ## Non-goals
 
@@ -168,8 +212,9 @@ vanilla panels are neither sources nor storage of a modded grid.
 - How the pole carries grid totals to clients (goal 10).
 - Whether to reuse the game's `ShowPreview` for the placement arcs or draw them with the library's own
   `MoonPowerLinks` (whichever proves stable; the recon's hazards apply).
-- Whether the furnace's buffer is modelled as a fuel source (output limited by charge) or as a source plus storage; the
-  observable behaviour must match goal 3 either way.
+- How the furnace's buffer is represented in the solver, as long as goal 3 holds: it delivers only the deficit after
+  solar and banks, it never charges a bank, and it fills only by burning coalite.
+- Library changes and the PowerGrid mod as one PR or two stacked ones.
 - Test scenario geometry and the self-test names.
 - Exact strings beyond those given in goal 8; wording follows the game's (sentence case, `  ·  ` separators as
   `PanelText` does today).
@@ -178,3 +223,7 @@ vanilla panels are neither sources nor storage of a modded grid.
 
 - Structure names and ids (goal 5). The builder uses the table; Ryan renames before release if he wants.
 - Whether a second, long-range pole should be in the first version (default: no).
+- Goal 4's call: vanilla panels keep powering modded machines in their range, the grid tops up. The pure alternative
+  (modded machines draw from the grid only) is a small change if play shows the mixed rule is confusing.
+- Goal 3's order: solar, then banks, then fuel (Factorio's). The alternative, fuel and solar sharing the load evenly so
+  furnaces always burn, is also a small solver change.
