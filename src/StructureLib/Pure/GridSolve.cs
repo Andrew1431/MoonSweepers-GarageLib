@@ -121,7 +121,7 @@ namespace StructureLib
             for (int i = 0; i < nb && !live; i++) live = storage[i].ChargeKwh > 0;
 
             float delivered = fromSolar + fromStorage + fromFuel;
-            float satisfaction = Clamp01(deficit > 0f ? delivered / deficit : live ? 1f : 0f);
+            float satisfaction = Clamp01(deficit > 0f ? delivered / deficit : demand > 0f ? 1f : live ? 1f : 0f);
 
             var power = new float[nc];
             var used = new float[nc];

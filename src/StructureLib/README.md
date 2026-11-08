@@ -353,7 +353,7 @@ exactly as they are. Design and reasons: `docs/superpowers/specs/2026-11-08-powe
 - **Fuel sources have no kWh buffer.** A furnace offers `PeakKw` while a coalite burns (`Running`), and a burn starts
   only when the grid's last solve still had a deficit after solar and storage (a host-side gate, `GridState.WantsFuel`).
   Reason: every peer runs the solve and the host streams only Running, Progress, Cycles and stores, so a charge raised
-  by a cycle event would never reach a client. Cost: a source can waste up to one burn at low demand. A modded
+  by a cycle event would never reach a client. Cost: a source can waste up to one burn at low demand. A source keeps offering `PeakKw` for one solve after its burn ends (one-solve grace), so the solve between two burns does not read Power 0. A modded
   machine's demand counts while it is Running or its next cycle is ready, so a fuel-only grid can bootstrap.
 - **Sun factor** (provisional, read from the game's machine code, not yet measured): `s = SunDirectionAt(LunarTime)`,
   `h = dot(up, s)`, `d = smoothstep(clamp01((h + 0.0096) / 0.0192))`, `factor = max(0, dot(s, n)) x d`, with `n` the

@@ -98,6 +98,8 @@ namespace StructureLib.Patches
         static readonly Dictionary<int, float> surplus = new(), charging = new();
         static readonly Dictionary<int, double> stored = new();
         static readonly Dictionary<int, string> shortText = new();
+        // Per fuel source: Running at the previous solve (the one-solve grace between burns). Cleared on rebuild.
+        static readonly Dictionary<int, bool> wasRunning = new();
 
         /// <summary>Throws caught in the postfix this session, and solves run (the grid-pole-removed self-test reads them).</summary>
         internal static int SolveThrows, Solves;
@@ -125,7 +127,8 @@ namespace StructureLib.Patches
         //    vanilla batteries; shared between modded machines in depot-id order. That satisfaction is its VanillaPower.
         //    A vanilla machine's VanillaPower is its Power as vanilla's solve left it.
         // 3. Per grid, in depot-id order: sources (a solar array: PeakKw x Sun.Factor; a fuel source: PeakKw while its
-        //    batch burns, i.e. Running, else nothing, passed as ChargeKwh +inf / 0), banks (ChargeKwh, BatteryKwh, RateKw)
+        //    batch burns, i.e. Running or Running at the previous solve (one-solve grace: a solve landing between FinishCycle and
+        //    the next TryStartCycle must not read Power 0), else nothing, passed as ChargeKwh +inf / 0), banks (ChargeKwh, BatteryKwh, RateKw)
         //    and consumers (a modded machine's RunningKw while Running or ready to start a cycle, ProductionPatches.ReadyToStart;
         //    a vanilla machine's DemandKw) go to GridSolve.Solve:
         //    solar first, then banks, then fuel, and one satisfaction for every consumer for the share vanilla left unmet.
@@ -161,7 +164,7 @@ namespace StructureLib.Patches
         {
             var production = world.production;
             var depots = world.depots;
-            if (production == null || depots == null || !MoonStructures.Frozen || MoonStructures.Disabled) { GridState.Clear(); return; }
+            if (production == null || depots == null || !MoonStructures.Frozen || MoonStructures.Disabled) { GridState.Clear(); builtCount = -1; return; }
             Solves++;
 
             var nodes = world.powerNodes;
@@ -242,6 +245,7 @@ namespace StructureLib.Patches
             gridOrder.Clear();
             byGrid.Clear();
             polesByGrid.Clear();
+            wasRunning.Clear();
             GridState.BeginGraph();
             noPower = NoPowerText();
 
@@ -404,7 +408,7 @@ namespace StructureLib.Patches
                     {
                         var p = all[i];
                         var at = new Vector3(p.X, p.Y, p.Z);
-                        distances.Add(Vector3.Distance(at, m.At) <= p.SupplyRadius + diagonal + 0.01f
+                        distances.Add(Vector3.Distance(at, m.At) <= p.SupplyRadius + diagonal + 4f /* vertical slack for slopes; the exact FootprintDistance decides */
                             ? MoonWorld.FootprintDistance(at, m.At, m.Rotation, m.Half)
                             : float.PositiveInfinity);
                     }
@@ -513,7 +517,9 @@ namespace StructureLib.Patches
                 switch (m.Role)
                 {
                     case Role.Fuel:
-                        sources.Add(new SourceIn(m.Id, false, m.Def.Power.PeakKw, 0f, s.Running ? double.PositiveInfinity : 0));
+                        bool burning = s.Running || wasRunning.TryGetValue(m.Id, out var was) && was;
+                        wasRunning[m.Id] = s.Running;
+                        sources.Add(new SourceIn(m.Id, false, m.Def.Power.PeakKw, 0f, burning ? double.PositiveInfinity : 0));
                         sourceOf.Add(m);
                         peak += m.Def.Power.PeakKw;
                         break;

@@ -175,6 +175,8 @@ namespace StructureLib
     //  grid-pole-has-state: pole1 has a production state after a solve.
     //  grid-chain-even-share: the burner (pole1), the grinder and the chamber (pole3) are in grid -(lowest pole id),
     //    which has 3 poles; while both consumers ask for power they read the same Power (within 0.01).
+    //    (12 kW of supply against 11 kW of demand is satisfaction 1, so this proves same-grid membership and equal Power across
+    //    three poles; even sharing when short is proven by the xunit EvenShareWhenShort.)
     //  grid-vanilla-topup: the grid raised the chamber (vanilla left it below 1): Power >= vanilla's, and its powerStatus
     //    names the grid once it is 1. Not applicable when vanilla's panels power it fully throughout.
     //  grid-no-pole-no-power: the lone grinder reads Grid 0 and a status naming a power pole; the lone burner supplies

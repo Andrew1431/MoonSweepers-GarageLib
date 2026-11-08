@@ -73,7 +73,7 @@ public static class PanelText
         float capacityKwh, float satisfaction, int machinesFed)
     {
         int pct = (int)Math.Round(Math.Max(0f, Math.Min(1f, satisfaction)) * 100f, MidpointRounding.AwayFromZero);
-        bool shortGrid = satisfaction < 0.995f;
+        bool shortGrid = demandKw > 0f && satisfaction < 0.995f;
         string state;
         PanelColour colour;
         if (shortGrid) { state = "Grid short: " + pct.ToString(Inv) + " %"; colour = PanelColour.Amber; }

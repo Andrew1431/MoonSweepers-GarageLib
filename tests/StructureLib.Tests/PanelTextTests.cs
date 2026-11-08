@@ -76,6 +76,14 @@ public class PanelTextTests
         PanelText.Pole("Power pole", poles, 5f, 10f, used, 10f, 0, 20f, satisfaction, fed);
 
     [Fact]
+    public void Pole_NoDemand_NotShort()
+    {
+        var l = PanelText.Pole("Power pole", 3, 0f, 10f, 0f, 0f, 0, 20f, 0f, 0);
+        Assert.Equal("Nothing drawing power", l.State);
+        Assert.DoesNotContain("Grid short", l.State);
+    }
+
+    [Fact]
     public void Pole_Short()
     {
         var l = Pole();

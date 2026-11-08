@@ -17,6 +17,14 @@ namespace StructureLib.Tests
         static GridResult Run(SourceIn[] s, StorageIn[] b, ConsumerIn[] c, float stall = 0f) => GridSolve.Solve(s, b, c, Dt, stall);
 
         [Fact]
+        public void VanillaCoversAll_SatisfactionIsOne()
+        {
+            var r = Run(new SourceIn[0], new StorageIn[0], new[] { Load(1, 10, 1f) });
+            Assert.Equal(1f, r.Satisfaction);
+            Assert.Equal(0f, r.UnmetDemandKw, 1e-6);
+        }
+
+        [Fact]
         public void SolarCoversDemand_FuelIdle()
         {
             var r = Run(new[] { Solar(1, 10, 1), Fuel(2, 10, 6) }, new StorageIn[0], new[] { Load(1, 8) });

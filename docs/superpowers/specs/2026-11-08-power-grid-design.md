@@ -134,8 +134,8 @@ vanilla panels are neither sources nor storage of a modded grid.
    (`stored / capacity kWh`), and SATISFACTION (`<pct> %`, amber below 100). Aiming a solar array or battery bank
    shows a source/storage panel in the same style (OUTPUT or STORED, plus the GRID row). Consumers keep the production
    panel; their status text reads `Powered by the grid`, `Grid short: <pct> %` or `No power: build a power pole within
-   12 m` (the pole's `SupplyRadius`). The furnace's panel keeps its OUTPUT / BATTERY / FUEL rows and gets GRID instead
-   of POWERING. Texts are pure functions with tests, as `PanelText` is today.
+   12 m` (the pole's `SupplyRadius`). The furnace's panel keeps OUTPUT / FUEL / GRID rows
+   **(amended 2026-11-08 during implementation)** (no BATTERY row; GRID instead of POWERING). Texts are pure functions with tests, as `PanelText` is today.
 9. **Arcs and preview.** While placing a pole, an arc is previewed from the ghost to every pole it would link to, in
    the game's line style, and the ghost shows its `SupplyRadius` ring (the game's `MoonPowerLinks.ShowPreview`
    mechanism, or the library's own `MoonPowerLinks` as `PowerLinksView` does today). With the build tool held and any
@@ -166,8 +166,8 @@ vanilla panels are neither sources nor storage of a modded grid.
     the grid is short and both seats agree.
 11. **Performance.** The pole graph and the member-to-pole assignment are rebuilt only when the set of depots changes
     (a build, a removal, a world load); the per-solve work is the sums and the writes, linear in members. A spatial
-    index (cells of `LinkRange`) keeps the rebuild well under a millisecond for a few hundred poles. The solve path
-    allocates nothing per call in steady state.
+    index (cells of `LinkRange`) keeps the rebuild well under a millisecond for a few hundred poles. The pure solver
+    returns fresh `GridResult` arrays per solve and the postfix reuses its own lists **(amended 2026-11-08 during implementation)**.
 12. **Proven.** xunit tests on the pure grid rules (`Pure/PowerGrid.cs` or similar: union of poles, member assignment,
     pooled supply, even satisfaction, storage charge/discharge split, fuel drain split, the top-up rule for vanilla
     machines) including the energy-conservation property (over any solve, `Σ delivered + Σ stored − Σ discharged =
