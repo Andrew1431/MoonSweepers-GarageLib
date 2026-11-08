@@ -40,7 +40,9 @@ namespace StructureLib.Patches
         {
             var d = DepotDefinition(__instance, id, "IsProcessorId");
             if (d == null) return true;
-            __result = d.Processor != null;
+            // A machine, and a pole, solar array or bank too, so the game creates their production state after a build
+            // (the grid writes its fields there). A fuel source has a Processor.
+            __result = d.Processor != null || d.Power != null && (d.Power.Role != PowerRole.Source || d.Power.SupplyMode == SupplyMode.Solar);
             return false;
         }
 
@@ -147,7 +149,8 @@ namespace StructureLib.Patches
         }
 
         // Every Batch slot goes into the Output slot at the same mass (owners kept), or is burnt by a power producer, whose
-        // battery then stores half its capacity more (ProcessorCycle.ChargeAfterBurn: two cycles fill it).
+        // supply ends with it (it supplies PeakKw only while Running; see PowerPatches). A structure without a Processor (a
+        // pole, array or bank) has no cycle.
         [HarmonyPatch(typeof(MoonWorld), nameof(MoonWorld.FinishCycle)), HarmonyPrefix]
         static bool FinishCyclePre(MoonProductionState s)
         {
@@ -165,18 +168,30 @@ namespace StructureLib.Patches
                 }
                 s._Running_k__BackingField = false;
                 s._Progress_k__BackingField = 0f;
-                if (d.Processor.ProducesPower && d.Power != null) s._ChargeKwh_k__BackingField = ProcessorCycle.ChargeAfterBurn(s.ChargeKwh, d.Power.BatteryKwh);
             }
             catch (Exception e) { CoreLog.Once("finishcycle:" + d.Id, $"Finishing a cycle of '{d.Id}' depot {s.Id} threw: {e}", 2); }
             return false;
+        }
+
+        /// <summary>
+        /// An idle modded machine whose next cycle could start now (inputs ready, output room). The grid counts its
+        /// RunningKw as demand, as vanilla does for a chamber waiting to run, so a grid whose only source is a fuel source
+        /// (which burns only when the grid is short) is short and powers it before its cycle starts.
+        /// </summary>
+        internal static bool ReadyToStart(StructureDefinition d, MoonProductionState s)
+        {
+            try { return d?.Processor != null && !d.Processor.ProducesPower && s != null && !s.Running && StartMoves(d, s) != null; }
+            catch (Exception e) { CoreLog.Once("ready:" + d?.Id, $"Checking whether '{d?.Id}' depot {s?.Id} can start a cycle threw: {e.Message}", 2); return false; }
         }
 
         static List<(int From, int To, double Kg)> StartMoves(StructureDefinition d, MoonProductionState s)
         {
             int n = d.Processor.Slots.Count;
             if (s.stores == null || s.stores.Length != n) return null;
-            // A fuel generator does not burn into a full battery.
-            if (d.Processor.ProducesPower && d.Power != null && !ProcessorCycle.CanBurn(s.ChargeKwh, d.Power.BatteryKwh)) return null;
+            // A fuel source burns only when its grid needs fuel: the last solve was short after solar and storage. So a
+            // furnace with no pole, or on a grid the sun or the banks carry, does not burn. Only the host starts cycles
+            // (a client skips TryStartCycle and takes Running from the host), so the gate needs no replicated input.
+            if (d.Processor.ProducesPower && !GridState.WantsFuel(s.Id)) return null;
             var stored = new double[n];
             for (int i = 0; i < n; i++) stored[i] = s.Stored(i);
             return ProcessorCycle.StartMoves(SpecBuilder.CycleSlots(d), stored, d.Processor.ProducesPower);
@@ -198,7 +213,9 @@ namespace StructureLib.Patches
         static bool EmitProduct(MoonProductionState s)
         {
             var d = s == null ? null : Remap.Live(s.Kind);
-            return d?.Processor == null || !d.Processor.ProducesPower;
+            // Vanilla runs for vanilla kinds and for modded machines; never for a power producer or a structure without a
+            // Processor (a pole, array or bank: no output slot either).
+            return d == null || d.Processor != null && !d.Processor.ProducesPower;
         }
 
         // Only called with a connected outfeed belt (fact (d)). Vanilla EmitProduct emits a modded machine's output by itself

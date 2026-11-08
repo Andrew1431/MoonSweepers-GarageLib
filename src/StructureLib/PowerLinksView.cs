@@ -7,11 +7,12 @@ using UnityEngine;
 namespace StructureLib
 {
     /// <summary>
-    /// Power arcs for fuel networks. Vanilla's MoonPowerLinks.ShowGrid never includes modded members (it takes them from
+    /// Power arcs for pole grids. Vanilla's MoonPowerLinks.ShowGrid never includes modded members (it takes them from
     /// grid membership, research/POWER_UX_RECON.md "C. Arcs"), so the library owns one MoonPowerLinks and draws, while
-    /// the build tool is held and a fuel-network member is aimed, an arc from each generator of that network to every
-    /// member it fed in the last solve (PowerPatches.LastSolve) and the ring of one generator's Range. Driven from
-    /// CoreDriver.Update; no game method is patched. Reset on leaving the game or when the world changes.
+    /// the build tool is held and a pole or member of a grid is aimed, an arc for every pole-to-pole link of that grid and
+    /// from each pole to every member it reaches (GridState), and the ring of the aimed pole's SupplyRadius (else the
+    /// grid's first pole's). Driven from CoreDriver.Update; no game method is patched. Reset on leaving the game or when
+    /// the world changes.
     /// </summary>
     internal static class PowerLinksView
     {
@@ -26,7 +27,6 @@ namespace StructureLib
         static MoonDepotBuilder builder;
         static IntPtr world0;
         static bool drew;
-        static readonly HashSet<int> networks = new();
 
         internal static void Tick()
         {
@@ -50,20 +50,19 @@ namespace StructureLib
                     CoreLog.Debug($"PowerLinksView: created MoonPowerLinks on '{inter.name}'");
                 }
 
-                var netOf = PowerPatches.LastSolve.NetworkOf;
                 bool force = false;
 #if DEVBUILD
                 force = DevTools.ForceArcs != null && DevTools.ForceArcs.Value;
 #endif
-                int aimed = 0;
-                bool show = force;
-                if (!show)
+                int aimed = 0, aimedGrid = 0;
+                bool show = force && GridState.Grids.Count > 0;
+                if (!force)
                 {
                     if (builder == null) { builder = inter.builder; if (builder == null) builder = UnityEngine.Object.FindFirstObjectByType<MoonDepotBuilder>(); }
                     if (builder != null && builder.HoldingBuildTool)
                     {
                         aimed = inter.Aimed(world);
-                        show = aimed > 0 && netOf.ContainsKey(aimed);
+                        show = aimed > 0 && GridState.GridOfDepot(aimed, out aimedGrid);
                     }
                 }
                 if (!show)
@@ -73,30 +72,32 @@ namespace StructureLib
                     return;
                 }
 
-                networks.Clear();
-                if (!force) networks.Add(netOf[aimed]);
                 var cyan = MoonProductionInteraction.Cyan;
                 int arcs = 0;
-                // MoonPowerLinks keeps one ring: the aimed generator's, else the first generator of the network drawn.
-                int ringAt = aimed > 0 && Generator(world, aimed) != null ? aimed : -1;
+                // MoonPowerLinks keeps one ring: the aimed pole's, else the first pole of the (first) grid drawn.
+                int ringAt = aimed > 0 && Pole(world, aimed) != null ? aimed : -1;
+                if (ringAt < 0)
+                    foreach (var kv in GridState.Grids)
+                        if ((force || kv.Key == aimedGrid) && kv.Value.PoleIds.Count > 0) { ringAt = kv.Value.PoleIds[0]; break; }
                 // Set first: a throw between Begin and End still gets its Clear when the gate turns off.
                 drew = true;
                 links.Begin();
-                foreach (var kv in PowerPatches.LastSolve.Fed)
+                // A depot removed since the last rebuild has no position: no arc from or to it.
+                foreach (var (a, b) in GridState.PoleLinks)
                 {
-                    int gen = kv.Key;
-                    if (!netOf.TryGetValue(gen, out int net) || (!force && !networks.Contains(net))) continue;
-                    // A depot removed since the last solve has no position: no arc from or to it.
-                    if (!End(world, gen, out var from)) continue;
-                    if (ringAt < 0 && Generator(world, gen) != null) ringAt = gen;
-                    foreach (int member in kv.Value)
-                    {
-                        if (!End(world, member, out var to)) continue;
-                        links.Arc(from, to, Width, cyan);
-                        arcs++;
-                    }
+                    if (!force && !(GridState.GridOfDepot(a, out int g) && g == aimedGrid)) continue;
+                    if (!End(world, a, out var from) || !End(world, b, out var to)) continue;
+                    links.Arc(from, to, Width, cyan);
+                    arcs++;
                 }
-                var def = ringAt > 0 ? Generator(world, ringAt) : null;
+                foreach (var (pole, member) in GridState.Reach)
+                {
+                    if (!force && !(GridState.GridOfDepot(pole, out int g) && g == aimedGrid)) continue;
+                    if (!End(world, pole, out var from) || !End(world, member, out var to)) continue;
+                    links.Arc(from, to, Width, cyan);
+                    arcs++;
+                }
+                var def = ringAt > 0 ? Pole(world, ringAt) : null;
                 if (def != null && Position(world, ringAt, out var centre)) links.Ring(centre, def.Power.SupplyRadius, new Color(cyan.r, cyan.g, cyan.b, RingAlpha));
                 links.End();
                 ArcsDrawn = arcs;
@@ -126,13 +127,13 @@ namespace StructureLib
             ArcsDrawn = 0;
         }
 
-        // The modded fuel generator's definition for a depot, or null.
-        static StructureDefinition Generator(MoonWorld world, int id)
+        // The modded pole's (Relay) definition for a depot, or null.
+        static StructureDefinition Pole(MoonWorld world, int id)
         {
             var depots = world.depots;
             if (depots == null || !depots.ContainsKey(id)) return null;
             var d = Remap.Live(depots.get_Item(id).kind);
-            return d?.Power != null ? d : null;
+            return d?.Power != null && d.Power.Role == PowerRole.Relay ? d : null;
         }
 
         static bool Position(MoonWorld world, int id, out Vector3 p)

@@ -76,8 +76,14 @@ namespace StructureLib
                 if (RunSelfTest.Value && refusal == null) SelfTest.StartWatch();
                 if (!string.IsNullOrWhiteSpace(AutoBuild.Value))
                 {
+                    // The 'power-grid' entry is the grid self-tests' own layout (DevPowerGrid.cs), built by GridLayout.
+                    string rest = GridLayout.Without(AutoBuild.Value);
                     if (refusal != null) CoreLog.Warn("[dev] AutoBuild skipped: " + refusal);
-                    else AutoBuilder.Run(AutoBuild.Value);
+                    else
+                    {
+                        if (!string.IsNullOrWhiteSpace(rest)) AutoBuilder.Run(rest);
+                        if (GridLayout.Named) GridLayout.Start();
+                    }
                 }
                 if (!string.IsNullOrWhiteSpace(AutoBelt.Value))
                 {
@@ -99,8 +105,10 @@ namespace StructureLib
             if (feedAt > 0f && gameT > feedAt) { feedAt = -1f; AutoFeeder.Run(AutoFeed.Value); }
             TickBelts(gameT);
             PowerUx.Tick(gameT);
+            GridLayout.Tick();
             if (saveAt > 0f && gameT > saveAt) { saveAt = -1f; RequestSave(); }
-            if (RunSelfTest.Value && !selfTestRan && gameT > 20f)
+            // The grid layout walks the walker from site to site; the self-test starts once it is done.
+            if (RunSelfTest.Value && !selfTestRan && gameT > 20f && !GridLayout.Busy)
             {
                 selfTestRan = true;
                 string refusal = SlotRefusal();
@@ -274,6 +282,24 @@ namespace StructureLib
             }
             if (ok && id >= 0 && MoonStructures.IsModded(kind)) SeedContribution(world, id, def.priceDollars);
             Report(entry, ok, id, reason);
+        }
+
+        /// <summary>
+        /// One TryBuildDepot at a ground point (the walker must stand within the build reach), with the wallet topped up
+        /// and, for a modded kind, a contribution seeded as for any AutoBuild entry. The new depot id, or -1.
+        /// </summary>
+        internal static int BuildAt(MoonWorld world, MoonWalker walker, int kind, Vector3 at, float yaw, out string reason)
+        {
+            reason = "";
+            var def = world.BuildDefinition(kind);
+            if (def == null) { reason = $"no build definition for kind {kind}"; return -1; }
+            EnsureMoney(world, def.priceDollars);
+            var before = DepotIds(world);
+            bool ok = world.TryBuildDepot(walker, at.normalized, yaw, out reason, null, kind);
+            int id = -1;
+            if (ok) foreach (var kv in world.depots) if (!before.Contains(kv.Key)) { id = kv.Key; break; }
+            if (id >= 0 && MoonStructures.IsModded(kind)) SeedContribution(world, id, def.priceDollars);
+            return id;
         }
 
         // The build menu's own placement path for a structure: PlanStructure (free placement at a ground point), the sliced
@@ -487,6 +513,7 @@ namespace StructureLib
             CanisterRoundTrip();
             ProcessorChecks(lamp);
             PowerChecks();
+            GridChecks();
             PanelChecks();
             VanillaFedChecks();
             ArcChecks();
@@ -548,6 +575,7 @@ namespace StructureLib
         {
             if (cycleUntil >= 0f) TickCycle();
             if (PowerPending) TickPower();
+            if (GridPending) TickGrid();
             if (VanillaFedPending) TickVanillaFed();
             if (ArcPending) TickArc();
             if (ArcShotPending) TickArcShot();
@@ -560,7 +588,7 @@ namespace StructureLib
             if (BoxPending) TickBoxes();
             if (artUntil >= 0f) { TickCardArt(); return; }
             if (renderUntil >= 0f) { TickRendered(); return; }
-            if (saveUntil >= 0f && cycleUntil < 0f && !PowerPending && !VanillaFedPending && !ArcPending && !TintPending && sandOpen.Count == 0 && !BeltPending && !OutPending && !ModelPending && !SandChainPending && !BoxPending) TickSaveWait();
+            if (saveUntil >= 0f && cycleUntil < 0f && !PowerPending && !GridPending && !VanillaFedPending && !ArcPending && !TintPending && sandOpen.Count == 0 && !BeltPending && !OutPending && !ModelPending && !SandChainPending && !BoxPending) TickSaveWait();
         }
 
         // cardart-modded: CardArt answers something once nothing is pending, or after 5 s.
@@ -1121,52 +1149,38 @@ namespace StructureLib
             Assert("cycle-produces-grit", grit && raised, $"within 30 s of the feed: Stored(2) = {Stored(s, 2)}, CycleFinished raised: {raised}; {StateText(s)}");
         }
 
-        // The example burner (a fuel generator) 8 m from the grinder, no vanilla node built: after a solve the burner is
-        // in world.powerNodes; within 20 s of the self-test both report the same non-zero grid; within 30 s the burner has
-        // stored charge, and the grinder runs at Power > 0.5 while the burner supplies it. 60 s after the burner's feed,
-        // with its battery full and the grinder idle, 2 kg more grit must not start a cycle within 10 s.
+        // The power checks, on the grid layout ([Dev] AutoBuild names 'power-grid'; DevPowerGrid.cs): the example burner
+        // within 10 m of pole 1, the grinder within 10 m of pole 3, poles 1-2-3 linked into one grid; the layout fed the
+        // burner and the grinder. After a solve the burner is in world.powerNodes; within 20 s of the self-test both
+        // report the same non-zero grid (the poles' grid); within 30 s the burner supplies kW into it (it burns because
+        // the grid is short: nothing else feeds it), and the grinder runs at Power > 0.5 while the burner supplies it.
+        // (power-no-burn-when-full is gone with the burner's battery: DevPowerGrid's power-no-burn-when-carried replaces it.)
         const string BurnerId = "ryanhartwig.example-burner";
         static readonly Dictionary<string, float> powerOpen = new();
-        static int burnerDepot = -1, fullCycles, vanillaOnBurner = -1;
-        static float fullAt = -1f, fullUntil = -1f;
-        static double fullGrit;
+        static int burnerDepot = -1, powerGrinder = -1;
 
-        static bool PowerPending => powerOpen.Count > 0 || fullAt >= 0f || fullUntil >= 0f;
+        static bool PowerPending => powerOpen.Count > 0;
 
         static void PowerChecks()
         {
             var world = CoreState.World ?? CoreState.FindWorld();
             var burner = MoonStructures.Definition(BurnerId);
-            burnerDepot = burner != null && world != null ? DepotOfKind(world, burner.Kind) : -1;
-            if (!DevTools.AutoBuildNames(BurnerId))
+            if (!GridLayout.Named)
             {
-                CoreLog.Info($"[selftest] '{BurnerId}' was not built by AutoBuild this run: power checks not applicable" + (burnerDepot < 0 ? "" : $" (restored burner: {PowerText(world.ProductionOf(burnerDepot))})"));
+                int restored = burner != null && world != null ? DepotOfKind(world, burner.Kind) : -1;
+                CoreLog.Info($"[selftest] [Dev] AutoBuild does not name '{GridLayout.Token}' (the pole layout): power checks not applicable" + (restored < 0 ? "" : $" (a burner in the world: {PowerText(world.ProductionOf(restored))})"));
                 return;
             }
-            string[] names = { "power-node-registered", "power-grid-joined", "power-burner-supplies", "power-grinder-runs-on-burner", "power-no-burn-when-full" };
-            string skip = burner == null ? $"'{BurnerId}' is not registered" : burnerDepot < 0 ? "no example burner depot in world.depots" : null;
-            var feed = AutoFeeder.For(BurnerId);
-            // Three of the checks time themselves from the burner's AutoFeed. A burner with no AutoFeed entry fed through a
-            // belt box (a router) runs on whatever the chain brings, so those three do not apply; the node and grid
-            // checks need no feed and still run. A burner fed straight by a machine's belt with no AutoFeed still fails.
-            var into = skip == null && feed == null ? AutoBelter.Results.FirstOrDefault(r => r.Ok && r.To == burnerDepot) : null;
-            var router = into != null ? RouterAt(world, into.From) : null;
-            if (router != null)
-            {
-                CoreLog.Info($"[selftest] '{BurnerId}' has no AutoFeed entry and is fed through router '{router.Id}' (belt {into.Belt} from depot {into.From}): power-burner-supplies, power-grinder-runs-on-burner and power-no-burn-when-full not applicable; power-node-registered and power-grid-joined run; {PowerText(world.ProductionOf(burnerDepot))}");
-                powerOpen["power-node-registered"] = Time.unscaledTime + 20f;
-                powerOpen["power-grid-joined"] = Time.unscaledTime + 20f;
-                DonorReport(world);
-                return;
-            }
-            skip ??= feed == null ? "no AutoFeed entry for the burner" : feed.Error;
+            string[] names = { "power-node-registered", "power-grid-joined", "power-burner-supplies", "power-grinder-runs-on-burner" };
+            burnerDepot = GridLayout.Depot("burner");
+            powerGrinder = GridLayout.Depot("grinder");
+            string skip = burner == null ? $"'{BurnerId}' is not registered" : GridLayout.Refusal("burner", "grinder", "pole1", "pole2", "pole3");
             if (skip != null) { foreach (var n in names) Assert(n, false, skip); return; }
             float now = Time.unscaledTime;
             powerOpen["power-node-registered"] = now + 20f;
             powerOpen["power-grid-joined"] = now + 20f;
             powerOpen["power-burner-supplies"] = now + 30f;
             powerOpen["power-grinder-runs-on-burner"] = now + 30f;
-            fullAt = feed.At + 60f;
             DonorReport(world);
         }
 
@@ -1191,8 +1205,9 @@ namespace StructureLib
             var world = CoreState.World ?? CoreState.FindWorld();
             var burner = MoonStructures.Definition(BurnerId);
             MoonProductionState b = null, g = null;
-            try { b = world?.ProductionOf(burnerDepot); g = grinderDepot >= 0 ? world?.ProductionOf(grinderDepot) : null; } catch (Exception) { }
-            string text = $"burner {PowerText(b)}; grinder {PowerText(g)}; powerNodes {world?.powerNodes?.Count}, nodePool {world?.nodePool?.Count}";
+            try { b = world?.ProductionOf(burnerDepot); g = world?.ProductionOf(powerGrinder); } catch (Exception) { }
+            int poleGrid = GridLayout.PoleGrid();
+            string text = $"burner {PowerText(b)}; grinder {PowerText(g)}; poles' grid {poleGrid}; powerNodes {world?.powerNodes?.Count}, nodePool {world?.nodePool?.Count}";
             Poll("power-node-registered", () =>
             {
                 var nodes = world?.powerNodes;
@@ -1200,32 +1215,9 @@ namespace StructureLib
                     if (nodes.get_Item(i)?.record?.kind == burner.Kind) return (true, null);
                 return (false, $"no node of kind {burner.Kind} among {nodes?.Count ?? 0} powerNodes");
             });
-            Poll("power-grid-joined", () => (b != null && g != null && b.Grid != 0 && b.Grid == g.Grid, text));
-            Poll("power-burner-supplies", () => (b != null && (b.SuppliedKw > 0f || b.ChargeKwh > 0), text));
+            Poll("power-grid-joined", () => (b != null && g != null && b.Grid != 0 && b.Grid == g.Grid && b.Grid == poleGrid, text));
+            Poll("power-burner-supplies", () => (b != null && b.Grid == poleGrid && b.SuppliedKw > 0f, text));
             Poll("power-grinder-runs-on-burner", () => (b != null && g != null && g.Running && g.Power > 0.5f && b.SuppliedKw > 0f, text));
-            if (vanillaOnBurner < 0 && Patches.PowerPatches.LastSolve.Fed.TryGetValue(burnerDepot, out var fed))
-                vanillaOnBurner = fed.FirstOrDefault(d => Patches.PowerPatches.LastSolve.VanillaPowerBefore.ContainsKey(d), -1);
-            float now = Time.unscaledTime;
-            if (fullAt >= 0f && now >= fullAt)
-            {
-                fullAt = -1f;
-                // A vanilla machine on the burner (power-vanilla-fed) keeps drawing from it, so its battery does not fill.
-                if (vanillaOnBurner >= 0) { CoreLog.Info($"[selftest] power-no-burn-when-full not applicable: vanilla depot {vanillaOnBurner} draws from the burner, so its battery does not fill; {text}"); return; }
-                float battery = burner.Power?.BatteryKwh ?? 0f;
-                if (b == null || b.ChargeKwh < battery - 1e-6 || g == null || g.Running) { Assert("power-no-burn-when-full", false, $"60 s after the feed the battery is not full with the grinder idle: {text}"); return; }
-                var grit = MoonStructures.CargoDefinition(GritId);
-                world.CrewProcessorLoad(MoonWorld.LocalPlayer, burnerDepot, (MoonCargo)grit.Value, 2);
-                fullCycles = b.Cycles;
-                fullGrit = Stored(b, 0);
-                fullUntil = now + 10f;
-                CoreLog.Info($"[selftest] battery full: loaded 2 kg grit into the burner; {text}");
-            }
-            if (fullUntil >= 0f && now >= fullUntil)
-            {
-                fullUntil = -1f;
-                bool ok = b != null && b.Cycles == fullCycles && !b.Running && Stored(b, 0) >= fullGrit - 1e-6 && fullGrit >= 2 - 1e-6;
-                Assert("power-no-burn-when-full", ok, $"cycles {fullCycles} -> {b?.Cycles}, grit {fullGrit} -> {Stored(b, 0)} kg; {text}");
-            }
 
             void Poll(string name, Func<(bool ok, string detail)> probe) => PollOpen(powerOpen, name, text, probe);
         }
@@ -1247,7 +1239,8 @@ namespace StructureLib
         // cargo 3. Each machine is fed by AutoFeed (the deadline runs from the feed: 30 s for the oven, 40 s for the
         // generator) or by a belt AutoBelt built into it (the chain in DevBelts.cs: ChainSeconds from the self-test). By
         // then the oven has finished a cycle and holds coalite in its output slot (or EmitCargo saw a modded
-        // cargo), and the generator holds charge. A run that restored both from the save runs the reload checks instead.
+        // cargo), and the generator was fed (it holds coalite or has burnt some: it burns only when a pole grid it is on
+        // is short, so with no pole it keeps its coalite). A run that restored both from the save runs the reload checks instead.
         const string OvenId = "ryanhartwig.coking-oven", GeneratorId = "ryanhartwig.coalite-furnace", CoaliteId = "ryanhartwig.coalite";
         static readonly Dictionary<string, float> sandOpen = new();
         static int ovenDepot = -1, generatorDepot = -1;
@@ -1264,7 +1257,7 @@ namespace StructureLib
             generatorDepot = g != null && world != null ? DepotOfKind(world, g.Kind) : -1;
             Open("sandpower-oven-cycles", c, ovenDepot, OvenId, 30f);
             Open("sandpower-coalite-out", c, ovenDepot, OvenId, 30f);
-            Open("sandpower-generator-charges", g, generatorDepot, GeneratorId, 40f);
+            Open("sandpower-generator-fed", g, generatorDepot, GeneratorId, 40f);
             SandChainChecks(world);
 
             static void Open(string name, StructureDefinition d, int depot, string id, float seconds)
@@ -1292,7 +1285,7 @@ namespace StructureLib
                 int cargo = o >= 0 ? (byte)spec.slotCargo[o] : -1;
                 return ((cargo == 3 && Stored(c, o) > 0) || Patches.ProductionPatches.ModdedCargoEmits > 0, $"output slot {o} (cargo {cargo}) holds {Stored(c, o)} kg; {text}");
             });
-            PollOpen(sandOpen, "sandpower-generator-charges", text, () => (g != null && g.ChargeKwh > 0, text));
+            PollOpen(sandOpen, "sandpower-generator-fed", text, () => (g != null && (Stored(g, 0) > 0 || g.Cycles > 0 || g.Running), text));
         }
 
         static string PowerText(MoonProductionState s) => s == null ? "no state" :

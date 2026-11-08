@@ -9,7 +9,7 @@ namespace StructureLib.Tests
         [Theory]
         [InlineData(PowerRole.Source, SupplyMode.Fuel, 10f, 6f, 0f, 0f, 0f, true, true, 0, null)]
         [InlineData(PowerRole.Source, SupplyMode.Fuel, 0f, 6f, 0f, 0f, 0f, true, true, 1, "PeakKw")]
-        [InlineData(PowerRole.Source, SupplyMode.Fuel, 10f, 0f, 0f, 0f, 0f, true, true, 1, "BatteryKwh")]
+        [InlineData(PowerRole.Source, SupplyMode.Fuel, 10f, 0f, 0f, 0f, 0f, true, true, 0, null)] // a fuel source's BatteryKwh is ignored
         [InlineData(PowerRole.Source, SupplyMode.Fuel, 10f, 6f, 0f, 0f, 0f, false, false, 1, "Processor")]
         [InlineData(PowerRole.Source, SupplyMode.Fuel, 10f, 6f, 0f, 0f, 0f, true, false, 1, "ProducesPower")]
         [InlineData(PowerRole.Source, SupplyMode.Solar, 5f, 0f, 0f, 0f, 0f, false, false, 0, null)]

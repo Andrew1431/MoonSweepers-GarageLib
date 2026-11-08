@@ -87,17 +87,14 @@ namespace StructureLib
             finally { look?.Hide(); }
         }
 
-        // power-vanilla-fed (PowerPatches.TopUpVanilla): AutoBuild built a vanilla pressure chamber (96) and the example
-        // burner. Within 60 s, at some tick: vanilla's solve left the chamber below Power 0.99 and the top-up raised it to
-        // 0.99 or more, its Cycles rose since the check opened, and the summed ChargeKwh of the fuel generators that fed it
-        // (LastSolve.Fed when it first read the raised Power) is below its value then. In a world where the burner shares a
-        // network with another generator (slot-2: the coalite furnace 28), that one may be the generator drawn from
-        // first, so the energy check follows whichever generators fed the chamber. Not applicable when the chamber is not
-        // in the burner's network after 20 s.
+        // power-vanilla-fed (PowerPatches.SolveGrid, a vanilla consumer): the grid layout (DevPowerGrid.cs) built a vanilla
+        // pressure chamber (96) within 10 m of pole 3 and the example burner within 10 m of pole 1, poles 1-2-3 linked, and
+        // fed both. Within 60 s, at some tick: the chamber is in the poles' grid, vanilla's solve left it below Power 0.99
+        // and the grid raised it to 0.99 or more (GridState.VanillaBefore), the burner supplied kW into the grid at that
+        // tick (the energy came from fuel: nothing else feeds the grid), and the chamber's Cycles rose since the check
+        // opened. Not applicable when vanilla's own panels power the chamber fully for 20 s (it never needs the grid).
         static int vfChamber = -1, vfBurner = -1, vfCycles;
-        static float vfOpened = -1f, vfUntil = -1f;
-        static double vfCharge = -1;
-        static List<int> vfFeeders = new();
+        static float vfOpened = -1f, vfUntil = -1f, vfBefore = -1f, vfSupplied;
         static bool vfNetwork;
 
         static bool VanillaFedPending => vfUntil >= 0f;
@@ -105,27 +102,17 @@ namespace StructureLib
         static void VanillaFedChecks()
         {
             const string name = "power-vanilla-fed";
-            string chamberEntry = MoonWorld.PressureChamberKind.ToString();
-            if (!DevTools.AutoBuildNames(chamberEntry) || !DevTools.AutoBuildNames(BurnerId))
-            {
-                CoreLog.Info($"[selftest] {name} not applicable: AutoBuild does not name both '{chamberEntry}' and '{BurnerId}'");
-                return;
-            }
-            DevTools.BuildResults.TryGetValue(chamberEntry, out var c);
-            DevTools.BuildResults.TryGetValue(BurnerId, out var b);
-            if (!c.ok || !b.ok)
-            {
-                CoreLog.Info($"[selftest] {name} not applicable: AutoBuild built chamber {c.ok} ({c.reason}), burner {b.ok} ({b.reason}); {Surroundings(b.ok ? b.depot : -1)}");
-                return;
-            }
+            if (!GridLayout.Named) { CoreLog.Info($"[selftest] {name} not applicable: [Dev] AutoBuild does not name '{GridLayout.Token}'"); return; }
+            string refusal = GridLayout.Refusal("chamber", "burner", "pole1", "pole2", "pole3");
+            if (refusal != null) { CoreLog.Info($"[selftest] {name} not applicable: {refusal}; {Surroundings(GridLayout.Depot("burner"))}"); return; }
             var world = CoreState.World ?? CoreState.FindWorld();
-            var chamber = world?.ProductionOf(c.depot);
-            if (chamber == null) { Assert(name, false, $"chamber depot {c.depot} has no production state"); return; }
-            vfChamber = c.depot;
-            vfBurner = b.depot;
+            vfChamber = GridLayout.Depot("chamber");
+            vfBurner = GridLayout.Depot("burner");
+            var chamber = world?.ProductionOf(vfChamber);
+            if (chamber == null) { Assert(name, false, $"chamber depot {vfChamber} has no production state"); return; }
             vfCycles = chamber.Cycles;
-            vfCharge = -1;
-            vfFeeders = new List<int>();
+            vfBefore = -1f;
+            vfSupplied = 0f;
             vfNetwork = false;
             vfOpened = Time.unscaledTime;
             vfUntil = vfOpened + 60f;
@@ -138,39 +125,29 @@ namespace StructureLib
             var world = CoreState.World ?? CoreState.FindWorld();
             MoonProductionState c = null, b = null;
             try { c = world?.ProductionOf(vfChamber); b = world?.ProductionOf(vfBurner); } catch (Exception) { }
-            var last = Patches.PowerPatches.LastSolve.NetworkOf;
-            if (last.TryGetValue(vfChamber, out int net) && last.TryGetValue(vfBurner, out int bnet) && net == bnet) vfNetwork = true;
+            int poleGrid = GridLayout.PoleGrid();
+            if (GridState.GridOfDepot(vfChamber, out int g) && g == poleGrid && GridState.GridOfDepot(vfBurner, out int bg) && bg == poleGrid) vfNetwork = true;
             float now = Time.unscaledTime;
-            if (!vfNetwork)
+            bool raisedNow = GridState.VanillaBefore.TryGetValue(vfChamber, out float before) && before < 0.99f && c != null && c.Power >= 0.99f;
+            if (raisedNow && vfBefore < 0f && b != null && b.SuppliedKw > 0f)
             {
-                if (now - vfOpened < 20f) return;
+                vfBefore = before;
+                vfSupplied = b.SuppliedKw;
+                CoreLog.Info($"[selftest] {name}: chamber raised from {before:F2} by grid {poleGrid} (burner supplies {vfSupplied:F2} kW); chamber {VanillaText(c)}; burner {PowerText(b)}");
+            }
+            if (vfBefore < 0f && now - vfOpened >= 20f && c != null && c.Power >= 0.99f && !GridState.VanillaBefore.ContainsKey(vfChamber))
+            {
                 vfUntil = -1f;
-                // Not a candidate at all: its own grid already gives it full power.
-                bool sunFed = c != null && c.Power >= 0.99f && !Patches.PowerPatches.LastSolve.VanillaPowerBefore.ContainsKey(vfChamber);
-                string why = sunFed ? "vanilla already powers it fully" : "chamber not in the burner's network";
-                CoreLog.Info($"[selftest] {name} not applicable: {why} (chamber {VanillaText(c)}; burner {PowerText(b)})");
+                CoreLog.Info($"[selftest] {name} not applicable: vanilla already powers the chamber fully (chamber {VanillaText(c)}; burner {PowerText(b)})");
                 return;
             }
             if (c == null || b == null) { vfUntil = -1f; Assert(name, false, $"chamber {VanillaText(c)}; burner {PowerText(b)}"); return; }
-            bool raised = Patches.PowerPatches.LastSolve.VanillaPowerBefore.TryGetValue(vfChamber, out float before) && before < 0.99f && c.Power >= 0.99f;
-            if (raised && vfCharge < 0)
-            {
-                vfFeeders = Patches.PowerPatches.LastSolve.Fed.Where(kv => kv.Value.Contains(vfChamber)).Select(kv => kv.Key).OrderBy(d => d).ToList();
-                if (vfFeeders.Count > 0)
-                {
-                    vfCharge = Charge(world, vfFeeders);
-                    CoreLog.Info($"[selftest] {name}: chamber raised from {before:F2} by fuel generator(s) {string.Join(", ", vfFeeders)} (charge {vfCharge:F5} kWh); chamber {VanillaText(c)}; burner {PowerText(b)}");
-                }
-            }
-            double charge = vfCharge >= 0 ? Charge(world, vfFeeders) : -1;
-            bool ok = vfCharge >= 0 && c.Cycles > vfCycles && charge < vfCharge;
+            bool ok = vfNetwork && vfBefore >= 0f && c.Cycles > vfCycles;
             if (!ok && now < vfUntil) return;
             vfUntil = -1f;
-            Assert(name, ok, $"raised seen {vfCharge >= 0} (power before {before:F2}), cycles {vfCycles} -> {c.Cycles}, charge of feeders [{string.Join(", ", vfFeeders)}] at the raise {vfCharge:F5} -> {charge:F5} kWh; chamber {VanillaText(c)}; burner {PowerText(b)}");
-            if (ok) CoreLog.Info($"[selftest] {name}: cycles {vfCycles} -> {c.Cycles}, feeders [{string.Join(", ", vfFeeders)}] charge {vfCharge:F5} -> {charge:F5} kWh; chamber {VanillaText(c)}; burner {PowerText(b)}");
+            Assert(name, ok, $"in the poles' grid {poleGrid}: {vfNetwork}, raised seen {vfBefore >= 0f} (power before {vfBefore:F2}, burner supplying {vfSupplied:F2} kW), cycles {vfCycles} -> {c.Cycles}; chamber {VanillaText(c)}; burner {PowerText(b)}");
+            if (ok) CoreLog.Info($"[selftest] {name}: cycles {vfCycles} -> {c.Cycles}; chamber {VanillaText(c)}; burner {PowerText(b)}");
         }
-
-        static double Charge(MoonWorld world, List<int> depots) => depots.Sum(d => world?.ProductionOf(d)?.ChargeKwh ?? 0);
 
         // Where the walker and the depots within 40 m of the given one stand (to pick a free [Dev] PowerUxHome).
         static string Surroundings(int depot)
@@ -195,8 +172,9 @@ namespace StructureLib
         }
 
         // arc-drawn (PowerLinksView): with [Dev] ForceArcs, within 60 s after power-vanilla-fed or
-        // power-grinder-runs-on-burner opened (the burner was fed), the library's MoonPowerLinks drew at least one arc in a
-        // frame. Not applicable without ForceArcs (the build-tool and aim gate is not driven here) or without either check.
+        // power-grinder-runs-on-burner opened (the pole layout is built), the library's MoonPowerLinks drew at least one
+        // arc in a frame (a pole-to-pole link or a pole-to-member reach arc). Not applicable without ForceArcs (the
+        // build-tool and aim gate is not driven here) or without either check.
         static float arcOpened = -1f, arcUntil = -1f;
 
         static bool ArcPending => arcUntil >= 0f;
@@ -265,13 +243,11 @@ namespace StructureLib
             Assert(name, arcs >= 1, $"ArcsDrawn {arcs} after {now - arcOpened:F1} s; fed {FedText()}");
             if (arcs < 1) return;
             CoreLog.Info($"[selftest] {name}: {arcs} arc(s) after {now - arcOpened:F1} s; fed {FedText()}");
-            // A side-on screenshot of a fuel generator and a machine it fed, once the probe's tour is over (it moves the walker
+            // A side-on screenshot of a pole and a member it reaches, once the probe's tour is over (it moves the walker
             // for about 90 s from 24 s after load). The pressure chambers within 20 m of the burner get their full outputs
-            // emptied first; the pair framed is the burner and its nearest fed machine when it feeds one, else the generator
-            // that does (in slot-2 the coalite furnace 28 draws first and covers one chamber alone).
-            var burner = MoonStructures.Definition(BurnerId);
+            // emptied first; the pair framed is the layout's burner and the pole that reaches it, else any reached pair.
             var world = CoreState.World ?? CoreState.FindWorld();
-            int burnerAt = burner != null && world?.depots != null ? DepotOfKind(world, burner.Kind) : -1;
+            int burnerAt = world?.depots != null ? GridLayout.Depot("burner") : -1;
             shotLoad.Clear();
             if (burnerAt >= 0)
                 foreach (var kv in world.depots)
@@ -308,17 +284,18 @@ namespace StructureLib
                 }
                 if (shotStage == 1)
                 {
-                    var fed = Patches.PowerPatches.LastSolve.Fed;
-                    int gen = fed.ContainsKey(shotBurner) ? shotBurner : fed.Keys.DefaultIfEmpty(-1).First();
-                    if (gen < 0 || !fed.TryGetValue(gen, out var members) || members.Count == 0)
+                    // The pole that reaches the burner, and the burner (else any reached pair).
+                    var pairs = GridState.Reach.Where(r => r.Member == shotBurner).ToList();
+                    if (pairs.Count == 0) pairs = GridState.Reach.ToList();
+                    if (pairs.Count == 0)
                     {
                         if (now < shotDeadline) return;
                         shotAt = -1f;
-                        CoreLog.Warn("[selftest] arc-drawn shot: no generator fed anything within 15 s; no screenshot");
+                        CoreLog.Warn("[selftest] arc-drawn shot: no pole reached anything within 15 s; no screenshot");
                         return;
                     }
-                    shotGen = gen;
-                    shotMember = members.OrderBy(d => Vector3.Distance(PowerUx.At(world, gen), PowerUx.At(world, d))).First();
+                    shotGen = pairs[0].Pole;
+                    shotMember = pairs[0].Member;
                     var a = PowerUx.At(world, shotGen); var b = PowerUx.At(world, shotMember);
                     var mid = (a + b) / 2f; var up = mid.normalized;
                     var side = Vector3.Cross(up, (b - a).normalized).normalized;
@@ -337,7 +314,7 @@ namespace StructureLib
                     }
                     walker.Teleport(best + bestUp * 0.2f, true);
                     shotLook = mid + up * 1.5f;
-                    CoreLog.Info($"[selftest] arc-drawn shot: generator {shotGen}, machine {shotMember}; walker to {PowerUx.V(best)} ({bestFree:F1} m from the nearest depot), looking at {PowerUx.V(shotLook)}");
+                    CoreLog.Info($"[selftest] arc-drawn shot: pole {shotGen}, member {shotMember}; walker to {PowerUx.V(best)} ({bestFree:F1} m from the nearest depot), looking at {PowerUx.V(shotLook)}");
                     shotStage = 2; shotAt = now + 4f;
                     return;
                 }
@@ -349,15 +326,14 @@ namespace StructureLib
                 if (shotStage == 2) { shotStage = 3; shotAt = now + 1.5f; return; }
                 shotAt = -1f;
                 CoreLog.Info($"[selftest] arc-drawn shot: ArcsDrawn {PowerLinksView.ArcsDrawn}; fed {FedText()}");
-                PowerUx.Tour.Shot($"arc-drawn: generator {shotGen} and machine {shotMember}, side on");
+                PowerUx.Tour.Shot($"arc-drawn: pole {shotGen} and member {shotMember}, side on");
             }
             catch (Exception e) { shotAt = -1f; CoreLog.Warn("[selftest] arc-drawn shot threw: " + e.Message); }
         }
 
-        static string FedText()
-        {
-            return string.Join("; ", Patches.PowerPatches.LastSolve.Fed.Select(kv => $"{kv.Key} (network {(Patches.PowerPatches.LastSolve.NetworkOf.TryGetValue(kv.Key, out int n) ? n : -1)}) -> [{string.Join(", ", kv.Value)}]"));
-        }
+        static string FedText() => GridState.Grids.Count == 0 ? "no pole grid" : string.Join("; ", GridState.Grids.Values.Select(g =>
+            $"grid {g.Id}: poles [{string.Join(", ", g.PoleIds)}], members [{string.Join(", ", g.MemberIds)}], fed {g.Fed}, demand {g.DemandKw:F2} kW, satisfaction {g.Satisfaction:F2}")) +
+            $"; {GridState.PoleLinks.Count} link(s), {GridState.Reach.Count} reach arc(s)";
 
         // cargo-tint (Patches/CanisterPatches.cs). Views are pooled: a view that showed tinted grit and is reused for a
         // dust (or other) canister must come back white. The check drives the walker, so it starts once every other
@@ -417,7 +393,7 @@ namespace StructureLib
             CoreLog.Info($"[selftest] {name} opened: grit value {ctGritValue} tint {PowerUx.C(ctTint)}{(ctGritModel ? $" canister model '{grit.CanisterModel}'" : "")}; ActiveViews {streaming.ActiveViews}; waits for the other checks{(DevTools.PowerUxProbe?.Value == true ? " and the probe's tour" : "")}");
         }
 
-        static bool OthersPending => cycleUntil >= 0f || PowerPending || VanillaFedPending || ArcPending || ArcShotPending || sandOpen.Count > 0 ||
+        static bool OthersPending => cycleUntil >= 0f || PowerPending || GridPending || VanillaFedPending || ArcPending || ArcShotPending || sandOpen.Count > 0 ||
             BeltPending || OutPending || ModelPending || SandChainPending || BoxPending || artUntil >= 0f || renderUntil >= 0f;
 
         // The canister nearest `near` (within the radius) that is a ground dust canister (not riding, carried or flying),

@@ -864,6 +864,9 @@ namespace StructureLib
                 if (p == null || !kindOf.TryGetValue(p.id, out int kind)) continue;
                 take.Add(i);
                 var d = Remap.Live(kind);
+                // A pole, solar array or bank has a state for the grid's fields but no processor to record: expected, and
+                // PowerPatches gives it a fresh state after a load (a bank's charge is not kept across a save).
+                if (d != null && d.Processor == null && d.Power != null) continue;
                 if (d?.Processor == null) unrecorded.Add((p.id, kind));
                 else records.Add(ToProductionRecord(d, p));
             }

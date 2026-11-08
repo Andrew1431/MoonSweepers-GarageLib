@@ -28,7 +28,8 @@ namespace StructureLib
     {
         /// <summary>
         /// kW a fuel source can deliver in a solve of <paramref name="dt"/> seconds: its peak, at most what its stored charge
-        /// lasts over the solve; 0 when it holds no charge.
+        /// lasts over the solve; 0 when it holds no charge. A charge of <c>double.PositiveInfinity</c> is unbounded: the peak
+        /// (StructureLib passes it for a fuel source whose batch is burning).
         /// </summary>
         public static float AvailableKw(float peakKw, double chargeKwh, float dt)
         {

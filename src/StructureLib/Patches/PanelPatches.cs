@@ -125,7 +125,7 @@ namespace StructureLib.Patches
                 double capacity = fuel >= 0 ? slots[fuel].Capacity : 0;
                 l = PanelText.Generator(d.Name, d.Power.SupplyRadius, d.Power.PeakKw, state?.SuppliedKw ?? 0f, d.Power.BatteryKwh, state?.ChargeKwh ?? 0,
                     cargo.HasValue ? CargoName((MoonCargo)cargo.Value) : "", cargo.HasValue ? CargoShortName((MoonCargo)cargo.Value) : "",
-                    Kg(state, fuel), capacity, state?.Running ?? false, PowerPatches.FedCountOf(record.id));
+                    Kg(state, fuel), capacity, state?.Running ?? false, GridState.FedCount(record.id));
                 foreach (var r in l.Rows) rowCargo.Add(r.Label == "FUEL" ? cargo : null);
             }
             else if (!d.Processor.ProducesPower)

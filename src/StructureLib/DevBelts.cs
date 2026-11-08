@@ -1178,7 +1178,7 @@ namespace StructureLib
     // ryanhartwig.coalite-furnace; AutoFeed 96:Dust:12 only; AutoBelt 96:output->ryanhartwig.coking-oven:Sand in;
     // ryanhartwig.coking-oven:Coalite out->ryanhartwig.coalite-furnace:Coalite in; AutoSave; SunOverhead).
     // The vanilla chamber's sand rides into the oven, the oven's coalite rides into the generator:
-    //  1 sandpower-chain: within ChainSeconds of the self-test the generator holds charge with no AutoFeed entry for
+    //  1 sandpower-chain: within ChainSeconds of the self-test the generator was fed (holds coalite or burnt some) with no AutoFeed entry for
     //    either SandPower machine, with CargoEntered seen for both and CargoEmitted of coalite (cargo 3) from the
     //    oven. The first sand canister, oven cycle, coalite and charge are timed from the chamber's feed.
     //  2 sandpower-save-clean: a coalite canister put on the sand belt (the oven refuses it at its sand port, so it
@@ -1298,12 +1298,12 @@ namespace StructureLib
             var inC = entered.Where(e => e.DepotId == ovenDepot).ToList();
             var inG = entered.Where(e => e.DepotId == generatorDepot).ToList();
             var outC = emitted.Where(x => x.e.DepotId == ovenDepot && x.e.Cargo.Value == CoaliteValue).ToList();
-            bool ok = g != null && g.ChargeKwh > 0 && noFeed && inC.Count > 0 && inG.Count > 0 && outC.Count > 0;
+            bool ok = g != null && (Stored(g, 0) > 0 || g.Cycles > 0 || g.Running) && noFeed && inC.Count > 0 && inG.Count > 0 && outC.Count > 0;
             if (!ok && now < chainUntil) return;
             CoreLog.Info($"[selftest] sandpower-chain: {TimingText()}");
             CoreLog.Info($"[selftest] sandpower-chain: CargoEntered oven {inC.Count}x ({inC.Sum(e => e.Kilograms)} kg {string.Join("/", inC.Select(e => e.Cargo.Id).Distinct())}), generator {inG.Count}x ({inG.Sum(e => e.Kilograms)} kg {string.Join("/", inG.Select(e => e.Cargo.Id).Distinct())}); CargoEmitted from the oven {outC.Count}x ({outC.Sum(x => x.e.Kilograms)} kg, belts [{string.Join(",", outC.Select(x => x.e.BeltId).Distinct())}]); riders on belt {sandBelt}: {RidersText(world, sandBelt)}; on belt {briqBelt}: {RidersText(world, briqBelt)}");
             CoreLog.Info($"[selftest] sandpower-chain: oven {StateText(c)} power {c?.Power:F2} grid {c?.Grid}; generator {PowerText(g)}");
-            Assert("sandpower-chain", ok, $"generator charge {g?.ChargeKwh:F4} kWh, AutoFeed of a SandPower machine {!noFeed}, CargoEntered oven {inC.Count} generator {inG.Count}, CargoEmitted cargo {CoaliteValue} from the oven {outC.Count} (within {ChainSeconds:F0} s)");
+            Assert("sandpower-chain", ok, $"generator fed (coalite {Stored(g, 0):0.##} kg, cycles {g?.Cycles}, running {g?.Running}), AutoFeed of a SandPower machine {!noFeed}, CargoEntered oven {inC.Count} generator {inG.Count}, CargoEmitted cargo {CoaliteValue} from the oven {outC.Count} (within {ChainSeconds:F0} s)");
             StartPin(world);
         }
 

@@ -13,8 +13,8 @@ namespace StructureLib
     public static class PowerRules
     {
         /// <summary>
-        /// Errors for a power definition, empty when valid. A Fuel source needs PeakKw, BatteryKwh and a Processor with
-        /// ProducesPower; a Solar source needs PeakKw and no Processor; a Relay needs LinkRange and a SupplyRadius no
+        /// Errors for a power definition, empty when valid. A Fuel source needs PeakKw and a Processor with ProducesPower
+        /// (a BatteryKwh it declares is ignored); a Solar source needs PeakKw and no Processor; a Relay needs LinkRange and a SupplyRadius no
         /// larger than it, and no Processor; Storage needs BatteryKwh and RateKw and no Processor. A Processor with
         /// ProducesPower is only valid on a Fuel source.
         /// </summary>
@@ -29,7 +29,8 @@ namespace StructureLib
             {
                 case PowerRole.Source when mode == SupplyMode.Fuel:
                     Positive("PeakKw", peakKw);
-                    Positive("BatteryKwh", batteryKwh);
+                    // No BatteryKwh rule: a fuel source has no kWh buffer in the grid solve. It supplies PeakKw while its
+                    // processor is Running (a batch burns), which every peer sees, so a BatteryKwh it declares is ignored.
                     if (!hasProcessor) errors.Add($"'{id}': a fuel source needs a Processor with ProducesPower.");
                     else if (!producesPower) errors.Add($"'{id}': a fuel source's Processor needs ProducesPower.");
                     break;

@@ -26,6 +26,20 @@ namespace StructureLib.Tests
             Assert.Equal(0f, r.SourceKw[1], 1e-3);
         }
 
+        // A fuel source supplies PeakKw while its processor is Running: the postfix passes ChargeKwh = +infinity then.
+        [Fact] public void Available_UnboundedCharge_IsPeak() => Assert.Equal(12f, GridSolve.AvailableKw(12, double.PositiveInfinity, Dt));
+
+        [Fact]
+        public void RunningFuel_CoversTheDeficit_NotMore()
+        {
+            var r = Run(new[] { Fuel(1, 12, double.PositiveInfinity), Fuel(2, 12, 0) }, new StorageIn[0], new[] { Load(1, 1), Load(2, 10) });
+            Assert.Equal(11f, r.FuelKw, 1e-3);
+            Assert.Equal(11f, r.SourceKw[0], 1e-3);
+            Assert.Equal(0f, r.SourceKw[1], 1e-3);
+            Assert.Equal(1f, r.Satisfaction, 1e-3);
+            Assert.False(float.IsNaN(r.ConsumerPower[0]) || float.IsInfinity(r.ConsumerUsedKw[1]));
+        }
+
         [Fact]
         public void SolarSurplusChargesBank()
         {
