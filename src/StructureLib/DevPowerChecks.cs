@@ -9,7 +9,8 @@ namespace StructureLib
 {
     // Look-at panel self-tests (Patches/PanelPatches.cs). Each calls the game's ShowPanel from managed code, so the prefix
     // runs as it does when the walker aims the depot; the texts are read back from the panel's TMP_Text fields.
-    //  panel-generator: the example burner's panel is ours (its Name, FUEL POWER, OUTPUT, BATTERY, FUEL, POWERING).
+    //  panel-generator: the example burner's panel is ours (its Name, FUEL POWER, OUTPUT, FUEL, GRID).
+    //  panel-pole, panel-solar, panel-storage: the grid layout's pole and cell, any solar array (rows by role).
     //  panel-machine: the example grinder's production panel (PRODUCTION, GRIT, CYCLE, no POWER row) and with power a
     //    POWER row first.
     //  panel-vanilla-untouched: a vanilla pressure chamber still gets vanilla's panel ("Pressure chamber").
@@ -17,7 +18,7 @@ namespace StructureLib
     {
         static void PanelChecks()
         {
-            string[] names = { "panel-generator", "panel-machine", "panel-vanilla-untouched" };
+            string[] names = { "panel-generator", "panel-pole", "panel-solar", "panel-storage", "panel-machine", "panel-vanilla-untouched" };
             var world = CoreState.World ?? CoreState.FindWorld();
             var inter = UnityEngine.Object.FindFirstObjectByType<MoonProductionInteraction>();
             if (inter == null || world == null)
@@ -32,9 +33,53 @@ namespace StructureLib
             else Check("panel-generator", null, () =>
             {
                 string texts = PanelOf(inter, world, burnerAt, true, out var rows);
-                var want = new[] { burner.Name, "FUEL POWER", "OUTPUT", "BATTERY", "FUEL", "POWERING" };
+                var want = new[] { burner.Name, "FUEL POWER", "OUTPUT", "FUEL", "GRID" };
                 var missing = want.Where(w => !texts.Contains(w, StringComparison.Ordinal)).ToList();
-                bool rowsOk = rows.SequenceEqual(new[] { "OUTPUT", "BATTERY", "FUEL", "POWERING" });
+                bool rowsOk = rows.SequenceEqual(new[] { "OUTPUT", "FUEL", "GRID" });
+                return (missing.Count == 0 && rowsOk, $"missing [{string.Join(", ", missing)}], rows [{string.Join(", ", rows)}]; {texts}");
+            });
+
+            // panel-pole / panel-storage: the power-grid AutoBuild layout's first pole and battery cell; panel-solar: any
+            // solar array in the world (the examples ship none, so it is not applicable without a mod that adds one).
+            int poleAt = GridLayout.Depot("pole1");
+            if (poleAt < 0) CoreLog.Info($"[selftest] panel-pole not applicable: no pole1 from the '{GridLayout.Token}' layout");
+            else Check("panel-pole", null, () =>
+            {
+                string texts = PanelOf(inter, world, poleAt, true, out var rows);
+                var want = new[] { "POWER GRID", "SUPPLY", "DEMAND", "STORAGE", "SATISFACTION" };
+                var missing = want.Where(w => !texts.Contains(w, StringComparison.Ordinal)).ToList();
+                bool rowsOk = rows.SequenceEqual(new[] { "SUPPLY", "DEMAND", "STORAGE", "SATISFACTION" });
+                return (missing.Count == 0 && rowsOk, $"missing [{string.Join(", ", missing)}], rows [{string.Join(", ", rows)}]; {texts}");
+            });
+
+            int cellAt = GridLayout.Depot("cell");
+            if (cellAt < 0) CoreLog.Info($"[selftest] panel-storage not applicable: no cell from the '{GridLayout.Token}' layout");
+            else Check("panel-storage", null, () =>
+            {
+                string texts = PanelOf(inter, world, cellAt, true, out var rows);
+                var want = new[] { "POWER STORAGE", "STORED", "GRID" };
+                var missing = want.Where(w => !texts.Contains(w, StringComparison.Ordinal)).ToList();
+                bool rowsOk = rows.SequenceEqual(new[] { "STORED", "GRID" });
+                return (missing.Count == 0 && rowsOk, $"missing [{string.Join(", ", missing)}], rows [{string.Join(", ", rows)}]; {texts}");
+            });
+
+            int solarAt = -1;
+            try
+            {
+                foreach (var kv in world.depots)
+                {
+                    var sd = kv.Value != null ? Patches.Remap.Live(kv.Value.kind) : null;
+                    if (sd?.Power != null && sd.Power.Role == PowerRole.Source && sd.Power.SupplyMode == SupplyMode.Solar) { solarAt = kv.Key; break; }
+                }
+            }
+            catch (Exception e) { CoreLog.Once("panel-solar-find", "Looking for a solar array for panel-solar threw: " + e, 2); }
+            if (solarAt < 0) CoreLog.Info("[selftest] panel-solar not applicable: no solar array depot in the world");
+            else Check("panel-solar", null, () =>
+            {
+                string texts = PanelOf(inter, world, solarAt, true, out var rows);
+                var want = new[] { "SOLAR POWER", "OUTPUT", "GRID" };
+                var missing = want.Where(w => !texts.Contains(w, StringComparison.Ordinal)).ToList();
+                bool rowsOk = rows.SequenceEqual(new[] { "OUTPUT", "GRID" });
                 return (missing.Count == 0 && rowsOk, $"missing [{string.Join(", ", missing)}], rows [{string.Join(", ", rows)}]; {texts}");
             });
 
