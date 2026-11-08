@@ -1,7 +1,9 @@
 # SandPower
 
 A coking oven that bakes moon sand into coalite, and a coalite furnace that burns it for power.
-Built on [StructureLib](../../src/StructureLib/README.md), which must be installed too.
+Built on [StructureLib](../../src/StructureLib/README.md) and [PowerGrid](../PowerGrid/README.md), which must be installed too.
+
+Requires: StructureLib, PowerGrid.
 
 Coalite is regolith sand baked into dense bricks that burn hot in the furnace's oxygen-fed firebox.
 
@@ -11,12 +13,10 @@ Coalite is regolith sand baked into dense bricks that burn hot in the furnace's 
 |---|---|
 | **Coalite** (cargo) | 2 kg per unit, sells for $7 per unit. Cargo value 3 (see [the cargo registry](../../docs/cargo-registry.md)). Shown as a sand-coloured brick (its own model, `coalite.bin`) on belts, on the ground and in the hand, in place of the game's dust capsule. |
 | **Coking oven** (Production, $800) | Built on the stone press's footprint, with its own model. Holds 16 kg of sand, bakes 4 kg per 8 s cycle at 12 kW. Mass is kept: 4 kg of sand becomes 4 kg of coalite (2 units). The output slot holds 10 kg. |
-| **Coalite furnace** (Power, $1,500) | Built on the solar post's footprint, with its own model. Holds 10 kg of coalite (5 units) and burns one 2 kg lump of coalite per 20 s cycle. Each burn adds 3 kWh to its 6 kWh battery (half of it), so two lumps fill it; no burn starts while the battery is full. Supplies up to 10 kW to machines within 24 m, wirelessly: StructureLib machines and vanilla ones (a vanilla machine draws what its own solar grid leaves unmet), with a power arc drawn to each while the build tool is held. Its look-at panel shows its own output, battery, fuel and what it powers. |
+| **Coalite furnace** (Power, $1,500) | Built on the solar post's footprint, with its own model. Holds 10 kg of coalite (5 units) and burns one 2 kg lump of coalite per 20 s cycle. It needs a power pole within 12 m and feeds up to 10 kW into the power grid through it. The grid pools its sources (solar arrays, battery banks, furnaces) and shares the load evenly among the machines on the grid. The furnace burns a lump only when the grid still has a deficit after solar and the battery banks, so it idles while they cover the load. Its look-at panel shows its own output, fuel and the grid row with the pole count. |
 
-The generator alone runs an oven at 10 of its 12 kW (power 0.83, seen in game): a cycle takes 8 s at full power,
-so at 0.83 about 9.6 s (derived, not timed). On a
-vanilla solar grid the oven draws from the grid's surplus first, then from generators in range, then from the
-grid's batteries.
+The furnace alone runs an oven at 10 of its 12 kW (power 0.83, seen in game before the grid): a cycle takes 8 s at full power,
+so at 0.83 about 9.6 s (derived, not timed).
 
 The generator is built on the solar post rather than the battery bank, because the battery bank prefab has no
 production view (the part of a model that runs a machine).
@@ -85,8 +85,7 @@ Limits (StructureLib today):
   tinted stand-ins, which then become the game's materials in place.
 - **No animated effects.** The stone press's moving parts and the solar post's lights are hidden with their meshes; the
   models are static.
-- **The generator feeds machines within its 24 m range only.** A vanilla machine farther away on the same solar grid is not fed: the game's
-  power grid totals cannot be written from a mod, so the supply is per machine, not per grid. A fed vanilla machine's status reads "Powered by Coalite furnace".
+- **The furnace needs a power pole within 12 m.** Without one it powers nothing, and a machine on no pole's grid names the missing power pole in its status.
 - **A generator's running power draw is ignored;** it never takes power from the grid.
 - **Coalite is a brick up close only.** Within about 100 m a coalite canister shows the brick model; beyond that
   the game draws canisters instanced, and those are the plain dust capsule. The brick is a look: the capsule's

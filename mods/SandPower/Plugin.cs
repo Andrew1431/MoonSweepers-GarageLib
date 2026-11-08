@@ -6,10 +6,12 @@ using UnityEngine;
 
 namespace SandPower
 {
-    // A coking oven that bakes moon sand into coalite, and a furnace that burns it for power.
+    // A coking oven that bakes moon sand into coalite, and a furnace that burns it to feed the power grid through a
+    // power pole (PowerGrid): it burns only while the grid is still short after solar and battery banks.
     // Registrations only; the ids and the cargo value never change after release.
     [BepInPlugin(Guid, "SandPower", Version)]
     [BepInDependency(StructureLib.Plugin.Guid)]
+    [BepInDependency("com.ryanhartwig.powergrid")]
     public class Plugin : BasePlugin
     {
         public const string Guid = "com.ryanhartwig.sandpower";
@@ -64,7 +66,7 @@ namespace SandPower
                 Id = "ryanhartwig.coalite-furnace",
                 Name = "Coalite furnace",
                 Category = "Power",
-                Note = "Burns one coalite every 20 s for 10 kW. A 6 kWh battery for the gaps. Powers machines within 24 m, wirelessly.",
+                Note = "Burns one coalite every 20 s for 10 kW into the power grid. Needs a power pole within 12 m.",
                 Price = 1500m,
                 BaseStructure = MoonWorld.SolarPostKind,
                 // blender/coalite_furnace.py. Its Port_Coalite in node, at the -X footprint edge flowing +X, is the
