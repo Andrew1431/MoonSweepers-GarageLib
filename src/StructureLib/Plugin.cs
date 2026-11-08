@@ -51,6 +51,7 @@ namespace StructureLib
             "MoonCleaners.MoonPowerLinks:.ctor(MoonWorld,Transform)", "MoonCleaners.MoonPowerLinks:Begin", "MoonCleaners.MoonPowerLinks:Arc",
             "MoonCleaners.MoonPowerLinks:Ring", "MoonCleaners.MoonPowerLinks:End", "MoonCleaners.MoonPowerLinks:Clear", "MoonCleaners.MoonPowerLinks:Dispose",
             "MoonCleaners.MoonWorld:PowerAnchor", "MoonCleaners.MoonDepotBuilder:HoldingBuildTool", "MoonCleaners.MoonProductionInteraction:builder",
+            "MoonCleaners.MoonDepotBuilder:structurePlan", "MoonCleaners.MoonDepotBuilder:selectedBuildId", "MoonCleaners.MoonWorld+StructurePlan:position",
             // The power grid (Patches/PowerPatches.cs, Sun.cs).
             "MoonCleaners.MoonSolarSystem:Daylight", "MoonCleaners.MoonSolarSystem:SunDirectionAt", "MoonCleaners.MoonSolarSystem:LunarTime",
             "MoonCleaners.MoonWorld:solarSystem", "MoonCleaners.MoonWorld:NewProduction", "MoonCleaners.MoonWorld:StallPower",

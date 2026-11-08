@@ -195,9 +195,11 @@ namespace StructureLib
         static float bankAt = -1f, bankUntil = -1f, carriedUntil = -1f;
         static double bankCharge;
 
-        static bool GridPending => gridOpen.Count > 0 || bankStage > 0 || removeStage > 0;
+        static bool GridPending => gridOpen.Count > 0 || bankStage > 0 || removeStage > 0 || previewStage > 0;
+        static int previewStage;
+        static float previewUntil;
 
-        static readonly string[] GridNames = { "grid-pole-has-state", "grid-chain-even-share", "grid-vanilla-topup", "grid-no-pole-no-power", "grid-bank-carries", "power-no-burn-when-carried", "grid-pole-removed" };
+        static readonly string[] GridNames = { "grid-pole-has-state", "grid-chain-even-share", "grid-vanilla-topup", "grid-no-pole-no-power", "grid-bank-carries", "power-no-burn-when-carried", "grid-pole-removed", "arc-grid-links", "arc-preview" };
 
         static void GridChecks()
         {
@@ -210,12 +212,16 @@ namespace StructureLib
             float now = Time.unscaledTime;
             gpSolves = PowerPatches.Solves;
             if (GridLayout.Refusal("pole1") is string p1) Assert("grid-pole-has-state", false, p1); else gridOpen["grid-pole-has-state"] = now + 5f;
-            if (all != null) { foreach (var n in new[] { "grid-chain-even-share", "grid-vanilla-topup", "grid-bank-carries", "power-no-burn-when-carried", "grid-pole-removed" }) Assert(n, false, all); }
+            if (all != null) { foreach (var n in new[] { "grid-chain-even-share", "grid-vanilla-topup", "grid-bank-carries", "power-no-burn-when-carried", "grid-pole-removed", "arc-grid-links", "arc-preview" }) Assert(n, false, all); }
             else
             {
                 gridOpen["grid-chain-even-share"] = now + 40f;
                 gridOpen["grid-vanilla-topup"] = now + 40f;
                 bankStage = 1;
+                if (DevTools.ForceArcs != null && DevTools.ForceArcs.Value) gridOpen["arc-grid-links"] = now + 30f;
+                else CoreLog.Info("[selftest] arc-grid-links not applicable: [Dev] ForceArcs is false");
+                previewStage = 1;
+                previewUntil = now + 40f;
                 bankAt = now + 45f;
             }
             if (GridLayout.Refusal("lone-burner", "lone-grinder") is string lone) Assert("grid-no-pole-no-power", false, lone);
@@ -268,6 +274,14 @@ namespace StructureLib
                 }, () => PowerPatches.VanillaNodeOf(lgId) >= 0 ? $"vanilla node {PowerPatches.VanillaNodeOf(lgId)} reaches the lone grinder" : null);
             }
 
+            PollOpen(gridOpen, "arc-grid-links", text, () =>
+            {
+                int expected = GridState.PoleLinks.Count + GridState.Reach.Count;
+                int arcs = PowerLinksView.ArcsDrawn;
+                bool ok = chain != 0 && GridState.PoleLinks.Count == 2 && arcs == expected;
+                return (ok, $"ArcsDrawn {arcs}, expected {GridState.PoleLinks.Count} pole links + {GridState.Reach.Count} reach = {expected}; {text}");
+            });
+            TickPreview(world);
             TickBank(world, burner, grinder, chamber, cell, chain, text);
             TickPoleRemoved(world, grinder, text);
         }
@@ -287,13 +301,53 @@ namespace StructureLib
             PollOpen(open, name, text, probe);
         }
 
+        // arc-preview: once arc-grid-links has settled (its count is exact only without a ghost), select the example pole in
+        // the builder, put the dev ghost 10 m from pole1 along the tangent and read PowerLinksView: at least one preview
+        // arc and the ring centred on the ghost (0.5 m). The in-game picture of the real ghost is a deferred manual check.
+        static void TickPreview(MoonWorld world)
+        {
+            if (previewStage == 0) return;
+            float now = Time.unscaledTime;
+            try
+            {
+                if (previewStage == 1)
+                {
+                    if (gridOpen.ContainsKey("arc-grid-links") && now < previewUntil) return;
+                    var def = MoonStructures.Definition(GridLayout.PoleId);
+                    int p1 = GridLayout.Depot("pole1");
+                    var builder = UnityEngine.Object.FindFirstObjectByType<MoonDepotBuilder>();
+                    if (def == null || p1 < 0 || !world.depots.ContainsKey(p1) || builder == null)
+                    { previewStage = 0; Assert("arc-preview", false, $"pole def {def != null}, pole1 {p1}, builder {builder != null}"); return; }
+                    try { builder.SelectStructure(def.Kind); }
+                    catch (Exception e) { CoreLog.Warn("[selftest] arc-preview: SelectStructure threw " + e.Message); }
+                    var rec = world.depots.get_Item(p1);
+                    var at = new Vector3(rec.x, rec.y, rec.z);
+                    var dir = Vector3.ProjectOnPlane(Vector3.right, at.normalized).normalized;
+                    previewGhost = at + dir * 10f;
+                    PowerLinksView.DevGhost = previewGhost;
+                    previewUntil = now + 5f;
+                    previewStage = 2;
+                    CoreLog.Info($"[selftest] arc-preview: pole selected (builder kind {builder.selectedBuildId}, want {def.Kind}); ghost {PowerUx.V(previewGhost)}, 10 m from pole1 at {PowerUx.V(at)}");
+                    return;
+                }
+                var ring = PowerLinksView.RingAt;
+                bool ok = PowerLinksView.ArcsDrawn >= 1 && PowerLinksView.PreviewArcs >= 1 && ring.HasValue && Vector3.Distance(ring.Value, previewGhost) <= 0.5f;
+                if (!ok && now < previewUntil) return;
+                previewStage = 0;
+                PowerLinksView.DevGhost = null;
+                Assert("arc-preview", ok, $"ArcsDrawn {PowerLinksView.ArcsDrawn}, PreviewArcs {PowerLinksView.PreviewArcs}, ring {(ring.HasValue ? PowerUx.V(ring.Value) : "none")} vs ghost {PowerUx.V(previewGhost)}");
+            }
+            catch (Exception e) { previewStage = 0; PowerLinksView.DevGhost = null; Assert("arc-preview", false, "threw " + e.GetType().Name + ": " + e.Message); }
+        }
+        static Vector3 previewGhost;
+
         static void TickBank(MoonWorld world, MoonProductionState burner, MoonProductionState grinder, MoonProductionState chamber, MoonProductionState cell, int chain, string text)
         {
             float now = Time.unscaledTime;
             if (bankStage == 1)
             {
                 // After the chain checks (or at the latest 45 s after the grid checks opened).
-                bool others = gridOpen.ContainsKey("grid-chain-even-share") || gridOpen.ContainsKey("grid-vanilla-topup") || VanillaFedPending || PowerPending || ArcPending;
+                bool others = gridOpen.ContainsKey("grid-chain-even-share") || gridOpen.ContainsKey("grid-vanilla-topup") || gridOpen.ContainsKey("arc-grid-links") || previewStage > 0 || VanillaFedPending || PowerPending || ArcPending;
                 if (others && now < bankAt) return;
                 if (cell == null || burner == null || grinder == null || chamber == null)
                 {
