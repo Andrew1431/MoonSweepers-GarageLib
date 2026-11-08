@@ -4,6 +4,7 @@
     <Project Path="examples/ExampleVehicle/ExampleVehicle.csproj" />
   </Folder>
   <Folder Name="/mods/">
+    <Project Path="mods/PowerGrid/PowerGrid.csproj" />
     <Project Path="mods/SandPower/SandPower.csproj" />
     <Project Path="mods/SharedUpgrades/SharedUpgrades.csproj" />
   </Folder>
