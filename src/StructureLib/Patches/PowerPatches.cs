@@ -80,7 +80,8 @@ namespace StructureLib.Patches
         static readonly Dictionary<int, List<Member>> byGrid = new();
         static readonly Dictionary<int, List<Pole>> polesByGrid = new();
         static readonly Dictionary<int, Vector2> halfOfKind = new();
-        static IntPtr builtFor;
+        static IntPtr builtFor, builtProduction;
+        static int builtGeneration = -1;
         static int builtCount = -1;
         static long builtHash;
         static string noPower = "No power: build a power pole";
@@ -174,7 +175,7 @@ namespace StructureLib.Patches
                 if (n.state != null && n.state.Grid != 0) vanillaGridNodes.Add(n);
             }
 
-            if (DepotSetChanged(world, depots)) Rebuild(world, depots, production);
+            if (DepotSetChanged(world, depots, production)) Rebuild(world, depots, production);
             if (members.Count == 0 && poles.Count == 0) return;
 
             for (int i = 0; i < members.Count; i++)
@@ -209,7 +210,10 @@ namespace StructureLib.Patches
 
         // ---- 1. the graph ----
 
-        static bool DepotSetChanged(MoonWorld world, Il2CppSystem.Collections.Generic.Dictionary<int, MoonDepotSnapshot> depots)
+        // The key also carries the load: the production dictionary's pointer and Sidecar's load generation, so a save loaded
+        // into the same MoonWorld with the same depot ids still rebuilds (EnsureState and RestoreCharge run only here).
+        static bool DepotSetChanged(MoonWorld world, Il2CppSystem.Collections.Generic.Dictionary<int, MoonDepotSnapshot> depots,
+            Il2CppSystem.Collections.Generic.Dictionary<int, MoonProductionState> production)
         {
             int count = 0;
             long hash = 0;
@@ -219,7 +223,10 @@ namespace StructureLib.Patches
                 // Order-independent: a dictionary's enumeration order may change after a removal.
                 unchecked { hash += (long)((ulong)kv.Key * 0x9E3779B97F4A7C15UL >> 16); }
             }
-            if (world.Pointer == builtFor && count == builtCount && hash == builtHash) return false;
+            int generation = Sidecar.LoadGeneration;
+            if (world.Pointer == builtFor && production.Pointer == builtProduction && generation == builtGeneration && count == builtCount && hash == builtHash) return false;
+            builtProduction = production.Pointer;
+            builtGeneration = generation;
             builtFor = world.Pointer;
             builtCount = count;
             builtHash = hash;
@@ -406,6 +413,7 @@ namespace StructureLib.Patches
                 catch (Exception e)
                 {
                     footprintFailed = true;
+                    SolveThrows++;
                     CoreLog.Error($"[solvepower] MoonWorld.FootprintDistance threw; poles attach by the pure X/Z footprint distance from now on (wrong away from the moon's +Y pole): {e}");
                 }
             }

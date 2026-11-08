@@ -148,6 +148,7 @@ namespace StructureLib
                 CanisterOrphans.Clear();
                 cargoPending.Clear();
                 ForgetProduction();
+                Interlocked.Increment(ref loadGeneration);
             }
         }
 
@@ -166,6 +167,7 @@ namespace StructureLib
                 CanisterOrphans.Clear();
                 cargoPending.Clear();
                 ForgetProduction();
+                Interlocked.Increment(ref loadGeneration);
                 string path = PathFor(root);
                 if (path == null) { CoreLog.Warn("Sidecar load: save root unknown, starting empty"); return; }
                 if (!File.Exists(path)) { CoreLog.Info($"Sidecar: none at {CoreLog.Redact(path)} (no modded structures saved yet)"); return; }
@@ -890,6 +892,11 @@ namespace StructureLib
         // a save (maybe off the main thread) writes one ProductionRecord per bank in the save (Id, DepotId, Charge only);
         // a load hands the charge back (TakeLoadedCharge) once PowerPatches has given the bank its state.
         static readonly object bankLock = new();
+
+        // Bumped by every load (and every start without one): PowerPatches rebuilds its grid on a new value, so a load into
+        // the same MoonWorld with the same depot ids still gets fresh states and its banks' saved charge.
+        static int loadGeneration;
+        internal static int LoadGeneration => Volatile.Read(ref loadGeneration);
         static readonly Dictionary<int, double> bankCharge = new(), loadedCharge = new();
 
         static bool IsBank(StructureDefinition d) => d?.Power != null && d.Processor == null && d.Power.Role == PowerRole.Storage;

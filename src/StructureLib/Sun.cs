@@ -10,7 +10,7 @@ namespace StructureLib
     /// <c>h = dot(up, s)</c>, <c>d = smoothstep(clamp01((h + 0.0096) / 0.0192))</c>, <c>SunFactor = max(0, dot(s, n)) × d</c>,
     /// with the array's normal <c>n = up</c> (a flat panel; provisional until the sampling). The lunar clock is synced to
     /// every peer, so every peer gets the same factor. When the solar system cannot be read the factor falls back to the
-    /// world-wide <c>MoonSolarSystem.Daylight</c>: 1 above 0.5, else 0 (logged once).
+    /// world-wide <c>MoonSolarSystem.Daylight</c> (0..1, used as the factor; logged once).
     /// </summary>
     internal static class Sun
     {
@@ -39,16 +39,16 @@ namespace StructureLib
 
         static float Fallback(string why)
         {
-            // Daylight is a float (0..1); the fallback is day or night, as vanilla's own Daylight flag (d > 0.5).
-            bool day;
-            try { day = MoonSolarSystem.Daylight > 0.5f; }
+            // Daylight is already a 0..1 float: it is the factor.
+            float day;
+            try { day = Mathf.Clamp01(MoonSolarSystem.Daylight); }
             catch (Exception e)
             {
                 CoreLog.Once("sun-daylight", $"Sun: reading MoonSolarSystem.Daylight threw ({e.Message}); solar arrays read no sun", 1);
                 return 0f;
             }
-            CoreLog.Once("sun-fallback", $"Sun: the sun direction could not be read ({why}); solar arrays use MoonSolarSystem.Daylight ({day}) instead", 1);
-            return day ? 1f : 0f;
+            CoreLog.Once("sun-fallback", $"Sun: the sun direction could not be read ({why}); solar arrays use MoonSolarSystem.Daylight ({day:F2}) instead", 1);
+            return float.IsNaN(day) ? 0f : day;
         }
     }
 }

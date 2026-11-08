@@ -185,8 +185,9 @@ namespace StructureLib
     //    the cell's charge falls.
     //  power-no-burn-when-carried: then 2 kg of grit into the burner must not start a burn within 10 s (the cell
     //    carries the grid, so the grid wants no fuel).
-    //  grid-pole-removed: RemoveStructureNow(pole2): within two solves the grinder's Grid is 0 or a new id, and the
-    //    solve did not throw.
+    //  grid-pole-removed: the grinder is on the chain's grid -(lowest pole id) before; RemoveStructureNow(pole2): within
+    //    two solves pole3 stands alone and the grinder reads its grid, exactly -(pole3 id), and no solve threw
+    //    (PowerPatches.SolveThrows, which also counts the FootprintDistance fallback).
     internal static partial class SelfTest
     {
         static readonly Dictionary<string, float> gridOpen = new();
@@ -269,7 +270,7 @@ namespace StructureLib
             }
 
             TickBank(world, burner, grinder, chamber, cell, chain, text);
-            TickPoleRemoved(world, grinder, text);
+            TickPoleRemoved(world, grinder, chain, text);
         }
 
         // An open grid assertion with a "not applicable" reason checked at the deadline (null: it applies).
@@ -341,12 +342,12 @@ namespace StructureLib
             }
         }
 
-        static void TickPoleRemoved(MoonWorld world, MoonProductionState grinder, string text)
+        static void TickPoleRemoved(MoonWorld world, MoonProductionState grinder, int chain, string text)
         {
             if (removeStage == 1)
             {
                 int pole2 = GridLayout.Depot("pole2");
-                if (pole2 < 0 || grinder == null) { removeStage = 0; Assert("grid-pole-removed", false, $"pole2 {pole2}, grinder state {(grinder != null)}"); return; }
+                if (pole2 < 0 || grinder == null || chain == 0 || grinder.Grid != chain) { removeStage = 0; Assert("grid-pole-removed", false, $"before the removal: pole2 {pole2}, grinder state {(grinder != null)}, grinder grid {grinder?.Grid} (expected the chain's {chain})"); return; }
                 gpOldGrid = grinder.Grid;
                 gpThrows = PowerPatches.SolveThrows;
                 try { world.RemoveStructureNow(pole2); }
@@ -361,9 +362,10 @@ namespace StructureLib
                 if (PowerPatches.Solves < gpSolves + 2) return;
                 removeStage = 0;
                 bool gone = !world.depots.ContainsKey(GridLayout.Depot("pole2"));
-                bool moved = grinder != null && grinder.Grid != gpOldGrid;
+                int alone = -GridLayout.Depot("pole3");
+                bool moved = grinder != null && grinder.Grid == alone;
                 bool clean = PowerPatches.SolveThrows == gpThrows;
-                Assert("grid-pole-removed", gone && moved && clean, $"pole2 gone {gone}; grinder grid {gpOldGrid} -> {grinder?.Grid} after {PowerPatches.Solves - gpSolves} solves; solve throws {gpThrows} -> {PowerPatches.SolveThrows}; {text}");
+                Assert("grid-pole-removed", gone && moved && clean, $"pole2 gone {gone}; grinder grid {gpOldGrid} -> {grinder?.Grid} (expected pole3's {alone}) after {PowerPatches.Solves - gpSolves} solves; solve throws {gpThrows} -> {PowerPatches.SolveThrows}; {text}");
             }
         }
 
